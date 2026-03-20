@@ -1,0 +1,9 @@
+pi-mono
+whipflow
+docs
+data
+src
+*.whip
+node_modules/
+whips
+.whipflow

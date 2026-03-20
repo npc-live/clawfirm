@@ -1,0 +1,31 @@
+{
+  "name": "@harness.farm/clawfirm",
+  "version": "0.1.0",
+  "description": "clawfirm 7*24 weather prediction market trading engine",
+  "type": "module",
+  "bin": {
+    "clawfirm": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "src/core",
+    "clawfirm.config.js"
+  ],
+  "scripts": {
+    "trade": "tsx src/core/index.ts",
+    "trade:dry": "DRY_RUN=true tsx src/core/index.ts",
+    "typecheck": "tsc --noEmit --project tsconfig.core.json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "viem": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
