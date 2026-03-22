@@ -1,5 +1,6 @@
 ---
 name: video-script-generator
+version: 1.0.0
 description: 生成短视频脚本和分镜。输入产品/主题描述、目标受众、时长，输出完整脚本+分镜结构（JSON/YAML）。支持多种模板：痛点-解决、反转剧情、before-after。触发词：视频脚本、短视频文案、分镜、storyboard、video script。
 ---
 

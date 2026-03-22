@@ -1,5 +1,6 @@
 ---
 name: scene-video-generator
+version: 1.0.0
 description: 根据分镜描述生成视频片段。支持多个 AI 视频生成后端：即梦 Jimeng、Kling 可灵、Runway、Pika、Vidu。输入场景描述+可选的数字人口播，输出视频片段。触发词：AI视频、生成视频、分镜视频、scene video、text to video、图生视频。
 ---
 
