@@ -63,27 +63,41 @@ scenes:
   - id: 1
     type: hook          # 场景类型
     duration: 3s
-    narration: "..."    # 台词
+    narration: "..."    # 台词（talking模式必填）
     shot_description: "..." # 画面描述
-    requires_avatar: true   # ← 关键：是否需要数字人
+    avatar_mode: talking    # ← 关键：talking / acting / none
     demo_insert: false
 ```
 
 **场景类型判断：**
-| type | requires_avatar | 处理方式 |
-|------|-----------------|----------|
-| hook (口播开场) | true | → digital-avatar |
-| pain (痛点展示) | false | → scene-video-gen |
-| solution (口播) | true | → digital-avatar |
-| demo (产品演示) | false | → demo-recorder |
-| result (效果) | true/false | 视情况 |
-| cta (号召) | true | → digital-avatar |
+| type | avatar_mode | 处理方式 |
+|------|-------------|----------|
+| hook (口播开场) | talking | → digital-avatar (口播) |
+| pain (痛点展示) | none / acting | → scene-video-gen 或 digital-avatar (表演) |
+| solution (口播) | talking | → digital-avatar (口播) |
+| demo (产品演示) | none | → demo-recorder |
+| result (效果) | talking / acting | → digital-avatar |
+| cta (号召) | talking | → digital-avatar (口播) |
+
+**avatar_mode 说明：**
+| 模式 | 说明 | 示例 |
+|------|------|------|
+| `talking` | 数字人口播，有台词 | "大家好，今天教大家..." |
+| `acting` | 数字人出镜但不说话 | 皱眉看电脑、开心喝咖啡 |
+| `none` | 无数字人，纯场景/产品 | 产品界面、空镜头 |
+
+**用户可根据需求灵活选择：同一个场景可以选择用数字人表演或纯AI场景。**
 
 ---
 
 ## Step 2a: digital-avatar
 
-**处理 `requires_avatar: true` 的场景**
+**处理 `avatar_mode: talking` 或 `avatar_mode: acting` 的场景**
+
+| 模式 | 输入 | 输出 |
+|------|------|------|
+| talking | avatar_id + voice_id + narration | 口播视频 |
+| acting | avatar_id + action_description | 表演视频（无台词）|
 
 **⚠️ 重要：后端一致性原则**
 - 选定一个平台后，全程使用
@@ -112,7 +126,9 @@ scenes:
 
 ## Step 2b: scene-video-generator
 
-**处理 `requires_avatar: false` 且非 demo 的场景**
+**处理 `avatar_mode: none` 或用户选择纯AI生成的场景**
+
+也可用于 `avatar_mode: acting`（用AI生成人物动作，而非数字人平台）。
 
 **输入：**
 - scenes[].shot_description（作为 prompt）
@@ -208,18 +224,18 @@ output:
 **Step 1 输出（分镜）：**
 ```yaml
 scenes:
-  - id: 1, type: hook, requires_avatar: true
-  - id: 2, type: pain, requires_avatar: false
-  - id: 3, type: solution, requires_avatar: true
-  - id: 4, type: demo, demo_insert: true
-  - id: 5, type: result, requires_avatar: true
-  - id: 6, type: cta, requires_avatar: true
+  - id: 1, type: hook, avatar_mode: talking     # 口播开场
+  - id: 2, type: pain, avatar_mode: acting      # 数字人表演（皱眉看电脑）
+  - id: 3, type: solution, avatar_mode: talking # 口播介绍
+  - id: 4, type: demo, avatar_mode: none        # 纯产品演示
+  - id: 5, type: result, avatar_mode: acting    # 数字人表演（开心喝咖啡）
+  - id: 6, type: cta, avatar_mode: talking      # 口播号召
 ```
 
 **路由：**
-- 场景 1,3,5,6 → digital-avatar（可灵）
-- 场景 2 → scene-video-generator（可灵）
-- 场景 4 → demo-recorder
+- 场景 1,3,6（talking）→ digital-avatar 口播
+- 场景 2,5（acting）→ digital-avatar 表演 或 scene-video-generator
+- 场景 4（none）→ demo-recorder
 
 **Step 3：**
 - 6 个视频 → video-stitcher → 成片
