@@ -1,439 +1,358 @@
-# clawfirm
+# ClawFirm
 
-AI 驱动的自动化工作流平台。组合交易机器人、内容发布、电商套利等业务模块，通过 whip 工作流引擎统一编排。
+一人公司的终极武器 / The Ultimate Weapon for One-Person Companies
 
 ---
 
-## 安装
+## 🦞 简介
 
-1. 前往 [clawfirm.dev](https://clawfirm.dev) 注册账号
-2. 安装 CLI 并登录：
+**ClawFirm.dev：你的 AI 全能合伙人**
+
+ClawFirm.dev 是专为新时代个体创业者打造的"一人公司"自动化引擎。我们不只是提供工具，而是通过 AI 深度嵌入商业全链路，提供三种核心盈利增长模式：
+
+- **全栈软件出海：** 从深度用户调研、功能构建到自动化营销，AI 帮你像一支完整团队一样打造并分发软件产品，通过真实付费反馈快速迭代。
+- **自动化套利交易：** 利用 AI 敏锐捕捉市场信号，通过算法实现高效率的交易获利，让资产在自动化流程中稳健增值。
+- **自媒体矩阵分发：** 针对不同平台特征，AI 自动生成高转化内容并精准投喂流量，让你的个人品牌和产品实现全网裂变。
+
+ClawFirm.dev 致力于消除"一人公司"的技术壁垒，让一个人也能拥有一座工厂的战斗力，完成从创意到现金流的完整商业闭环。
+
+## 🦞 About
+
+**ClawFirm.dev: Your All-in-One AI Partner**
+
+ClawFirm.dev is an automation engine built for the new generation of solo entrepreneurs — powering the "one-person company." We don't just provide tools; we deeply embed AI across the entire business chain, offering three core growth models:
+
+- **Full-Stack Software for Global Markets:** From deep user research and feature development to automated marketing, AI helps you build and distribute software products like a full team — iterating rapidly with real paid user feedback.
+- **Automated Arbitrage Trading:** Leveraging AI to capture market signals with precision, executing efficient algorithmic trades to steadily grow your assets through automated workflows.
+- **Personal Branding Building on Social Media:** Tailored to each platform's characteristics, AI auto-generates high-conversion content and precisely distributes traffic, enabling your personal brand and products to go viral across the web.
+
+ClawFirm.dev is committed to eliminating the technical barriers of the "one-person company," giving a single individual the firepower of an entire factory — completing the full business loop from idea to cash flow.
+
+## 🌍 社区 / Community
+
+- **Discord:** https://discord.gg/JNXz2utFW8
+- **WeChat 微信:** PpCiting
+
+---
+
+## 安装 / Installation
 
 ```bash
 npm install -g clawfirm
-clawfirm login
-clawfirm install    # 安装全部工具并同步 skills 到 Claude Code
 ```
 
----
-
-## CLI 命令
+## CLI 命令 / CLI Commands
 
 ```
-clawfirm login                    登录 clawfirm.dev
-clawfirm whoami                   显示当前会话
-clawfirm logout                   退出登录
+clawfirm login                    登录 clawfirm.dev / Login to clawfirm.dev
+clawfirm whoami                   显示当前会话 / Show current session
+clawfirm logout                   退出登录 / Logout
 
-clawfirm install [tool]           安装全部工具（或指定单个）
-clawfirm uninstall [tool]         卸载工具
-clawfirm list                     列出已注册工具
+clawfirm install [tool]           安装全部工具（或指定工具）/ Install all tools (or specific)
+clawfirm uninstall [tool]         卸载工具 / Uninstall tool
+clawfirm list                     列出已注册工具 / List registered tools
 
-clawfirm new "<description>"      从自然语言描述生成新项目
-clawfirm <name> [args]            调用插件
+clawfirm new "<description>"      从自然语言描述生成新项目 / Generate new project from description
+clawfirm <name> [args]            调用插件 / Invoke plugin
 ```
 
-## 工具集
+## 工具集 / Toolset
 
-| 工具 | 说明 |
+| 工具 / Tool | 说明 / Description |
 |------|------|
-| `openvault` | 加密本地密钥管理器 |
-| `skillctl` | 同步 AI skills 到编程工具 |
-| `whipflow` | 确定性 AI 工作流执行引擎 |
-| `agent-browser` | AI agent 浏览器自动化 |
-
----
-
-## Whip 工作流
-
-每个业务模块在 `whips/` 下有独立子目录，包含标准文件：
-
-| 文件 | 职责 | 运行时机 |
-|------|------|----------|
-| `setup.whip` | 环境检查、API 验证、写入配置 | 首次使用时运行一次 |
-| `scan.whip` | 拉取数据、识别信号/机会 | 手动或由 monitor 触发 |
-| `trade.whip` | 风控检查、执行核心动作 | 手动或由 monitor 触发 |
-| `monitor.whip` | 持续轮询、状态管理、调度循环 | 长期后台运行 |
-| `report.whip` | 统计指标、输出分析报告 | 随时查看 |
-
-**标准运行顺序：**
+| `openvault` | 加密本地密钥管理器 / Encrypted local secret manager |
+| `skillctl` | 同步 AI skills 到编程工具 / Sync AI skills to dev tools |
+| `whipflow` | 确定性 AI 工作流执行引擎 / Deterministic AI workflow engine |
+| `agent-browser` | AI agent 浏览器自动化 / AI agent browser automation |
 
 ```bash
-whipflow run whips/<module>/setup.whip     # 第一步：初始化（只需一次）
-whipflow run whips/<module>/monitor.whip   # 第二步：启动监控（长期运行）
+clawfirm install   # 安装全部工具并同步 skills 到 Claude Code / Install all tools & sync skills
+```
 
-# 按需手动触发：
+---
+
+## 快速开始 / Quick Start
+
+```bash
+clawfirm login
+clawfirm install
+```
+
+---
+
+## Whip 工作流 / Whip Workflows
+
+每个业务模块在 `whips/` 下有独立子目录，包含 5 个标准文件：
+
+Each business module has its own subdirectory under `whips/` with 5 standard files:
+
+| 文件 / File | 职责 / Role | 运行时机 / When to Run |
+|------|------|----------|
+| `setup.whip` | 环境检查、API 验证、写入配置 / Env check, API validation, write config | 首次使用 / First-time setup |
+| `scan.whip` | 拉取数据、识别信号/机会 / Fetch data, identify signals | 手动或由 monitor 触发 / Manual or triggered by monitor |
+| `trade.whip` | 风控检查、执行核心动作 / Risk check, execute core action | 手动或由 monitor 触发 / Manual or triggered by monitor |
+| `monitor.whip` | 持续轮询、状态管理、调度循环 / Continuous polling, state management | 长期后台运行 / Long-running background |
+| `report.whip` | 统计指标、输出分析报告 / Stats, output analysis report | 随时查看 / Anytime |
+
+### 标准运行顺序 / Standard Run Order
+
+```bash
+# 1. 初始化（只需一次）/ Initialize (once only)
+whipflow run whips/<module>/setup.whip
+
+# 2. 启动监控（长期运行）/ Start monitor (long-running)
+whipflow run whips/<module>/monitor.whip
+
+# 3. 手动扫描 / 执行 / 看报告 / Manual scan / execute / view reports
 whipflow run whips/<module>/scan.whip
 whipflow run whips/<module>/trade.whip
 whipflow run whips/<module>/report.whip
 ```
 
-所有工作流通过 `data/current-run.json` 接收输入参数，运行日志写入 `data/stage-log.json`。
-
 ---
 
-## 业务模块
+## 业务模块 / Business Modules
 
-### polymarket — 天气预测市场交易
+### polymarket — 天气预测市场交易 / Weather Prediction Market Trading
 
-在 Polymarket 上交易天气温度合约。使用 Open-Meteo 集合预报（ECMWF/ICON，40-51 个成员）计算每个温度区间的模型概率，与市场隐含概率比较，edge 达标时用 Half-Kelly 公式下单。
+在 Polymarket 上交易天气温度合约。使用 Open-Meteo 集成预报模型计算胜率，与市场隐含概率比较，发现边缘时下单。
 
-**前置条件：** Polygon 钱包私钥、`ANTHROPIC_API_KEY`
+Trade weather temperature contracts on Polymarket. Uses Open-Meteo integrated forecast models to calculate win probability, compares with market-implied odds, and places orders when an edge is found.
 
 ```bash
-# 1. 写入运行配置
+# 初始化（填入 Polygon 钱包私钥）/ Initialize (enter Polygon wallet private key)
 cat > data/current-run.json << 'EOF'
 {
   "run_id": "poly-001",
-  "wallet_address": "0xYourPolygonAddress",
+  "wallet_address": "0xYourAddress",
   "budget_usd": 10,
-  "min_edge": 0.05,
-  "max_positions": 3
+  "min_edge": 0.05
 }
 EOF
-
-# 2. 存储私钥（推荐 openvault）
-openvault set clawfirm/polygon-private-key
-
-# 3. 初始化
 whipflow run whips/polymarket/setup.whip
 
-# 4. 手动扫描一次，查看有没有机会
-whipflow run whips/polymarket/scan.whip
-# → 输出 data/opportunities.json，包含每个机会的 p_model / p_market / edge
-
-# 5. 手动下单
-PRIVATE_KEY=$(openvault get clawfirm/polygon-private-key) \
-  whipflow run whips/polymarket/trade.whip
-
-# 6. 启动自动监控（每小时触发 scan + trade）
+# 启动监控 / Start monitor
 whipflow run whips/polymarket/monitor.whip
-
-# 7. 查看报告
-whipflow run whips/polymarket/report.whip
 ```
 
-**核心策略参数（回测验证，2024-03-21 ~ 2026-03-20）：**
-
-| 参数 | 值 |
-|------|----|
-| 最小 edge | 5%（降水合约 15%，夏季 6-8 月 12%） |
-| 跳过过度自信区间 | edge 30%–40% |
-| 仓位公式 | Half-Kelly × 0.5，最大 10% 初始资金 |
-| 最大同时持仓 | 3 |
-| 日亏损熔断 | -5% 停止当日交易 |
-| 回测胜率 | **57.26%**，Sharpe **3.60**，最大回撤 **10.87%** |
-
-**优先市场：** 上海（$183K）→ 首尔 → 多伦多 → 纽约 → 伦敦 → 东京 → 新加坡 → 深圳
+**策略参数（回测验证）/ Strategy Params (backtested):** 胜率/Win rate 57.26%, Sharpe 3.60, 最大回撤/Max drawdown 10.87%
+**主要市场 / Primary Markets:** 上海/Shanghai ($183K liquidity) → 首尔/Seoul → 多伦多/Toronto → 纽约/New York
 
 ---
 
-### hyperliquid — 新闻驱动期货交易
+### hyperliquid — 新闻驱动期货交易 / News-Driven Futures Trading
 
-监控多个加密货币新闻源（CryptoPanic、CoinTelegraph RSS、The Block、Decrypt），用 Claude 对新闻打分（0-100），得分达标时在 Hyperliquid 自动开多/空。
+监控加密货币新闻，用 Claude 评估信号强度，在 Hyperliquid 自动开多/空。
 
-**没有账号？** 通过返佣链接注册，双方均可获得手续费返还：
-👉 **[https://app.hyperliquid.xyz/join/ARCANE](https://app.hyperliquid.xyz/join/ARCANE)**
-
-**前置条件：** Hyperliquid 账号、钱包私钥、`ANTHROPIC_API_KEY`
+Monitors crypto news, uses Claude to assess signal strength, and automatically opens long/short positions on Hyperliquid.
 
 ```bash
-# 1. 写入运行配置
 cat > data/current-run.json << 'EOF'
 {
   "run_id": "hl-001",
-  "wallet_address": "0xYourHLAddress",
+  "wallet_address": "0xYourAddress",
   "budget_usd": 200,
   "max_position_usd": 50,
   "max_open_trades": 4,
   "min_signal_score": 60,
-  "stop_loss_pct": 0.04,
-  "take_profit_pct": 0.08,
-  "default_leverage": 3,
-  "max_leverage": 5,
-  "entry_window_minutes": 5,
-  "poll_interval_seconds": 60
+  "default_leverage": 3
 }
 EOF
-
-# 2. 初始化
-openvault set clawfirm/hl-private-key
 whipflow run whips/hyperliquid/setup.whip
-
-# 3. 手动扫描一次看信号
-whipflow run whips/hyperliquid/scan.whip
-# → data/hl-signals.json，每个信号包含 coin / direction / score / reason
-
-# 4. 手动执行一次下单
-whipflow run whips/hyperliquid/trade.whip
-
-# 5. 启动自动监控（60s 一轮：检查止损止盈 + 触发新一轮 scan+trade）
 whipflow run whips/hyperliquid/monitor.whip
-
-# 6. 查看绩效报告
-whipflow run whips/hyperliquid/report.whip
 ```
 
-**信号评分标准（Claude 评分）：**
+**策略参数 / Strategy Params:** 最多 4 个持仓/Max 4 positions, 3-5x 杠杆/leverage, 2h 最长持有/max hold, 5% 止损/stop-loss, 8% 止盈/take-profit
 
-| 分数 | 触发条件示例 |
-|------|-------------|
-| 90-100 | ETF 获批/拒绝、大型交易所被黑超 $50M、CEO 被捕 |
-| 75-89 | Coinbase/Binance 上线、跨链桥被攻击、SEC 起诉 |
-| 60-74 | 中小交易所上线、机构购买、美联储表态 |
-| < 60 | 过滤掉，不交易 |
-
-**策略参数：** 最多 4 个持仓，3-5x 杠杆，最长持仓 2 小时，止损 4%，止盈 8%
-
-也可绕过 whip 直接用脚本：
+也可使用独立脚本直接运行 / Can also run standalone script:
 
 ```bash
 HL_PRIVATE_KEY=0x... node scripts/hl-news-trader.js monitor
-HL_PRIVATE_KEY=0x... node scripts/hl-news-trader.js scan
-HL_PRIVATE_KEY=0x... node scripts/hl-news-trader.js positions   # 查看当前持仓
 ```
-
-> **如果想用 Binance 代替 Hyperliquid：**
-> - 国内用户（免翻墙）：[https://accounts.maxweb.red/register?ref=AIARCANE](https://accounts.maxweb.red/register?ref=AIARCANE)
-> - 国际用户：[https://accounts.binance.com/en/register?ref=AIARCANE](https://accounts.binance.com/en/register?ref=AIARCANE)
->
-> 已有 Binance 账号但非邀请码注册？可手动填入经纪商代码享受返佣：现货 `URWGV8AN`，合约 `t4eky4We`
 
 ---
 
-### social-media — 社交媒体内容自动化
+### social-media — 社交媒体内容自动化 / Social Media Content Automation
 
-AI 生成内容，自动发布到小红书、微博、Bilibili、Twitter、Telegram。包含竞品分析、内容策略生成、每日发布、评论互动、周报等完整运营流程。
+AI 生成内容，自动发布到小红书、微博、Bilibili、Twitter 等平台。
 
-**前置条件：** 各平台 token、`social-cli` 已安装
+AI-generated content, auto-published to Xiaohongshu, Weibo, Bilibili, Twitter and more.
 
 ```bash
-# 1. 写入账号配置
-cat > data/current-run.json << 'EOF'
-{
-  "run_id": "social-001",
-  "niche": "AI 工具评测",
-  "target_audience": "25-35 岁开发者和产品经理",
-  "tone_style": "专业但不枯燥，有观点，举例子",
-  "content_freq": "每天1篇",
-  "growth_goal": "3个月涨粉10000",
-  "xhs_account": "your_xhs_id",
-  "twitter_account": "your_twitter_handle"
-}
-EOF
-
-# 2. 初始化（自动做竞品分析 + 生成内容策略文档）
 whipflow run whips/social-media/setup.whip
-# → docs/competitive-analysis.md（竞品规律、蓝海方向）
-# → docs/content-strategy.md（完整运营策略，自动校验循环，最多修 3 轮）
 
-# 3. 每日运营
-whipflow run whips/social-media/daily-content.whip   # 生成今日内容
-whipflow run whips/social-media/daily-publish.whip   # 发布到各平台
+# 每日内容生成 + 发布 / Daily content generation + publishing
+whipflow run whips/social-media/daily-content.whip
+whipflow run whips/social-media/daily-publish.whip
 
-# 4. 内容复用（把爆款改写成其他平台版本）
-whipflow run whips/social-media/repurpose.whip
-
-# 5. 互动管理
-whipflow run whips/social-media/comments.whip        # 回复评论 + 社群互动
-
-# 6. 数据复盘
-whipflow run whips/social-media/analytics.whip       # 实时数据分析
-whipflow run whips/social-media/weekly-report.whip   # 周报 + 下周计划
+# 周报 & 互动 / Weekly report & engagement
+whipflow run whips/social-media/weekly-report.whip
+whipflow run whips/social-media/comments.whip
 ```
 
 ---
 
-### arbitrage — 电商跨平台套利
+### arbitrage — 电商跨平台套利 / Cross-Platform E-Commerce Arbitrage
 
-扫描闲鱼↔拼多多（国内）或 eBay↔Amazon（海外）价差，自动采购和上架，目标毛利率 > 20%。
+扫描闲鱼↔拼多多（国内）或 eBay↔Amazon（海外）价差，自动采购和上架。目标利润率 > 20%。
+
+Scans price gaps between Xianyu↔Pinduoduo (domestic) or eBay↔Amazon (international), auto-purchases and lists. Target margin > 20%.
 
 ```bash
-cat > data/current-run.json << 'EOF'
-{
-  "run_id": "arb-001",
-  "market": "cn",
-  "category": "数码配件",
-  "min_profit_pct": 0.20,
-  "max_buy_price": 200,
-  "daily_budget": 1000
-}
-EOF
-
-whipflow run whips/arbitrage/setup.whip   # 分析品类利润模型
-whipflow run whips/arbitrage/scan.whip    # 扫描当前价差机会
-whipflow run whips/arbitrage/buy.whip     # 执行采购
-whipflow run whips/arbitrage/list.whip    # 上架到目标平台
-whipflow run whips/arbitrage/report.whip  # ROI 报告
+whipflow run whips/arbitrage/setup.whip
+whipflow run whips/arbitrage/scan.whip    # 扫描价差 / Scan price gaps
+whipflow run whips/arbitrage/buy.whip     # 采购 / Purchase
+whipflow run whips/arbitrage/list.whip    # 上架 / List for sale
+whipflow run whips/arbitrage/report.whip  # ROI 报告 / ROI report
 ```
 
 ---
 
-### domains — 域名捡漏
+### domains — 域名捡漏 / Domain Sniping
 
-扫描即将过期的高价值 .io / .ai 域名，自动评分，高分自动抢注，挂到 Sedo/Afternic 出售。
+扫描即将过期的高价值域名，自动抢注，挂到 Sedo/Afternic 出售。
+
+Scans expiring high-value domains, auto-registers them, and lists on Sedo/Afternic for resale.
 
 ```bash
-cat > data/current-run.json << 'EOF'
-{
-  "run_id": "domain-001",
-  "extensions": [".io", ".ai", ".com"],
-  "min_score": 80,
-  "max_reg_price": 50,
-  "registrar": "namecheap"
-}
-EOF
-
-whipflow run whips/domains/setup.whip    # 注册商账号配置
-whipflow run whips/domains/scan.whip     # 扫描过期域名列表
-whipflow run whips/domains/snipe.whip    # 自动抢注高分域名
-whipflow run whips/domains/list.whip     # 挂牌出售
-whipflow run whips/domains/report.whip   # 组合估值报告
+whipflow run whips/domains/setup.whip
+whipflow run whips/domains/scan.whip      # 扫描过期域名 / Scan expiring domains
+whipflow run whips/domains/snipe.whip     # 自动注册 / Auto-register
+whipflow run whips/domains/list.whip      # 挂牌出售 / List for sale
+whipflow run whips/domains/report.whip    # 组合价值分析 / Portfolio analysis
 ```
 
 ---
 
-### amazon-affiliate — 亚马逊联盟内容
+### amazon-affiliate — 亚马逊联盟内容 / Amazon Affiliate Content
 
 关键词研究 → AI 写 SEO 文章 → 自动发布 → 排名监控。
 
-```bash
-cat > data/current-run.json << 'EOF'
-{
-  "run_id": "aff-001",
-  "niche": "home office equipment",
-  "target_country": "US",
-  "min_search_volume": 1000,
-  "max_keyword_difficulty": 40
-}
-EOF
+Keyword research → AI-written SEO articles → auto-publish → rank monitoring.
 
-whipflow run whips/amazon-affiliate/setup.whip         # 选品 + 关键词研究
-whipflow run whips/amazon-affiliate/research.whip      # 深度产品调研
-whipflow run whips/amazon-affiliate/write.whip         # 生成 SEO 文章
-whipflow run whips/amazon-affiliate/publish.whip       # 发布到博客/站点
-whipflow run whips/amazon-affiliate/seo-monitor.whip   # 追踪关键词排名
+```bash
+whipflow run whips/amazon-affiliate/setup.whip
+whipflow run whips/amazon-affiliate/research.whip  # 选品 + 关键词 / Product selection + keywords
+whipflow run whips/amazon-affiliate/write.whip     # 生成文章 / Generate articles
+whipflow run whips/amazon-affiliate/publish.whip   # 发布 / Publish
+whipflow run whips/amazon-affiliate/seo-monitor.whip  # 排名追踪 / Rank tracking
 ```
 
 ---
 
-## 创建新的 Whip 模块
+## 创建新的 Whip 模块 / Create New Whip Modules
 
 `creator` 是一个 meta-whip，给定业务描述自动生成完整的 whip 子目录。
 
+`creator` is a meta-whip that auto-generates a complete whip subdirectory from a business description.
+
 ```bash
-# 1. 描述你的业务
 cat > data/current-run.json << 'EOF'
 {
   "run_id": "create-001",
-  "name": "twitter-alpha",
-  "description": "监控 Twitter KOL 推文，识别 alpha 信号，自动在 Binance Spot 下单",
-  "files": ["setup", "scan", "trade", "monitor", "report"],
-  "apis": ["Twitter API v2", "Binance Spot REST API"],
-  "data_prefix": "twitter-alpha"
+  "name": "my-strategy",
+  "description": "监控 Reddit 帖子，识别热门话题，自动发布相关内容到 Twitter",
+  "apis": ["Reddit API", "Twitter API v2"]
 }
 EOF
 
-# 2. 生成
 whipflow run whips/creator/create.whip
-# → whips/twitter-alpha/setup.whip
-# → whips/twitter-alpha/scan.whip
-# → whips/twitter-alpha/trade.whip
-# → whips/twitter-alpha/monitor.whip
-# → whips/twitter-alpha/report.whip
-
-# 3. 用生成的模块
-whipflow run whips/twitter-alpha/setup.whip
-whipflow run whips/twitter-alpha/monitor.whip
+# 输出 / Output: whips/my-strategy/ 含 setup/scan/trade/monitor/report.whip
 ```
 
-详见 [`whips/creator/README.md`](whips/creator/README.md)。
+详见 / See [`whips/creator/README.md`](whips/creator/README.md)。
 
 ---
 
-## 密钥管理
+## 密钥管理 / Secret Management
 
-推荐用 `openvault` 管理所有密钥，whip 文件自动检测并优先读取，不需要手动 export：
+推荐使用 `openvault` 存储所有密钥，避免明文出现在环境变量或文件中：
+
+Recommended: use `openvault` to store all secrets, avoiding plaintext in env vars or files:
 
 ```bash
-# 存储
+# 存储密钥 / Store secrets
 openvault set clawfirm/polygon-private-key
 openvault set clawfirm/hl-private-key
 openvault set clawfirm/anthropic-api-key
-openvault set clawfirm/xhs-token
-openvault set clawfirm/twitter-token
 
-# 读取（手动验证）
-openvault get clawfirm/anthropic-api-key
+# whip 文件内部自动读取，无需手动 export
+# whip files read secrets automatically, no manual export needed
 ```
 
-回退方案（不推荐，密钥明文暴露在进程环境中）：
+回退方案（不推荐）/ Fallback (not recommended):
 
 ```bash
 export PRIVATE_KEY=0x...
 export ANTHROPIC_API_KEY=sk-ant-...
-export HL_PRIVATE_KEY=0x...
 ```
 
 ---
 
-## 数据文件
+## 数据文件 / Data Files
 
-所有运行时数据存放在 `data/`，已加入 `.gitignore`：
+所有运行时数据统一存放在 `data/`，不提交到 git：
+
+All runtime data is stored in `data/`, not committed to git:
 
 ```
 data/
-├── current-run.json         # 当前工作流输入参数
-├── stage-log.json           # 各阶段执行日志（追加写入）
-├── config.json              # 策略配置（无明文密钥）
-├── api-creds.json           # 凭证引用（指向 openvault key 名）
-├── opportunities.json       # polymarket 当前机会列表
-├── trades.json              # 交易历史
-├── positions.json           # 当前持仓
-├── reports.json             # 绩效报告
-├── hl-config.json           # hyperliquid 策略配置
-├── hl-signals.json          # hyperliquid 当前信号
-└── hl-trades.json           # hyperliquid 交易记录
-```
-
-`stage-log.json` 记录每个 whip 每个阶段的执行结果，格式：
-
-```json
-[
-  { "run_id": "poly-001", "stage": "env-check", "index": 0, "status": "done", "ts": "2026-03-24T10:00:00Z" },
-  { "run_id": "poly-001", "stage": "api-check",  "index": 1, "status": "done", "ts": "2026-03-24T10:00:05Z" }
-]
-```
-
-每个 whip 最终输出 `WorkflowEvent` JSON-line，供 Tauri UI 或日志系统解析：
-
-```json
-{"ts":"2026-03-24T10:01:00Z","event":"stage_complete","stage":"scan","data":{"opportunities_found":2,"top_edge":0.12}}
+├── current-run.json      # 当前工作流输入参数 / Current workflow input params
+├── stage-log.json        # 各阶段执行日志 / Stage execution logs
+├── config.json           # 策略配置（无明文密钥）/ Strategy config (no plaintext secrets)
+├── trades.json           # 交易历史 / Trade history
+├── positions.json        # 当前持仓 / Current positions
+└── reports.json          # 绩效报告 / Performance reports
 ```
 
 ---
 
-## 项目结构
+## 项目结构 / Project Structure
 
 ```
 clawfirm/
-├── bin/cli.js               # CLI 入口
-├── lib/                     # auth, login, dispatch, install, skills
-├── scripts/                 # 独立交易脚本
-│   ├── weather-trader.js    # Polymarket 天气交易（独立版）
-│   ├── weather-trader-v2.js
-│   └── hl-news-trader.js    # Hyperliquid 新闻交易（独立版）
-├── skills/                  # 可复用 AI skills
-│   ├── remotion-video/      # 视频制作
-│   ├── social-publish/      # 多平台内容发布
-│   └── video-skills/        # 数字人视频生成
-├── whips/                   # 工作流模块
-│   ├── creator/             # Meta-whip：生成新 whip 目录
-│   ├── polymarket/          # 天气预测市场交易
-│   ├── hyperliquid/         # 新闻驱动期货交易
-│   ├── social-media/        # 社交媒体自动化
-│   ├── arbitrage/           # 电商套利
-│   ├── domains/             # 域名捡漏
-│   └── amazon-affiliate/    # 联盟营销
-├── data/                    # 运行时数据（git ignored）
-└── clawfirm.config.js       # 工具注册表
+├── bin/cli.js            # CLI 入口 / CLI entry point
+├── lib/                  # auth, login, dispatch, install, skills
+├── scripts/              # 独立交易脚本 / Standalone trading scripts
+├── skills/               # 可复用 AI skills / Reusable AI skills
+├── whips/                # 工作流模块 / Workflow modules
+│   ├── creator/          # Meta-whip：生成新 whip 目录 / Generate new whip dirs
+│   ├── polymarket/       # 天气预测市场交易 / Weather prediction market
+│   ├── hyperliquid/      # 新闻期货交易 / News-driven futures
+│   ├── social-media/     # 社交媒体自动化 / Social media automation
+│   ├── arbitrage/        # 电商套利 / E-commerce arbitrage
+│   ├── domains/          # 域名捡漏 / Domain sniping
+│   └── amazon-affiliate/ # 联盟营销 / Affiliate marketing
+├── data/                 # 运行时数据（git ignored）/ Runtime data (git ignored)
+└── clawfirm.config.js    # 工具注册表 / Tool registry
 ```
+
+---
+
+## ⚠️ 免责声明 / Disclaimer
+
+**中文**
+
+本项目（ClawFirm）及其所有代码、工作流、策略、脚本和文档仅供学习、研究和技术演示之用，**不构成任何投资建议、交易指导或财务咨询**。
+
+1. **交易与金融风险**：本项目包含的加密货币交易、预测市场、期货合约等金融类代码和策略，可能导致部分或全部本金亏损。过往回测数据不代表未来表现。使用者应充分了解相关市场风险，并自行承担一切交易损失。
+2. **一人公司与垫资风险**：本项目涉及的电商套利、域名抢注等业务模式可能需要使用者自行垫付资金。任何因资金投入产生的亏损、滞销或无法回本，均由使用者自行承担。
+3. **无担保**：本项目按"原样"（AS IS）提供，不做任何明示或暗示的保证，包括但不限于适销性、特定用途适用性和盈利能力的保证。
+4. **责任限制**：在任何情况下，本项目的作者和贡献者均不对因使用或无法使用本项目而产生的任何直接、间接、附带、特殊或后果性损害承担责任。
+
+**使用本项目即表示您已阅读、理解并同意本免责声明的全部内容。如不同意，请勿使用本项目。**
+
+**English**
+
+This project (ClawFirm) and all its code, workflows, strategies, scripts, and documentation are provided solely for educational, research, and technical demonstration purposes. **Nothing in this project constitutes investment advice, trading guidance, or financial consulting.**
+
+1. **Trading & Financial Risk**: The cryptocurrency trading, prediction market, and futures contract code and strategies included in this project may result in partial or total loss of capital. Past backtest results do not guarantee future performance. Users must fully understand the associated market risks and bear all trading losses themselves.
+2. **Self-Funded Business Risk**: Business models in this project such as e-commerce arbitrage and domain sniping may require users to invest their own capital upfront. Any losses, unsold inventory, or inability to recoup funds are the sole responsibility of the user.
+3. **No Warranty**: This project is provided "AS IS" without warranty of any kind, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, and profitability.
+4. **Limitation of Liability**: In no event shall the authors or contributors of this project be liable for any direct, indirect, incidental, special, or consequential damages arising from the use of or inability to use this project.
+
+**By using this project, you acknowledge that you have read, understood, and agreed to this disclaimer in its entirety. If you do not agree, do not use this project.**
+
+## 📄 License
+
+MIT License
