@@ -20,6 +20,7 @@ function printHelp(config) {
     clawfirm whoami            Show current session
     clawfirm logout            Log out
     clawfirm new "<description>"  Start a project from natural language
+    clawfirm run <file.whip>   Run a whipflow workflow
     clawfirm install [tool]    Install all tools (or a specific one)
     clawfirm uninstall [tool]  Uninstall all tools (or a specific one)
     clawfirm list              List registered tools
@@ -91,6 +92,17 @@ async function main() {
   if (command === "uninstall") {
     const { runUninstall } = await import("../lib/install.js");
     await runUninstall(config, rest[0]);
+    return;
+  }
+
+  if (command === "run") {
+    const { spawnSync } = await import("node:child_process");
+    const result = spawnSync("whipflow", ["run", ...rest], { stdio: "inherit" });
+    if (result.error?.code === "ENOENT") {
+      console.error("\n  clawfirm: 'whipflow' not found. Install it with: npm i -g whipflow\n");
+      process.exit(1);
+    }
+    process.exit(result.status ?? 0);
     return;
   }
 

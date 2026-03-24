@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.core.json",
+  "compilerOptions": {
+    "rootDir": "src/social",
+    "outDir": "dist/social",
+    "types": ["better-sqlite3", "node"]
+  },
+  "include": ["src/social/**/*"]
+}
