@@ -1,0 +1,178 @@
+# whips/gaokao/research.whip
+# 功能：院校与专业深度调研 —— 查询目标院校历年录取数据、专业就业、城市生活成本
+# 调用方：setup.whip 完成后 / 手动触发
+# 前置：data/gaokao-profile.json 存在
+# 输出：data/gaokao-schools.json（候选院校数据库），docs/school-research.md
+
+agent researcher:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  高校信息研究专家。能够基于已知规律推断院校录取数据、专业就业情况。
+  明确区分"已知事实"和"基于规律的推断"。
+  对每所学校给出综合评价，不回避缺点，不夸大优点。
+  """
+
+agent career_advisor:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  职业发展顾问。从就业市场角度分析各专业前景。
+  了解互联网、金融、医疗、公务员等不同赛道的现实情况。
+  给出有参考价值的就业数据和薪资区间（明确说明数据来源和时效性）。
+  """
+
+# ── 读取学生画像 ──
+let profile = session: researcher
+  prompt: """
+  读取配置：
+  1. 读取 data/gaokao-profile.json
+  2. 读取 docs/gaokao-strategy.md（提取核心专业方向和城市偏好）
+  3. 读取 data/current-run.json，获取 research_focus 参数
+     - "schools"：重点调研院校
+     - "majors"：重点调研专业就业
+     - "cities"：重点调研城市生活成本
+     - "all"：全面调研（默认）
+
+  输出完整配置信息。
+  """
+
+# ── 院校调研 ──
+let school_research = session: researcher
+  prompt: """
+  基于学生画像，调研候选院校：
+
+  学生画像：{profile}
+
+  根据位次区间，为以下三档各调研 5-8 所院校：
+
+  **冲刺档院校**（位次略高于学生，录取概率 40-60%）：
+  选校逻辑：城市好 或 专业强，值得一冲
+
+  **稳妥档院校**（位次基本匹配，录取概率 70-85%）：
+  选校逻辑：综合性价比最高的选择
+
+  **保底档院校**（位次明显低于学生，录取概率 95%+）：
+  选校逻辑：确保兜底，但要选有价值的院校
+
+  对每所院校输出：
+  {
+    school_name: "...",
+    tier: "冲/稳/保",
+    location_city: "...",
+    location_province: "...",
+    type: "综合/理工/财经/师范/医学/...",
+    985: true/false,
+    211: true/false,
+    double_first_class: true/false,
+    estimated_score_line: N,         # 对学生省份的预估分数线（基于近年规律）
+    score_line_note: "近年波动说明",
+    target_majors: [...],            # 该校中匹配学生兴趣的专业
+    major_strength: "该校强势学科",
+    employment_rate: "约XX%（推断）",
+    campus_location: "市中心/郊区/独立校区",
+    estimated_annual_tuition: N,     # 元/年
+    estimated_living_cost: "X-Y 元/月（该城市）",
+    scholarship_policy: "国家奖学金 + 校级奖学金说明",
+    pros: ["优点1", "优点2", "优点3"],
+    cons: ["缺点1", "缺点2"],
+    special_notes: "特殊注意（体检要求/专业限制/大小年等）",
+    recommendation_reason: "一句话推荐理由"
+  }
+
+  特别关注 {profile.family_income} 和 {profile.has_scholarship_need}：
+  如果家庭困难，优先标注奖学金政策丰厚的院校。
+
+  写入 docs/school-research.md（按冲/稳/保分组，附对比表格）。
+  """
+
+# ── 专业就业调研 ──
+let major_research = session: career_advisor
+  prompt: """
+  对学生感兴趣的专业方向做深度就业分析：
+
+  学生信息：{profile}
+  职业目标：{profile.career_goal}
+  兴趣方向：{profile.interest_areas}
+
+  对每个主要专业方向输出：
+
+  **专业名称**：
+  - 学什么：核心课程方向（3-5 门代表课程）
+  - 就业方向：毕业后主要去向（按比例估算）
+    * 对口就业：X%（具体岗位名称）
+    * 跨专业就业：X%（常见方向）
+    * 考研：X%
+    * 考公/事业单位：X%
+  - 薪资区间：
+    * 应届生起薪：X-Y 万/年（一线城市 vs 普通城市）
+    * 3-5 年后：X-Y 万/年
+    * 天花板：（高端出路）
+  - 就业趋势：
+    * 近年市场需求变化（扩招/收缩/平稳）
+    * AI/自动化对该专业的影响
+    * 未来 5-10 年的前景判断
+  - 与职业目标 {profile.career_goal} 的匹配度：高/中/低，说明原因
+  - 选这个专业需要具备的特质/能力
+  - 坑点提示（容易被忽视的问题）
+
+  如果职业目标是"考公务员"：
+    特别说明哪些专业在国考/省考中报考职位最多、最容易上岸
+
+  如果职业目标是"出国深造"：
+    特别说明哪些专业海外认可度高、申请难度如何
+
+  写入 docs/major-research.md。
+  """
+
+# ── 城市生活成本调研 ──
+let city_research = session: researcher
+  prompt: """
+  对学生偏好城市做生活成本和发展机会分析：
+
+  学生信息：{profile}
+  偏好城市：{profile.city_prefer}
+
+  对每个主要目标城市输出：
+
+  **城市名称**：
+  - 院校资源：该城市 985/211 数量，对应专业强校
+  - 月均生活成本：X-Y 元（含住宿/餐饮/交通，不含学费）
+  - 大学区位：主要高校是否在市区/郊区
+  - 就业市场：主要产业/就业机会（对应 {profile.interest_areas}）
+  - 落户政策：大学生落户门槛（宽松/一般/严格）
+  - 发展潜力：城市未来 10 年的定位（一线稳定/新一线快速/省会稳定）
+  - 与家乡距离：距 {profile.hometown} 的交通时间
+  - 对该学生的综合评分：★★★★☆（附简要理由）
+
+  特别关注家庭经济 {profile.family_income}：
+  对家庭经济普通的学生，测算 4 年总费用（学费+生活费），
+  对比不同城市的经济压力差异。
+
+  写入 docs/city-research.md。
+  """
+
+# ── 汇总写入候选院校库 ──
+session: researcher
+  prompt: """
+  将调研结果整合到候选院校数据库：
+
+  调研数据：{school_research}
+
+  读取 data/gaokao-candidates.json（不存在则 []），
+  将每所调研的院校追加（格式与 school_research 中一致，增加 status: "researched"）。
+  写回文件。
+
+  追加 data/stage-log.json：{ stage: "research", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"research","data":{
+    "schools_researched": N,
+    "majors_analyzed": N,
+    "cities_analyzed": N,
+    "files": ["docs/school-research.md","docs/major-research.md","docs/city-research.md"],
+    "next_step": "运行 match.whip 生成志愿候选列表"
+  }}
+  """

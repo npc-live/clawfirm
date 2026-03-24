@@ -1,0 +1,186 @@
+# whips/gaokao/match.whip
+# 功能：志愿智能匹配 —— 综合所有因素，生成排序后的志愿候选列表
+# 调用方：research.whip 完成后 / 手动触发
+# 前置：data/gaokao-profile.json，data/gaokao-candidates.json
+# 输出：data/gaokao-matches.json（评分排序的候选志愿），docs/match-analysis.md
+
+agent matcher:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  志愿匹配算法专家。综合分数、地域、家庭、职业目标等多维度，
+  为每个院校+专业组合打出综合评分。
+  评分要透明，每个维度的权重和得分都要明确说明。
+  不做无根据的推荐，每条建议都要有逻辑支撑。
+  """
+
+agent risk_assessor:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  志愿风险评估专家。专注于识别填报风险点：
+  大小年陷阱、专业调剂风险、服从调剂隐患、录取规则盲区。
+  宁可说出不好听的真话，也不说好听的假话。
+  """
+
+# ── 读取数据 ──
+let data = session: matcher
+  prompt: """
+  读取所有必要数据：
+  1. 读取 data/gaokao-profile.json（学生画像）
+  2. 读取 data/gaokao-candidates.json（候选院校库）
+  3. 读取 docs/gaokao-strategy.md（填报策略和优先级）
+  4. 读取 docs/major-research.md（专业就业分析）
+
+  如果 data/gaokao-candidates.json 为空，输出 "NO_CANDIDATES: 请先运行 research.whip"
+
+  输出完整数据供后续使用。
+  """
+
+if **data 包含 NO_CANDIDATES**:
+  throw "候选院校库为空，请先运行 research.whip"
+
+# ── 多维度评分 ──
+let scored_matches = session: matcher
+  prompt: """
+  对每个候选院校+专业组合进行多维度评分：
+
+  数据：{data}
+  学生优先级顺序：{data.profile.priority_order}
+
+  **评分维度（总分 100 分）：**
+
+  根据学生的 priority_order 动态分配权重：
+  （以下为默认权重，根据实际优先级调整）
+
+  1. 录取可能性（20分）
+     - 估算录取概率：>90% 得满分，70-90% 得15分，50-70% 得10分，<50% 得5分
+     - 结合大小年规律修正
+
+  2. 城市匹配度（20分）
+     - 是否在偏好城市：完全匹配20分，次选15分，不在偏好但不回避10分，在回避地区0分
+     - 城市发展机会与学生职业目标的契合度
+
+  3. 专业匹配度（25分）
+     - 与兴趣方向的匹配：核心兴趣25分，相关方向15分，备选方向8分
+     - 与职业目标的契合：高度契合+5分附加
+
+  4. 就业前景（15分）
+     - 该专业在该城市的就业质量（薪资×就业率）
+     - 5年内的行业趋势
+
+  5. 经济适配度（10分）
+     - 4年总费用 vs 家庭经济承受力
+     - 奖学金获得概率
+     - 如有助学需求，该校资助政策完善性
+
+  6. 学校综合实力（10分）
+     - 985/211/双一流加分
+     - 目标专业的学科评级
+
+  对每个组合输出：
+  {
+    school_name: "...",
+    major: "...",
+    tier: "冲/稳/保",
+    total_score: N,
+    score_breakdown: {
+      admission_prob: { score: N, note: "..." },
+      city_match: { score: N, note: "..." },
+      major_match: { score: N, note: "..." },
+      employment: { score: N, note: "..." },
+      economic_fit: { score: N, note: "..." },
+      school_strength: { score: N, note: "..." }
+    },
+    estimated_admission_prob: "约X%",
+    estimated_score_line: N,
+    4year_total_cost: "约X万元",
+    highlight: "一句话最大亮点",
+    concern: "一句话最大顾虑"
+  }
+
+  按总分降序排列，同档内按得分排序。
+  """
+
+# ── 风险评估 ──
+let risk_report = session: risk_assessor
+  prompt: """
+  对高分候选志愿做风险评估：
+
+  候选列表：{scored_matches}
+  学生画像：{data.profile}
+
+  对排名前 15 的组合检查以下风险：
+
+  1. **大小年风险**
+     该院校历史上是否有明显的大小年现象？
+     今年处于哪个周期？（大年前后排位会波动 500-2000 名）
+
+  2. **专业调剂风险**
+     如果勾选了服从专业调剂，可能被调剂到什么专业？
+     这些专业学生能否接受？
+     建议是否勾选服从调剂的理由。
+
+  3. **录取规则盲区**
+     - 是否有专业体检限制（色觉/视力/身高等）？
+     - 是否有政治面貌要求？
+     - 是否有外省招生名额特别少（1-2 名，分数线波动大）？
+     - 是否有性别比例限制？
+
+  4. **经济风险**
+     - 4年总费用是否超出家庭舒适范围？
+     - 奖学金/助学金是否稳定可获得？
+
+  5. **梯度风险**
+     分析当前候选列表的整体梯度是否合理：
+     - 冲/稳/保之间的分差是否足够？
+     - 是否有填报断层（某个分段没有志愿覆盖）？
+
+  对每个风险点给出：风险等级（高/中/低）+ 应对建议。
+  """
+
+# ── 生成匹配分析报告 ──
+session: matcher
+  prompt: """
+  生成完整的志愿匹配分析报告：
+
+  评分数据：{scored_matches}
+  风险报告：{risk_report}
+
+  写入 docs/match-analysis.md：
+
+  ## 总体评估
+  [2-3 句，说明学生分数段的整体填报形势和核心建议]
+
+  ## 推荐志愿候选列表
+
+  ### 冲刺志愿（建议填 X 个）
+  | 排名 | 学校 | 专业 | 综合得分 | 录取概率 | 最大亮点 | 主要风险 |
+  |------|------|------|----------|----------|----------|----------|
+  ...
+
+  ### 稳妥志愿（建议填 X 个）
+  ...
+
+  ### 保底志愿（建议填 X 个）
+  ...
+
+  ## 风险提示
+  [列出所有高/中风险项，及应对建议]
+
+  ## 被淘汰的候选及原因
+  [透明说明哪些院校/专业未入选及原因]
+
+  写入 data/gaokao-matches.json（完整评分数据）。
+  追加 data/stage-log.json：{ stage: "match", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"match","data":{
+    "total_candidates": N,
+    "recommended": N,
+    "high_risks_found": N,
+    "next_step": "运行 plan.whip 生成最终填报方案"
+  }}
+  """

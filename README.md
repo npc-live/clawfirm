@@ -321,6 +321,57 @@ whipflow run whips/amazon-affiliate/seo-monitor.whip
 ---
 
 ## 创建新模块 / Create New Modules
+### saas — SaaS 软件出海 / SaaS Global Launch
+
+竞品分析 + GTM 策略 → 英文落地页文案 → 多渠道获客（Reddit / HN / Cold Email / SEO）→ Product Hunt 发布 → 增长周报。
+
+```bash
+cat > data/current-run.json << 'EOF'
+{
+  "run_id": "saas-001",
+  "product_name": "YourProduct",
+  "product_desc": "One sentence description in English",
+  "product_url": "https://yourproduct.com",
+  "product_category": "productivity",
+  "target_market": "US",
+  "target_persona": "startup founders",
+  "pricing_model": "freemium",
+  "monthly_price_usd": 19,
+  "current_mrr_usd": 0,
+  "launch_channels": ["producthunt", "reddit", "hacker-news", "seo-article"]
+}
+EOF
+whipflow run whips/saas/setup.whip     # 竞品分析 + GTM 策略
+whipflow run whips/saas/landing.whip   # 英文落地页文案
+whipflow run whips/saas/acquire.whip   # 获客内容
+whipflow run whips/saas/launch.whip    # Product Hunt 发布套件
+whipflow run whips/saas/monitor.whip   # 每日监控 + 回复草稿
+whipflow run whips/saas/report.whip    # 增长周报
+```
+
+详见 [`whips/saas/README.md`](whips/saas/README.md)。
+
+---
+
+### gaokao — 高考志愿填报 / College Application Advisor
+
+综合分数位次、地域偏好、家庭经济、职业目标，生成冲/稳/保志愿方案和可打印的填报清单。
+
+```bash
+
+whipflow run whips/gaokao/run-all.whip     
+# 学生画像 + 填报策略框架  
+# 院校调研 + 专业就业 + 城市成本
+# 多维评分 + 冲稳保候选列表
+# 最终志愿顺序 + 打印速查表
+# 综合报告（家长可读版）
+```
+
+详见 [`whips/gaokao/README.md`](whips/gaokao/README.md)。
+
+---
+
+## 创建新的 Whip 模块 / Create New Whip Modules
 
 `creator` 是 meta-whip，从自然语言描述自动生成完整的 whip 子目录。
 
