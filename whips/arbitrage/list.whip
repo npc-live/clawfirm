@@ -1,0 +1,95 @@
+# whips/arbitrage/list.whip
+# 功能：上架商品 —— 将收到的货物发布到目标平台，定价策略优化
+# 调用方：收到货物后手动触发
+# 前置：data/inventory.json 有 status=received 的条目
+# 输出：data/inventory.json status=listed，上架链接
+
+agent lister:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  电商商品上架专家。撰写高转化率的商品标题和描述，
+  制定有竞争力的定价策略。标题必须包含关键搜索词，描述必须真实准确。
+  """
+
+# ── 读取待上架库存 ──
+let inventory = session: lister
+  prompt: """
+  读取待上架商品：
+  1. 读取 data/inventory.json，筛选 status=received 的条目
+  2. 读取 data/arbitrage-config.json
+
+  如果无待上架商品，输出 "NO_RECEIVED: 无已收货待上架商品"
+  输出：{ items: [...], config }
+  """
+
+if **inventory 包含 NO_RECEIVED**:
+  throw "无待上架商品"
+
+# ── 竞品定价分析 ──
+let pricing = session: lister
+  prompt: """
+  对每个待上架商品做竞品定价分析：
+
+  商品列表：{inventory}
+
+  对每个商品：
+  1. 搜索目标平台同款当前在售价格（取最低3个）
+  2. 计算推荐定价：
+     - 激进策略：比最低价低 3-5%（快速出货）
+     - 稳健策略：与最低价持平（保利润）
+     - 溢价策略：比最低价高 5%（适用于描述更好/评价更高时）
+  3. 计算各策略下的净利润率
+
+  默认选稳健策略，如果库存周转已超过 14 天则切换激进策略。
+
+  输出每个商品的推荐定价和策略选择理由。
+  """
+
+# ── 生成商品文案 ──
+let listings = session: lister
+  prompt: """
+  为每个商品生成上架文案：
+
+  商品信息：{inventory}
+  定价策略：{pricing}
+
+  ▸ 拼多多上架：
+    标题（30字内，含品牌+型号+核心关键词，不含违禁词）
+    主图文字：突出"官方同款"、"正品保障"
+    详情描述：商品参数、使用说明、售后政策
+
+  ▸ Amazon 上架（如果是跨境模式）：
+    Title（200字符内，Brand + Keywords + Features）
+    Bullet points（5条，每条40字符内）
+    Description（含长尾关键词，自然植入）
+    Search terms（后台关键词，不重复）
+    价格：{pricing.recommended_price}
+
+  使用 social-cli 执行上架：
+  - 拼多多：social-cli pdd post [商品信息]
+  - Amazon：使用 SP API 或 Seller Central 界面
+
+  上架成功后：
+  更新 data/inventory.json 对应条目：
+  status="listed", listed_at="[ISO]", listing_url="[URL]", listed_price=X
+
+  输出每个商品的上架结果 WorkflowEvent。
+  """
+
+# ── 完成 ──
+session: lister
+  prompt: """
+  list.whip 完成。
+
+  统计本次上架结果。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"list","data":{
+    "listed": N,
+    "failed": N,
+    "total_listed_value": X,
+    "avg_expected_profit_rate": X
+  }}
+  """

@@ -1,0 +1,195 @@
+# whips/setup.whip
+# 功能：首次配置 —— 环境检测、账号设置、竞品分析、内容策略
+# 前置：whipflow 已安装，social-cli 已安装
+# 输出：data/config.json 已填写，docs/content-strategy.md 已生成
+
+agent env-checker:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read"]
+  prompt: "环境检测专家。验证工具和配置是否就绪，给出精确的修复命令。"
+
+agent strategist:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  资深自媒体运营策略专家。每个策略必须包含：
+  目标用户画像、平台特性适配、关键词布局、发布时机、可量化增长目标。
+  不给模糊建议，只给可执行方案。
+  """
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: "数据分析专家。所有结论必须有数据支撑，每条洞察附具体行动建议。"
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "内容合规审核专家。验证策略质量，输出 APPROVED 或 NEEDS_REVISION。"
+
+# ── 读取运行配置 ──
+let run_config = session: env-checker
+  prompt: """
+  读取当前运行配置：
+  1. 读取 data/current-run.json
+  2. 如果文件不存在，输出错误提示
+
+  输出 JSON 格式的配置信息：
+  { run_id, niche, target_audience, tone_style, content_freq, growth_goal,
+    xhs_account, weibo_account, bilibili_account, twitter_account, telegram_channel }
+  """
+
+# ── 阶段 0：环境验证 ──
+let env_check = session: env-checker
+  prompt: """
+  验证运行环境：
+  配置：{run_config}
+
+  检查：
+  1. node --version（需要 >= 18）
+  3. tsx 是否可用：which tsx
+  4. whipflow 是否可用：which whipflow
+
+  将检测结果追加写入 data/stage-log.json：
+  读取现有文件（不存在则用 []），追加：
+  { run_id, stage: "env-setup", index: 0, status: "done", ts: "[ISO时间]", output: "[检测结果]" }
+  写回文件。
+
+  输出 "ENV_OK" 或 "ENV_FAILED: [具体问题和修复命令]"
+  """
+
+if **env_check 包含 ENV_FAILED**:
+  session: env-checker
+    prompt: """
+    环境检测失败：{env_check}
+
+    告知用户具体问题和修复步骤，更新 data/stage-log.json 中对应条目 status 为 "failed"。
+    """
+  throw "环境检测失败，请按提示修复后重新运行 setup.whip"
+
+# ── 阶段 1：账号配置持久化 ──
+session: env-checker
+  prompt: """
+  将账号配置持久化到 data/config.json：
+
+  配置：{run_config}
+
+  写入文件（覆盖已有内容）：
+  {
+    "run_id": ...,
+    "niche": ...,
+    "target_audience": ...,
+    "tone_style": ...,
+    "content_freq": ...,
+    "growth_goal": ...,
+    "xhs_account": ...,
+    "weibo_account": ...,
+    "bilibili_account": ...,
+    "twitter_account": ...,
+    "telegram_channel": ...,
+    "created_at": "[ISO时间]"
+  }
+
+  追加 data/stage-log.json：{ run_id, stage: "account-config", index: 1, status: "done", ts: "[ISO时间]" }
+
+  确认写入成功。
+  """
+
+# ── 阶段 2a：竞品分析 ──
+let competitive_analysis = session: analyst
+  prompt: """
+  对以下领域进行竞品分析：
+  领域：从 {run_config} 读取 niche
+  目标受众：从 {run_config} 读取 target_audience
+
+  使用平台工具采集竞品数据（只处理 run_config 中非空的平台账号）：
+
+  - 如果 xhs_account 非空：social-cli xhs 搜索该领域 TOP 内容
+    分析：标题结构、正文格式、标签策略、点赞/收藏 > 1000 的内容共同特征
+
+  - 如果 weibo_account 非空：social-cli weibo 搜索热门话题
+    分析：话题热度趋势、博主互动风格
+
+  - 如果 bilibili_account 非空：social-cli bilibili 搜索热门视频
+    分析：标题/封面规律、播放量门槛
+
+  - 如果 twitter_account 非空：social-cli x 搜索热门推文
+    分析：英文内容策略、hashtag 使用
+
+  - 如果 telegram_channel 非空：social-cli telegram 分析同领域频道
+
+  将结果写入 docs/competitive-analysis.md：
+  - 各平台 TOP 内容共同规律（至少 5 条可执行结论）
+  - 内容蓝海（竞品没做好的机会点）
+  - 最佳发布时间窗口（各平台分列）
+  - 高频爆款关键词 Top 30
+
+  追加 data/stage-log.json：{ stage: "competitive-analyst", status: "done", ts: "[ISO时间]" }
+  """
+
+# ── 阶段 2b：内容策略生成 ──
+let content_strategy = session: strategist
+  prompt: """
+  基于竞品分析，制定完整自媒体内容运营策略：
+
+  配置：{run_config}
+  竞品分析：{competitive_analysis}
+
+  输出策略文档（写入 docs/content-strategy.md，注明版本 v1.0 和日期）：
+
+  【账号定位】差异化 USP、人设设计、视觉风格指南
+  【内容矩阵】3-5 种固定栏目、发布比例、每种类型的标题公式 + 结构框架
+  【关键词策略】核心 10 个 + 长尾 30 个 + 各平台禁用词列表
+  【发布计划】每周7天内容日历模板 + 各平台最优发布时间（精确到小时）
+  【增长路径】冷启动方案、互动增长策略、变现路径规划
+
+  追加 data/stage-log.json：{ stage: "strategy-planner", status: "done", ts: "[ISO时间]" }
+  """
+
+let strategy_check = session: validator
+  prompt: """
+  审核内容运营策略质量：
+  {content_strategy}
+
+  验证：
+  1. 是否有明确差异化定位（非泛泛而谈）？
+  2. 内容矩阵是否有具体可执行的模板？
+  3. 关键词是否精准匹配目标受众？
+  4. 发布计划是否有具体时间（非"尽快发布"）？
+  5. 增长策略是否符合各平台算法逻辑？
+
+  输出 "STRATEGY_APPROVED" 或 "STRATEGY_NEEDS_REVISION: [具体缺失项]"
+  """
+
+loop until **strategy_check 包含 STRATEGY_APPROVED** (max: 3):
+  content_strategy = session: strategist
+    prompt: """
+    根据审核意见修订策略：{strategy_check}
+    针对每个缺失项补充具体可执行内容，更新 docs/content-strategy.md（版本号递增）。
+    """
+  strategy_check = session: validator
+    prompt: """
+    重新审核修订后的策略：{content_strategy}
+    输出 "STRATEGY_APPROVED" 或 "STRATEGY_NEEDS_REVISION: [具体缺失项]"
+    """
+
+# ── 完成 ──
+session: env-checker
+  prompt: """
+  setup.whip 执行完成。
+
+  更新 data/runs.json：
+  读取现有文件（不存在则用 []），找到 id={run_config.run_id} 的条目更新 status="completed"、finished_at="[ISO时间]"；
+  不存在则追加新条目，写回文件。
+
+  输出完成摘要（JSON-line 格式，供 Tauri 解析）：
+  {"ts": "[ISO时间]", "event": "stage_complete", "runId": [id], "stage": "setup", "data": {
+    "strategy_file": "docs/content-strategy.md",
+    "competitive_analysis": "docs/competitive-analysis.md",
+    "platforms_configured": [非空账号列表]
+  }}
+  """

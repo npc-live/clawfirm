@@ -1,0 +1,131 @@
+# whips/amazon-affiliate/research.whip
+# 功能：单篇选题深度研究 —— 搜集竞品内容、产品数据、用户评价，生成写作素材包
+# 调用方：write.whip 前自动触发 / 手动指定关键词
+# 前置：setup.whip 已完成（data/affiliate-config.json 存在）
+# 输出：data/research-[keyword].json，供 write.whip 使用
+
+agent researcher:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  亚马逊产品研究专家。深度分析产品特性、用户痛点、竞品内容结构。
+  从 Amazon 评论中提取真实用户语言，用于写出有说服力的测评内容。
+  """
+
+# ── 读取配置和目标关键词 ──
+let config = session: researcher
+  prompt: """
+  读取配置：
+  1. 读取 data/affiliate-config.json
+  2. 读取 data/current-run.json 获取目标关键词（keyword 字段）
+     如果未指定，从 top_keywords 中取第一个 status=pending 的关键词
+
+  输出：{ keyword, amazon_tag, amazon_locale, niche }
+  """
+
+# ── 竞品内容分析 ──
+let serp_analysis = session: researcher
+  prompt: """
+  分析目标关键词的 SERP 竞品内容：
+
+  关键词：{config.keyword}
+
+  使用 web search 搜索该关键词，分析前5个排名的内容：
+  1. 文章标题和 H2/H3 结构
+  2. 字数估计
+  3. 是否有对比表格、评分系统
+  4. 推荐的产品数量（Best X 文章通常5-10个）
+  5. 是否有视频嵌入、图片
+  6. 最近更新时间
+
+  提炼：
+  - 必须包含的内容要素（所有竞品都有的）
+  - 可以差异化的角度（竞品没有或做得差的）
+  - 最优文章长度范围
+
+  输出竞品分析摘要。
+  """
+
+# ── 产品数据采集 ──
+let product_data = session: researcher
+  prompt: """
+  采集该关键词对应的亚马逊产品数据：
+
+  关键词：{config.keyword}
+  市场：{config.amazon_locale}
+
+  搜索 Amazon 该类目 Best Sellers 和搜索结果，采集 Top 8-10 个产品：
+  对每个产品记录：
+  - ASIN、产品名、品牌
+  - 价格（当前价、历史最低价）
+  - 评分（星级 + 评论数）
+  - 核心规格（从产品页面提取关键参数）
+  - 优点（高频正面评论关键词）
+  - 缺点（高频负面评论关键词，1-3星评论）
+  - 是否是 Amazon's Choice / Best Seller
+  - 佣金率（根据品类）
+
+  按综合评分排序（评分 × log(评论数)）。
+
+  输出结构化产品列表。
+  """
+
+# ── 用户痛点挖掘 ──
+let user_insights = session: researcher
+  prompt: """
+  从产品评论中挖掘用户真实痛点和语言：
+
+  产品数据：{product_data}
+
+  对 Top 3 产品，深度分析评论：
+  - 用户最关心的购买因素（频率排序）
+  - 常见使用场景（"I use this for..."）
+  - 最常见的投诉和退货原因
+  - 用户与竞品的对比描述（"compared to X..."）
+  - 适合/不适合的人群描述
+
+  提炼：
+  - 5-8 个用户真实痛点（用用户的原话表达）
+  - 3-5 个购买决策关键因素
+  - 最适合推荐的产品（综合评分 + 价格 + 评论质量）
+
+  输出用户洞察摘要。
+  """
+
+# ── 打包写作素材 ──
+session: researcher
+  prompt: """
+  将研究结果打包为写作素材包：
+
+  关键词：{config.keyword}
+  竞品分析：{serp_analysis}
+  产品数据：{product_data}
+  用户洞察：{user_insights}
+
+  写入 data/research-{keyword}.json：
+  {
+    "keyword": "...",
+    "ts": "[ISO]",
+    "article_type": "best_x | comparison | review",
+    "recommended_length": N,
+    "required_sections": [...],
+    "differentiation_angles": [...],
+    "products": [
+      { asin, name, brand, price, rating, review_count, pros, cons, affiliate_url, commission_rate }
+    ],
+    "user_pain_points": [...],
+    "buying_factors": [...],
+    "top_pick": { asin, reason }
+  }
+
+  更新 data/affiliate-config.json 中对应关键词的 status 为 "researched"。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"research","data":{
+    "keyword": "...",
+    "products_found": N,
+    "article_type": "...",
+    "research_file": "data/research-[keyword].json"
+  }}
+  """

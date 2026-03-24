@@ -1,0 +1,108 @@
+# whips/amazon-affiliate/seo-monitor.whip
+# 功能：SEO 排名监控 + 收入统计 —— 追踪关键词排名、流量、联盟收入
+# 调用方：scheduler.ts 每日定时
+# 前置：网站已有发布文章（data/articles.json 有 status=published 的记录）
+# 输出：data/rankings.json，data/revenue.json，docs/seo-report.md
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  SEO 数据分析专家。从排名和流量数据中识别优化机会，
+  找出哪些文章需要更新、哪些关键词可以突破首页。
+  所有建议必须有数据支撑。
+  """
+
+# ── 读取配置 ──
+let config = session: analyst
+  prompt: """
+  读取监控配置：
+  1. 读取 data/affiliate-config.json
+  2. 读取 data/articles.json（筛选 status=published 的文章）
+  3. 读取 data/rankings.json（不存在则 []），获取上次排名基准
+
+  输出：{ articles: [...], site_url, amazon_tag, keywords_to_check: [...] }
+  """
+
+# ── 排名检查 ──
+let rankings = session: analyst
+  prompt: """
+  检查各关键词当前 Google 排名：
+
+  配置：{config}
+
+  对每篇已发布文章的目标关键词：
+  使用 web search 搜索该关键词，检查 {config.site_url} 是否出现在前3页，
+  记录当前排名位置。
+
+  同时检查：
+  - 文章是否被 Google 收录（site:{url} 搜索）
+  - 是否有 Featured Snippet 机会（关键词有 "what is" / "how to" 意图）
+  - 竞品排名是否有变化
+
+  读取 data/rankings.json，追加今日快照：
+  { keyword, url, position, indexed: bool, date: "[today]" }
+  写回文件。
+
+  输出排名摘要（含环比变化）。
+  """
+
+# ── 收入统计 ──
+let revenue = session: analyst
+  prompt: """
+  统计联盟收入数据：
+
+  配置：{config}
+
+  从 Amazon Associates 报告页面获取数据（使用 social-cli 或 web fetch）：
+  - 昨日点击数、订单数、收入
+  - 各 ASIN 的点击转化率
+  - 哪篇文章产生了最多点击
+
+  读取 data/revenue.json（不存在则 []），追加：
+  { date: "[yesterday]", clicks: N, orders: N, revenue_usd: X, top_articles: [...] }
+  写回文件。
+
+  计算：
+  - 本月累计收入
+  - 距离目标还差多少
+  - 每篇文章的 RPM（每千访客收入）
+
+  输出收入摘要。
+  """
+
+# ── 优化建议 ──
+let insights = session: analyst
+  prompt: """
+  基于排名和收入数据生成优化建议：
+
+  排名数据：{rankings}
+  收入数据：{revenue}
+
+  分析：
+
+  【需要立即更新的文章】
+  - 排名在 11-20 位的文章（最容易突破首页）
+  - 有点击但零转化的文章（需要改进 CTA 或产品选择）
+  - 排名下滑 > 5 位的文章（需要补充内容或更新产品数据）
+
+  【新选题机会】
+  - 现有文章排名好的关键词，是否有相关长尾词可以写
+  - 竞品最近新发的文章方向
+
+  【内链优化】
+  - 哪些新文章可以从现有高排名文章获得内链
+
+  写入 docs/seo-report.md（追加今日报告）
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"seo-monitor","data":{
+    "articles_tracked": N,
+    "avg_position": X,
+    "top_10_count": N,
+    "revenue_yesterday_usd": X,
+    "revenue_month_usd": X,
+    "articles_need_update": N
+  }}
+  """

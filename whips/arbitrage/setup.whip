@@ -1,0 +1,118 @@
+# whips/arbitrage/setup.whip
+# 功能：首次配置 —— 平台账号验证、品类选择、利润模型初始化
+# 前置：有闲鱼/拼多多/eBay/Amazon 账号
+# 输出：data/arbitrage-config.json，docs/category-strategy.md
+
+agent env-checker:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "环境检测专家。验证工具和配置是否就绪。"
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  跨平台电商套利专家。精通闲鱼、拼多多、eBay、Amazon 的价格规律。
+  分析品类利润空间时必须考虑：采购价、运费、平台佣金、退货率、资金周转期。
+  只推荐净利润率 > 20% 的品类。
+  """
+
+# ── 读取初始配置 ──
+let run_config = session: env-checker
+  prompt: """
+  读取初始配置：
+  读取 data/current-run.json，输出：
+  {
+    run_id,
+    mode,              # "xianyu_pdd"（国内）| "ebay_amazon"（跨境）| "both"
+    budget_cny,        # 启动资金（人民币）
+    budget_usd,        # 启动资金（美元，跨境用）
+    xianyu_account,    # 闲鱼账号
+    pdd_account,       # 拼多多账号
+    ebay_account,      # eBay 账号
+    amazon_account,    # Amazon 卖家账号
+    target_categories, # 目标品类，如 ["电子产品", "运动户外"]
+    min_profit_rate    # 最低利润率，默认 0.20
+  }
+  """
+
+# ── 环境验证 ──
+let env_check = session: env-checker
+  prompt: """
+  验证环境：
+  1. social-cli 是否可用：which social-cli
+  2. node --version（>= 18）
+  3. 各平台账号格式验证（非空）
+
+  追加 data/stage-log.json：{ stage: "env-check", status, ts }
+  输出 "ENV_OK" 或 "ENV_FAILED: [原因]"
+  """
+
+if **env_check 包含 ENV_FAILED**:
+  throw "环境检测失败：{env_check}"
+
+# ── 品类利润分析 ──
+let category_analysis = session: analyst
+  prompt: """
+  分析各目标品类的套利空间：
+
+  配置：{run_config}
+  模式：{run_config.mode}
+
+  对每个目标品类，搜集价差数据：
+
+  【国内模式（闲鱼→拼多多）】
+  - 闲鱼搜索该品类，记录二手价格区间
+  - 拼多多搜索同款，记录新品最低价
+  - 计算：套利空间 = 拼多多售价 × 0.85 - 闲鱼采购价 - 运费（约10元）
+  - 考虑：平台佣金（拼多多约1-3%）、退货率（该品类平均水平）
+
+  【跨境模式（eBay→Amazon）】
+  - eBay 搜索该品类 sold listings，统计实际成交价
+  - Amazon 同款 BSR 排名和售价
+  - 计算：净利润 = Amazon售价 × 0.85 - eBay采购价 - 头程运费 - FBA费用
+  - 考虑：汇率风险、海关清关、退货处理
+
+  筛选条件：净利润率 >= {run_config.min_profit_rate}
+
+  为每个品类输出：
+  { category, avg_source_price, avg_target_price, profit_rate, volume_estimate,
+    turnover_days, risk_level, recommended: bool, reason }
+
+  写入 docs/category-strategy.md
+  输出品类分析摘要。
+  """
+
+# ── 写入配置 ──
+session: env-checker
+  prompt: """
+  写入 data/arbitrage-config.json：
+  {
+    "run_id": ...,
+    "mode": ...,
+    "budget_cny": ...,
+    "budget_usd": ...,
+    "accounts": { xianyu, pdd, ebay, amazon },
+    "approved_categories": [利润率达标的品类列表],
+    "min_profit_rate": ...,
+    "max_inventory_per_item": 3,   # 单品最多备货数量
+    "max_category_exposure": 0.30, # 单品类最大资金占比
+    "created_at": "[ISO]"
+  }
+
+  初始化数据文件：
+  - data/inventory.json → []
+  - data/orders.json → []
+  - data/profit.json → []
+  - data/watchlist.json → []
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "approved_categories": [...],
+    "mode": "...",
+    "budget_total": X,
+    "ready_to_scan": true
+  }}
+  """

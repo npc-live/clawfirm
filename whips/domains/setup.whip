@@ -1,0 +1,125 @@
+# whips/domains/setup.whip
+# 功能：首次配置 —— 注册商账号验证、评估标准设定、关键词方向初始化
+# 前置：有 GoDaddy/Namecheap/Dynadot 账号，有域名交易平台账号（Sedo/Dan/Afternic）
+# 输出：data/domain-config.json，docs/domain-strategy.md
+
+agent env-checker:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "环境检测专家。验证工具和配置是否就绪。"
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  域名投资专家。精通域名估值、过期域名策略、行业关键词价值评估。
+  估值必须基于：历史成交数据、关键词搜索量、行业 CPC、域名长度和可记忆性。
+  只推荐有明确买家群体的域名。
+  """
+
+# ── 读取初始配置 ──
+let run_config = session: env-checker
+  prompt: """
+  读取初始配置：
+  读取 data/current-run.json，输出：
+  {
+    run_id,
+    registrar,           # "godaddy" | "namecheap" | "dynadot"
+    registrar_api_key,
+    marketplace,         # "sedo" | "dan" | "afternic" | "all"
+    budget_usd,          # 总预算
+    max_reg_fee_usd,     # 单个域名最大注册/抢注费，默认 $20
+    target_sale_price,   # 目标售价区间，如 [500, 5000]
+    niches,              # 感兴趣的行业，如 ["ai", "saas", "finance", "health"]
+    tlds,                # 目标后缀，如 [".com", ".io", ".ai"]
+    min_valuation_usd    # 最低估值门槛，默认 $200
+  }
+  """
+
+# ── 环境验证 ──
+let env_check = session: env-checker
+  prompt: """
+  验证环境：
+  1. node --version（>= 18）
+  2. whois 是否可用：which whois
+  3. registrar API 连通性：
+     curl -s -H "Authorization: sso-key {registrar_api_key}" \
+     https://api.godaddy.com/v1/domains/available?domain=test-domain-check.com
+  4. 检查 data/ 目录可写
+
+  追加 data/stage-log.json：{ stage: "env-check", status, ts }
+  输出 "ENV_OK" 或 "ENV_FAILED: [原因]"
+  """
+
+if **env_check 包含 ENV_FAILED**:
+  throw "环境检测失败：{env_check}"
+
+# ── 行业关键词库建立 ──
+let keyword_research = session: analyst
+  prompt: """
+  为各目标行业建立关键词库：
+
+  行业：{run_config.niches}
+  目标后缀：{run_config.tlds}
+
+  对每个行业，研究：
+
+  【高价值关键词特征】
+  - 搜索量（Google Keyword Planner 数据）
+  - 行业 CPC（广告出价越高，域名价值越高）
+  - 商业意图词（buy, best, price, service, tool, app）
+  - 新兴词（AI 相关：agent, copilot, llm, embed）
+
+  【历史成交参考】
+  搜索 Namebio / DNJournal 该行业域名成交记录
+  分析：什么样的域名在该行业能卖到 $500/$1000/$5000+
+
+  【域名命名规律】
+  - 动词+名词（GetX, UseX, TryX）
+  - 形容词+名词（SmartX, FastX, EasyX）
+  - 纯名词（行业词.com 最值钱）
+  - 品牌化发音（可以直接注册为公司名）
+
+  为每个行业输出：
+  - 高价值关键词 Top 30（含估值依据）
+  - 值得关注的词组模式
+  - 避免的词（商标风险词、已泛滥词）
+
+  写入 docs/domain-strategy.md
+  """
+
+# ── 写入配置 ──
+session: env-checker
+  prompt: """
+  写入 data/domain-config.json：
+  {
+    "run_id": ...,
+    "registrar": ...,
+    "registrar_api_key": ...,
+    "marketplace": ...,
+    "budget_usd": ...,
+    "max_reg_fee_usd": ...,
+    "target_sale_price": [...],
+    "niches": [...],
+    "tlds": [...],
+    "min_valuation_usd": ...,
+    "keyword_library": { niche: [keywords] },
+    "created_at": "[ISO]"
+  }
+
+  初始化数据文件：
+  - data/domain-watchlist.json → []
+  - data/portfolio.json → []
+  - data/domain-sales.json → []
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "niches": [...],
+    "tlds": [...],
+    "keywords_loaded": N,
+    "budget_usd": X,
+    "ready_to_scan": true
+  }}
+  """

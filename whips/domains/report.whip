@@ -1,0 +1,104 @@
+# whips/domains/report.whip
+# 功能：投资组合报告 —— 统计持仓域名、询盘、成交，分析投资回报
+# 调用方：scheduler.ts 每周日定时
+# 前置：data/portfolio.json 有数据
+# 输出：data/domain-sales.json，docs/domain-report.md
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  域名投资组合分析专家。评估持仓质量，识别滞销域名，
+  计算整体 ROI，给出续费/放弃/降价决策建议。
+  """
+
+# ── 汇总持仓数据 ──
+let portfolio_data = session: analyst
+  prompt: """
+  汇总本周持仓数据：
+  1. 读取 data/portfolio.json
+  2. 读取 data/domain-sales.json（不存在则 []）
+  3. 读取 data/domain-config.json
+
+  检查各交易平台的询盘和成交：
+  使用 web fetch 或 social-cli 查询 Sedo / Dan / Afternic 后台：
+  - 本周新增询盘（Make Offer）
+  - 本周成交
+
+  对已成交域名：
+  更新 data/portfolio.json 对应条目：
+  status="sold", sold_at, sold_price_usd, buyer_platform
+
+  追加 data/domain-sales.json：
+  { domain, reg_cost_usd, sold_price_usd, profit_usd, roi, hold_days, sold_at }
+
+  输出汇总数据。
+  """
+
+# ── 续费决策 ──
+let renewal_decisions = session: analyst
+  prompt: """
+  对持仓域名做续费决策：
+
+  持仓数据：{portfolio_data}
+
+  对每个 status=listed 且临近到期（90天内）的域名评估：
+
+  续费标准：
+  - estimated_value / 总持有成本 > 3：续费
+  - 有过询盘记录（即使未成交）：续费
+  - listed 超过 18 个月且无询盘：放弃（不续费）
+  - list_price 明显高于市场（参考同类成交）：降价后续费
+
+  输出每个域名的决策：RENEW / DROP / REPRICE: [新价格]
+  """
+
+# ── 生成报告 ──
+session: analyst
+  prompt: """
+  生成本周域名投资报告：
+
+  数据：{portfolio_data}
+  续费决策：{renewal_decisions}
+
+  计算：
+  - 总持有域名数、总投入成本
+  - 本周成交数、本周收入
+  - 累计 ROI = 累计销售收入 / 累计采购成本
+  - 平均持有周期（已售出域名）
+  - 待续费域名数量和费用
+
+  写入 docs/domain-report.md（追加本周报告）：
+
+  # 域名投资周报 — [日期]
+
+  ## 持仓概览
+  | 状态 | 数量 | 总成本 | 预期价值 |
+  | listed | N | $X | $X |
+  | sold（本周）| N | — | $X |
+
+  ## 本周成交
+  [列出每笔成交：域名、持有时长、成本、售价、利润]
+
+  ## 询盘记录
+  [本周收到的 Make Offer 及处理情况]
+
+  ## 续费决策
+  [RENEW/DROP/REPRICE 列表]
+
+  ## 下周重点
+  - 需要抢注的高价值过期域名
+  - 需要降价促销的滞销域名
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"report","data":{
+    "portfolio_count": N,
+    "total_cost_usd": X,
+    "sales_this_week": N,
+    "revenue_this_week_usd": X,
+    "cumulative_roi": X,
+    "domains_to_renew": N,
+    "domains_to_drop": N
+  }}
+  """

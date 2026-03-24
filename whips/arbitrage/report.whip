@@ -1,0 +1,85 @@
+# whips/arbitrage/report.whip
+# 功能：利润统计报告 —— 汇总库存、成交、利润，识别高利润品类
+# 调用方：scheduler.ts 每日定时
+# 前置：data/orders.json，data/inventory.json 有数据
+# 输出：data/profit.json，docs/arbitrage-report.md
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  电商利润分析专家。从成交数据中识别高利润品类和商品，
+  找出资金周转瓶颈，给出品类调整建议。
+  """
+
+# ── 汇总数据 ──
+let summary = session: analyst
+  prompt: """
+  读取今日数据：
+  1. 读取 data/orders.json
+  2. 读取 data/inventory.json
+  3. 读取 data/profit.json（不存在则 []）
+  4. 读取 data/arbitrage-config.json
+
+  今日日期：date '+%Y-%m-%d'
+
+  计算：
+
+  【库存状态】
+  - 在途（in_transit）：件数 + 占用资金
+  - 已上架（listed）：件数 + 标价总额 + 预期利润
+  - 已售出：今日新增成交（需要检查平台订单）
+
+  【今日成交】
+  使用 social-cli 查询各平台今日新增订单：
+  - 拼多多：social-cli pdd orders --today
+  - Amazon：查询 Seller Central 今日订单
+  对每笔成交，计算实际利润 = 成交价 - 采购价 - 运费 - 佣金
+
+  更新 data/inventory.json 已售出商品 status="sold", sold_at, sold_price, actual_profit
+
+  读取 data/profit.json，追加今日利润记录：
+  { date, revenue, cost, gross_profit, profit_rate, items_sold, categories: {...} }
+  写回文件。
+
+  输出数据摘要。
+  """
+
+# ── 分析和建议 ──
+session: analyst
+  prompt: """
+  生成利润分析报告：
+
+  数据：{summary}
+
+  分析：
+
+  【品类表现】
+  各品类的：平均利润率、平均周转天数、资金效率（利润/占用资金/天）
+
+  【滞销预警】
+  上架超过 14 天未售出的商品 → 建议降价 10% 促销
+
+  【资金效率】
+  哪些品类 ROI 最高（日化利润率）？
+  哪些品类占用资金最多但利润贡献少？
+
+  【下周采购建议】
+  - 应加大采购的品类（高利润率 + 快周转）
+  - 应减少或停止的品类（低利润 or 滞销）
+  - 预计下周可用采购资金
+
+  写入 docs/arbitrage-report.md（追加今日报告）
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"report","data":{
+    "revenue_today": X,
+    "profit_today": X,
+    "profit_rate_today": X,
+    "items_in_transit": N,
+    "items_listed": N,
+    "items_overdue": N,
+    "top_category": "..."
+  }}
+  """

@@ -1,0 +1,78 @@
+# whips/amazon-affiliate/publish.whip
+# 功能：发布文章到网站 —— 将草稿推送到 WordPress/Hugo，设置 SEO meta
+# 调用方：write.whip 完成后触发 / 手动
+# 前置：docs/drafts/[keyword].md 存在，网站已配置
+# 输出：data/articles.json status=published，线上 URL
+
+agent publisher:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: "网站内容发布专家。将 Markdown 草稿准确发布到目标平台，设置完整 SEO meta 和内链。"
+
+# ── 读取配置 ──
+let config = session: publisher
+  prompt: """
+  读取发布配置：
+  1. 读取 data/current-run.json 获取目标关键词
+  2. 读取 data/affiliate-config.json
+  3. 读取 data/articles.json，找到 keyword 匹配且 status=draft 的文章
+  4. 读取 docs/drafts/{keyword}.md
+
+  输出：{ keyword, draft_path, site_url, site_platform, article_id }
+  """
+
+# ── 生成 SEO meta ──
+let seo_meta = session: publisher
+  prompt: """
+  为文章生成完整 SEO meta：
+
+  文章内容：{config.draft_path} 的全文
+  关键词：{config.keyword}
+
+  生成：
+  - title tag（50-60字符，含主关键词，靠前）
+  - meta description（150-160字符，含关键词，有 CTA）
+  - URL slug（全小写，连字符分隔，含主关键词）
+  - Open Graph title / description（分享用）
+  - 焦点关键词（Yoast/RankMath 用）
+  - 文章分类和标签（3-5个）
+
+  输出 JSON 格式的 meta 数据。
+  """
+
+# ── 发布到对应平台 ──
+let publish_result = session: publisher
+  prompt: """
+  将文章发布到网站：
+
+  配置：{config}
+  SEO meta：{seo_meta}
+
+  根据 site_platform 执行对应操作：
+
+  ▸ WordPress：
+    使用 WordPress REST API（POST /wp-json/wp/v2/posts）：
+    - title: seo_meta.title
+    - content: 将 Markdown 转换为 HTML（使用 marked 或 pandoc）
+    - status: "draft"（先发为草稿，人工确认后再 publish）
+    - slug: seo_meta.slug
+    - categories / tags
+    - 使用 Yoast SEO API 设置 meta description 和焦点关键词
+
+  ▸ Hugo：
+    更新文章 frontmatter（title, description, slug, tags, date）
+    将文件复制到 content/posts/{slug}.md
+    运行 hugo build
+    如果配置了 Netlify/Vercel，触发 deploy hook
+
+  发布成功后，更新 data/articles.json 对应条目：
+  status="published", url="[线上URL]", published_at="[ISO]"
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"publish","data":{
+    "keyword": "...",
+    "url": "...",
+    "status": "draft/published"
+  }}
+  """

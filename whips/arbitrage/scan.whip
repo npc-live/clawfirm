@@ -1,0 +1,87 @@
+# whips/arbitrage/scan.whip
+# 功能：价差监控 —— 扫描各品类价差机会，计算利润，输出值得采购的商品列表
+# 调用方：scheduler.ts 每2小时定时
+# 前置：data/arbitrage-config.json 存在
+# 输出：data/watchlist.json（值得买入的商品）
+
+agent scanner:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  电商价差扫描专家。快速识别跨平台价差机会，
+  精确计算所有成本后的真实利润率，过滤掉不值得操作的标的。
+  只输出净利润率 > 阈值的机会，附完整成本拆解。
+  """
+
+# ── 读取配置 ──
+let config = session: scanner
+  prompt: """
+  读取配置：
+  1. 读取 data/arbitrage-config.json
+  2. 读取 data/inventory.json，统计当前在途/库存金额
+  3. 计算可用资金 = budget - 在途资金
+
+  输出：{ mode, approved_categories, min_profit_rate, available_budget, accounts }
+  """
+
+# ── 扫描价差机会 ──
+let opportunities = session: scanner
+  prompt: """
+  扫描各品类的价差机会：
+
+  配置：{config}
+
+  根据 mode 执行对应扫描：
+
+  ▸ 国内模式（闲鱼→拼多多）：
+    对每个 approved_categories：
+    使用 social-cli 搜索闲鱼该品类，筛选：
+    - 卖家评价 >= 4.5 分
+    - 在售时间 < 7 天（越新越可靠）
+    - 有清晰商品图
+    - 描述包含"自用"、"九成新"、"包装完好"等关键词
+    - 排除：无实物图、价格异常低（可能是骗局）
+
+    同时搜索拼多多同款新品最低价（百亿补贴优先）
+
+    计算每个商品的利润：
+    预期售价 = 拼多多最低价 × 0.90（保守估计，留竞争空间）
+    成本 = 闲鱼标价 + 12元运费
+    佣金 = 预期售价 × 0.02
+    净利润率 = (预期售价 - 成本 - 佣金) / 成本
+
+  ▸ 跨境模式（eBay→Amazon）：
+    搜索 eBay 该品类 Buy It Now 在售商品：
+    - 卖家 feedback > 98%
+    - 有 free shipping 或运费 < $5
+    - 非仿品（避免品牌词 + "replica"）
+
+    查询 Amazon 同款 ASIN 当前售价和 BSR 排名（BSR < 50000 说明有销量）
+
+    计算净利润：
+    Amazon售价 × 0.85（扣 referral fee）- FBA费用 - eBay采购价 - 头程运费
+
+  过滤：净利润率 >= {config.min_profit_rate}
+
+  读取 data/watchlist.json（不存在则 []），追加符合条件的机会：
+  {
+    id: "[uuid]", ts: "[ISO]", mode,
+    source_platform, source_url, source_price,
+    target_platform, target_search_keyword,
+    estimated_target_price, estimated_profit_rate,
+    costs: { shipping, commission, fba_fee },
+    product_name, category, condition,
+    risk_notes,
+    status: "pending"
+  }
+  写回文件（去重：source_url 已存在则跳过）。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"scan","data":{
+    "categories_scanned": N,
+    "opportunities_found": N,
+    "avg_profit_rate": X,
+    "available_budget_used_pct": X
+  }}
+  """

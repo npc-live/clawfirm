@@ -3,6 +3,5 @@ whipflow
 docs
 data
 src
-*.whip
 node_modules/
 .whipflow

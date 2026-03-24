@@ -1,0 +1,143 @@
+# whips/polymarket/scan.whip
+# 功能：扫描天气预测市场，计算 edge，筛选值得交易的合约
+# 调用方：scheduler.ts 每小时定时 / 手动触发
+# 前置：data/api-creds.json 已配置，PRIVATE_KEY 环境变量已设置
+# 输出：data/opportunities.json（edge 达标的候选仓位）
+
+agent forecaster:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  天气预报数据专家。从 Open-Meteo 集合预报 API 提取概率分布，
+  计算每个温度区间的模型概率。输出必须精确到小数点后4位。
+  """
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  预测市场分析专家。计算模型概率与市场隐含概率之间的 edge，
+  应用风控过滤规则，输出可执行的交易机会列表。
+  所有计算过程必须透明，附完整推导数据。
+  """
+
+# ── 读取配置 ──
+let config = session: forecaster
+  prompt: """
+  读取交易配置：
+  1. 读取 data/api-creds.json：{ wallet_address, poly_api_key }
+  2. 读取 data/positions.json（不存在则 []），统计当前持仓数
+  3. 读取 data/trades.json（不存在则 []），计算今日已实现亏损
+
+  输出：{
+    wallet_address,
+    current_positions: N,
+    daily_pnl: X,
+    scan_date: "YYYY-MM-DD",
+    regions: ["shanghai", "seoul", "toronto", "nyc", "london", "tokyo", "singapore", "shenzhen"]
+  }
+  """
+
+# ── 拉取集合天气预报 ──
+let forecasts = session: forecaster
+  prompt: """
+  从 Open-Meteo 集合预报 API 拉取各城市明后两天温度预报：
+
+  配置：{config}
+
+  对每个城市调用：
+  https://ensemble-api.open-meteo.com/v1/ensemble
+  参数：
+    - shanghai:   latitude=31.23, longitude=121.47
+    - seoul:      latitude=37.57, longitude=126.98
+    - toronto:    latitude=43.70, longitude=-79.42
+    - nyc:        latitude=40.71, longitude=-74.01
+    - london:     latitude=51.51, longitude=-0.13
+    - tokyo:      latitude=35.69, longitude=139.69
+    - singapore:  latitude=1.35,  longitude=103.82
+    - shenzhen:   latitude=22.54, longitude=114.06
+  models: icon_seamless（优先），ecmwf_ifs025（备用）
+  hourly: temperature_2m
+  ensemble_members: all
+
+  对每个城市计算次日最高气温的概率分布：
+  - 提取所有集合成员的次日 14:00 温度值
+  - 按 1°C 区间统计每个 bin 的成员数量
+  - P(bin) = count(members in bin) / total_members
+  - ensemble_spread = std(members)
+
+  写入 data/forecasts.json：
+  [{ city, model, member_count, date, bins: [{low, high, probability}], spread }]
+
+  输出预报摘要（每城市最高概率区间）。
+  """
+
+# ── 扫描市场定价 ──
+let market_prices = session: analyst
+  prompt: """
+  从 Polymarket Gamma API 获取各城市天气合约的当前市场价格：
+
+  https://gamma-api.polymarket.com/markets?tag=weather&active=true&limit=100
+
+  对每个活跃的温度合约：
+  1. 匹配城市和日期（与 {forecasts} 对应）
+  2. 提取每个温度区间的 outcome token 价格（即市场隐含概率）
+  3. 记录流动性（volumeNum）
+
+  过滤：volumeNum < 5000 的合约跳过（流动性不足）
+
+  输出：[{ city, date, market_id, question, bins: [{low, high, market_prob, token_id}], liquidity }]
+  """
+
+# ── 计算 edge 并筛选机会 ──
+let opportunities = session: analyst
+  prompt: """
+  对比模型概率与市场价格，计算每个区间的 edge：
+
+  预报数据：{forecasts}
+  市场价格：{market_prices}
+  当前状态：{config}
+
+  计算规则：
+  edge = P_model(bin) - P_market(bin)
+
+  过滤条件（全部满足才保留）：
+  1. edge >= 0.05（5% 最低门槛）
+     - 如果是降水相关合约：edge >= 0.15
+     - 如果当前月份为 6/7/8（上海夏季）：edge >= 0.12
+  2. edge < 0.30 或 edge > 0.40（跳过过度自信区间 30-40%）
+  3. 市场流动性 > 5000 USDC
+  4. 当前持仓数 < 3（风控上限）
+  5. 今日亏损未超过初始资金的 5%
+
+  对每个通过过滤的机会，计算仓位大小：
+  - full_kelly = edge / (1 - P_market)
+  - half_kelly = 0.5 * full_kelly
+  - 如果同城市已有仓位：half_kelly *= (1 - 0.65)（相关性折扣 ρ=0.65）
+  - max_position = min(half_kelly * capital, capital * 0.10)（最大 10% 初始资金）
+  - 最终下单金额 = max(5, min(max_position, 可用余额))（CLOB 最小 5 USDC）
+
+  写入 data/opportunities.json：
+  [{
+    city, date, market_id, token_id,
+    bin_low, bin_high,
+    p_model, p_market, edge,
+    position_size_usdc,
+    kelly_fraction,
+    liquidity,
+    model_spread,
+    rationale: "[一句话说明为什么有 edge]",
+    ts: "[ISO]"
+  }]
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"scan","data":{
+    "cities_scanned": N,
+    "markets_checked": N,
+    "opportunities_found": N,
+    "top_edge": X,
+    "ready_to_trade": true/false
+  }}
+  """

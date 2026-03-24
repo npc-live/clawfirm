@@ -1,0 +1,170 @@
+# whips/amazon-affiliate/setup.whip
+# 功能：首次配置 —— 环境检测、联盟账号、网站、关键词方向初始化
+# 前置：有 Amazon Associates 账号，有建站平台（WordPress/Hugo）
+# 输出：data/affiliate-config.json，docs/niche-strategy.md
+
+agent env-checker:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "环境检测专家。验证工具和配置是否就绪，给出精确的修复命令。"
+
+agent researcher:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  亚马逊联盟 SEO 专家。精通关键词研究、竞品分析、选题策略。
+  所有建议必须基于搜索量和竞争度数据，聚焦低竞争高意图关键词。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "策略审核专家。验证选题方向的可行性，输出 APPROVED 或 NEEDS_REVISION: [原因]。"
+
+# ── 读取初始配置 ──
+let run_config = session: env-checker
+  prompt: """
+  读取初始配置：
+  读取 data/current-run.json，输出：
+  {
+    run_id,
+    niche,               # 垂直领域，如 "outdoor gear", "home office"
+    site_url,            # 网站域名
+    site_platform,       # "wordpress" | "hugo" | "other"
+    amazon_tag,          # Associates tracking ID
+    amazon_locale,       # "us" | "uk" | "jp" 等
+    target_monthly_revenue_usd,
+    publish_cadence      # 每周发文数量
+  }
+  """
+
+# ── 阶段 0：环境验证 ──
+let env_check = session: env-checker
+  prompt: """
+  验证环境：
+  1. node --version（>= 18）
+  2. whipflow 是否可用：which whipflow
+  3. site_url 是否可访问：curl -s -o /dev/null -w "%{http_code}" {run_config.site_url}
+  4. Amazon Associates 账号：{run_config.amazon_tag} 格式是否正确（含 -20/-21 后缀）
+
+  追加 data/stage-log.json：{ stage: "env-check", status, ts }
+  输出 "ENV_OK" 或 "ENV_FAILED: [原因]"
+  """
+
+if **env_check 包含 ENV_FAILED**:
+  throw "环境检测失败：{env_check}"
+
+# ── 阶段 1：关键词和竞品研究 ──
+let niche_research = session: researcher
+  prompt: """
+  对目标领域进行关键词和竞品研究：
+
+  领域：{run_config.niche}
+  亚马逊市场：{run_config.amazon_locale}
+
+  使用 social-cli x 和 web search 搜集数据：
+
+  【关键词研究】
+  找出以下类型的关键词（每类 10 个）：
+  - "best [product]" 类（购买意图最强）
+  - "[product] vs [product]" 类（对比意图）
+  - "[product] review" 类
+  - "[product] for [use case]" 类（长尾）
+  优先选：月搜索量 500-5000，竞争度低，CPC > $0.5
+
+  【竞品分析】
+  搜索每个核心关键词，分析前3个排名的测评站：
+  - 文章结构（标题层级、字数、段落数）
+  - 是否有对比表格
+  - 内链策略
+  - 文章更新频率
+
+  【选题优先级排列】
+  按 (搜索量 × 商业价值) / 竞争难度 排序，输出 Top 20 选题
+
+  写入 docs/keyword-research.md
+  输出结构化研究摘要。
+  """
+
+# ── 阶段 2：内容策略制定 ──
+let content_strategy = session: researcher
+  prompt: """
+  基于关键词研究，制定内容策略：
+
+  关键词研究：{niche_research}
+  配置：{run_config}
+
+  输出策略文档（写入 docs/niche-strategy.md）：
+
+  【网站定位】目标用户、差异化角度、域名权威度建立路径
+  【内容架构】
+    - Pillar 页面（3-5 个核心品类页）
+    - Cluster 文章（每个 pillar 下 10-20 篇）
+    - 内链结构图
+  【文章模板】
+    - "Best X" 文章结构（字数、段落数、必备元素）
+    - "X vs Y" 对比文结构
+    - 单品 Review 结构
+  【联盟链接策略】
+    - 在哪里放链接（首段、对比表、结尾 CTA）
+    - disclosure 声明位置
+    - 链接密度（每1000字不超过3个）
+  【发布计划】
+    前4周内容日历（每周 {run_config.publish_cadence} 篇）
+
+  追加 data/stage-log.json：{ stage: "strategy", status: "done", ts }
+  """
+
+let strategy_check = session: validator
+  prompt: """
+  审核内容策略可行性：
+  {content_strategy}
+
+  检查：
+  1. 选题是否有真实搜索量？
+  2. 内容结构是否符合 SEO 最佳实践？
+  3. 联盟链接策略是否符合 Amazon Associates 条款？
+  4. 发布节奏是否可持续？
+
+  输出 "STRATEGY_APPROVED" 或 "STRATEGY_NEEDS_REVISION: [原因]"
+  """
+
+loop until **strategy_check 包含 STRATEGY_APPROVED** (max: 2):
+  content_strategy = session: researcher
+    prompt: "根据审核意见修订策略：{strategy_check}，更新 docs/niche-strategy.md。"
+  strategy_check = session: validator
+    prompt: "重新审核：{content_strategy}，输出 STRATEGY_APPROVED 或 STRATEGY_NEEDS_REVISION。"
+
+# ── 阶段 3：写入配置 ──
+session: env-checker
+  prompt: """
+  写入 data/affiliate-config.json：
+  {
+    "run_id": ...,
+    "niche": ...,
+    "site_url": ...,
+    "site_platform": ...,
+    "amazon_tag": ...,
+    "amazon_locale": ...,
+    "target_monthly_revenue_usd": ...,
+    "publish_cadence": ...,
+    "top_keywords": [Top 20 关键词列表],
+    "created_at": "[ISO]"
+  }
+
+  初始化空数据文件（如不存在）：
+  - data/articles.json → []
+  - data/rankings.json → []
+  - data/revenue.json → []
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "niche": "...",
+    "keywords_found": N,
+    "content_plan": "docs/niche-strategy.md",
+    "ready_to_write": true
+  }}
+  """

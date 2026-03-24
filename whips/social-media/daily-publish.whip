@@ -1,0 +1,168 @@
+# whips/daily-publish.whip
+# 功能：多平台并行发布 —— 将审核通过的今日草稿发布到各平台
+# 调用方：Tauri App "发布今日内容" 按钮 / scheduler.ts 每日定时
+# 前置：daily-content.whip 已完成（data/content-drafts.json 有 status=approved 的记录）
+# 输出：data/publish-log.json 记录，content-drafts.json status=published
+
+agent publisher:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  自动化发布专家。精确分发内容到各平台，确保格式符合规范，发布后记录截图和链接。
+  每次操作都输出 WorkflowEvent JSON-line 到 stdout，供 Tauri 实时追踪。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read"]
+  prompt: "发布结果验证专家。检查发布日志完整性，识别失败原因，判断是否需要重试。"
+
+# ── 读取配置 ──
+let run_config = session: publisher
+  prompt: """
+  读取运行配置：
+  1. 读取 data/current-run.json 获取 run_id
+  3. 读取 data/content-drafts.json，筛选：
+     run_id=[run_id] 且 calendar_day=date('now') 且 status="approved"
+
+  输出：{ run_id, drafts: [{id, platform, title, body, tags}] }
+  如果 drafts 为空，输出警告："NO_APPROVED_DRAFTS: 请先运行 daily-content.whip 并确保内容通过审核"
+  """
+
+if **run_config 包含 NO_APPROVED_DRAFTS**:
+  throw "没有待发布内容。请先运行 daily-content.whip 完成内容创作和审核。"
+
+# ── 并行发布到各平台 ──
+parallel:
+  let xhs_result = session: publisher
+    prompt: """
+    发布今日小红书内容：
+
+    从 {run_config}.drafts 中取 platform='xhs' 的草稿。
+    如果没有小红书草稿，输出 {"platform":"xhs","status":"skipped"} 并结束。
+
+    登录小红书，按格式发布（标题 + 正文 + 标签）。
+
+    发布成功后：
+    - 截图保存到 data/screenshots/xhs-{date}.png
+    - 读取 data/publish-log.json（不存在则 []），追加：
+      { run_id, draft_id, platform: "xhs", status: "success", published_at: "[ISO]", post_url: "[链接]", screenshot_path: "..." }
+      写回文件
+    - 更新 data/content-drafts.json 中对应条目 status="published"
+
+    输出 WorkflowEvent：
+    {"ts":"[ISO]","event":"publish_result","runId":[id],"stage":"daily-publish","data":{"platform":"xhs","status":"success","url":"[链接]"}}
+
+    发布失败：
+    - 追加 data/publish-log.json：{ ..., status: "failed", error_msg: "[原因]" }
+    - 输出：{"ts":"[ISO]","event":"publish_result","data":{"platform":"xhs","status":"failed","error":"[原因]"}}
+    """
+
+  let weibo_result = session: publisher
+    prompt: """
+    发布今日微博内容：
+
+    从 {run_config}.drafts 中取 platform='weibo' 的草稿。
+    如果没有微博草稿，输出 {"platform":"weibo","status":"skipped"} 并结束。
+
+    登录微博，发布（正文 + 话题标签）。
+
+    成功：追加 data/publish-log.json + 更新 data/content-drafts.json
+    输出 WorkflowEvent（publish_result 事件）
+    失败：追加 data/publish-log.json（status="failed"）+ 输出错误事件
+    """
+
+  let bilibili_result = session: publisher
+    prompt: """
+    提交今日 B站 内容稿件：
+
+    从 {run_config}.drafts 中取 platform='bilibili' 的草稿。
+    如果没有 B站草稿，输出 {"platform":"bilibili","status":"skipped"} 并结束。
+
+    登录 B站，提交稿件（标题 + 简介 + tags）。
+
+    成功：追加 data/publish-log.json（含审核状态）+ 更新 data/content-drafts.json
+    输出 WorkflowEvent
+    失败：追加 data/publish-log.json（status="failed"）+ 输出错误事件
+    """
+
+  let twitter_result = session: publisher
+    prompt: """
+    发布今日 Twitter 推文：
+
+    从 {run_config}.drafts 中取 platform='twitter' 的草稿。
+    如果没有 Twitter 草稿，输出 {"platform":"twitter","status":"skipped"} 并结束。
+
+    登录 Twitter，发布推文（含 hashtag）。
+
+    成功：追加 data/publish-log.json（含推文链接）+ 更新 data/content-drafts.json
+    输出 WorkflowEvent
+    失败：追加 data/publish-log.json + 输出错误事件
+    """
+
+  let telegram_result = session: publisher
+    prompt: """
+    推送今日 Telegram 内容：
+
+    从 {run_config}.drafts 中取 platform='telegram' 的草稿。
+    如果没有 Telegram 草稿，输出 {"platform":"telegram","status":"skipped"} 并结束。
+
+    向目标频道推送深度内容（Markdown 格式）。
+
+    成功：追加 data/publish-log.json + 更新 data/content-drafts.json
+    输出 WorkflowEvent
+    失败：追加 data/publish-log.json + 输出错误事件
+    """
+
+# ── 汇总发布结果 ──
+let publish_summary = session: validator
+  prompt: """
+  检查各平台发布结果：
+
+  发布结果：
+  - 小红书：{xhs_result}
+  - 微博：{weibo_result}
+  - B站：{bilibili_result}
+  - Twitter：{twitter_result}
+  - Telegram：{telegram_result}
+
+  读取 data/publish-log.json，筛选今日（published_at 为今天）的记录确认数据已写入。
+
+  写入 docs/publish-log.md（追加今日发布记录）
+
+  输出 "PUBLISH_COMPLETE: [成功平台列表]"
+  或 "PUBLISH_PARTIAL: [失败平台 + 原因]"（如有失败）
+  """
+
+# ── 重试失败平台 ──
+if **publish_summary 包含 PUBLISH_PARTIAL**:
+  session: publisher
+    prompt: """
+    重新处理发布失败的平台：
+    {publish_summary}
+
+    对每个失败平台：
+    1. 分析失败原因（登录态过期？格式错误？网络问题？）
+    2. 重新尝试发布
+    3. 读取 data/publish-log.json，找到对应条目，更新 attempt_count += 1
+    4. 如果仍然失败，emit approval_needed 事件，建议手动处理
+
+    输出每个重试结果的 WorkflowEvent。
+    """
+
+# ── 完成 ──
+session: validator
+  prompt: """
+  daily-publish.whip 执行完成。
+
+  读取 data/publish-log.json，统计今日各平台各状态数量。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","runId":[id],"stage":"daily-publish","data":{
+    "success_platforms": [...],
+    "failed_platforms": [...],
+    "publish_log": "docs/publish-log.md"
+  }}
+  """

@@ -1,0 +1,120 @@
+# whips/arbitrage/buy.whip
+# 功能：采购执行 —— 从 watchlist 中确认机会，下单采购，更新库存
+# 调用方：scan.whip 后手动确认触发（避免全自动误买）
+# 前置：data/watchlist.json 有 status=pending 的条目
+# 输出：data/inventory.json 新增，data/orders.json 记录
+
+agent buyer:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  电商采购执行专家。在下单前最后一次验证价格和库存，
+  确认利润空间仍然存在（价格可能已变动）。
+  发现价格恶化时立即中止，不强行下单。
+  """
+
+# ── 读取待采购列表 ──
+let watchlist = session: buyer
+  prompt: """
+  读取待采购机会：
+  1. 读取 data/watchlist.json，筛选 status=pending 的条目
+  2. 读取 data/arbitrage-config.json
+  3. 读取 data/inventory.json，计算已占用资金
+
+  如果 pending 为空，输出 "NO_PENDING: watchlist 中无待处理机会"
+
+  输出：{ opportunities: [...], available_budget, config }
+  """
+
+if **watchlist 包含 NO_PENDING**:
+  throw "无待采购机会，请先运行 scan.whip"
+
+# ── 价格二次确认 ──
+let price_check = session: buyer
+  prompt: """
+  对每个待采购商品做最终价格确认：
+
+  待采购列表：{watchlist}
+
+  对每个 opportunity：
+  1. 重新访问 source_url，确认：
+     - 商品是否仍在售（未被买走）
+     - 价格是否与 watchlist 记录一致（允许 ±5% 浮动）
+     - 卖家是否仍活跃
+
+  2. 重新查询 target_platform 同款当前最低价（确认卖出空间仍存在）
+
+  3. 重新计算净利润率
+
+  判断：
+  - 利润率仍 >= min_profit_rate：标记 CONFIRMED
+  - 利润率下降但仍 >= min_profit_rate × 0.8：标记 MARGINAL: [新利润率]
+  - 商品已售出或利润率不达标：标记 SKIP: [原因]
+
+  输出每个机会的确认状态。
+  """
+
+# ── 执行采购 ──
+let purchase_results = session: buyer
+  prompt: """
+  对 CONFIRMED 和 MARGINAL 的机会执行采购：
+
+  价格确认结果：{price_check}
+  配置：{watchlist.config}
+
+  对每个采购目标：
+
+  ▸ 闲鱼采购：
+    使用 social-cli 联系卖家（发送标准议价话术）：
+    "您好，[商品名]还在吗？能优惠一点吗？我今天就拍"
+    如果卖家同意降价 >= 5%，更新采购价重新计算利润
+    下单拍付
+
+  ▸ eBay 采购：
+    使用 social-cli 下单（Buy It Now 或 Best Offer）
+    记录 order ID、预计到货时间
+
+  每次采购后：
+  读取 data/orders.json（不存在则 []），追加：
+  {
+    id: "[uuid]", ts: "[ISO]",
+    watchlist_id, source_platform, source_url,
+    product_name, category,
+    purchase_price, actual_profit_rate,
+    order_id, status: "purchased",
+    estimated_arrival: "[日期]"
+  }
+  写回文件。
+
+  更新 data/watchlist.json 对应条目 status="purchased"。
+
+  输出每笔采购的 WorkflowEvent。
+  """
+
+# ── 更新库存 ──
+session: buyer
+  prompt: """
+  更新库存记录：
+
+  采购结果：{purchase_results}
+
+  读取 data/inventory.json（不存在则 []），为每笔成功采购追加：
+  {
+    id: "[uuid]",
+    order_id,
+    product_name, category,
+    purchase_price, target_platform, target_keyword,
+    status: "in_transit",  # in_transit → received → listed → sold
+    purchased_at: "[ISO]"
+  }
+  写回文件。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"buy","data":{
+    "purchased": N,
+    "skipped": N,
+    "total_spent": X,
+    "remaining_budget": X
+  }}
+  """

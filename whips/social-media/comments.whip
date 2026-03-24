@@ -1,0 +1,168 @@
+# whips/comments.whip
+# 功能：评论互动管理 —— 获取未回复评论，生成审核通过的回复草稿，自动发送
+# 调用方：Tauri App "处理评论" 按钮 / scheduler.ts 每日定时
+# 前置：各平台已发布内容（data/publish-log.json 有记录）
+# 输出：data/comment-queue.json（reply_status=sent），docs/comment-replies.md
+
+agent creator:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  自媒体互动内容专家。生成高质量评论回复：
+  - 认同型：感谢 + 补充增量价值（不重复原文）
+  - 质疑型：理性解释 + 补充依据（不对立不情绪化）
+  - 求助型：直接给出有用帮助
+  - 互动型：延伸讨论，引导更多人参与
+  - 垃圾广告：直接跳过
+  回复风格必须与账号定位一致，优先回复点赞数多的评论。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "评论回复审核专家。确保回复无敏感内容、保持人设一致、有实际价值、能引导互动。"
+
+agent publisher:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: "自动化发布专家。将审核通过的回复发送到对应平台，记录发送结果。"
+
+# ── 读取配置 ──
+let run_config = session: creator
+  prompt: """
+  读取运行配置：
+  1. 读取 data/current-run.json
+  2. 读取 data/config.json
+  输出：{ run_id, tone_style, platforms }
+  """
+
+# ── 采集未回复评论 ──
+let new_comments = session: creator
+  prompt: """
+  从各平台获取最新未回复评论：
+
+  配置：{run_config}
+
+  对每个已配置平台：
+
+  小红书：social-cli xhs → 获取未回复评论列表
+  微博：social-cli weibo → 获取未回复评论和 @ 提及
+  B站：social-cli bilibili → 获取未回复弹幕和评论
+  Twitter：social-cli x → 获取未回复 reply 和 mention
+  Telegram：social-cli telegram → 获取频道最新问题和讨论
+
+  读取 data/comment-queue.json（不存在则 []），追加新评论条目：
+  { id: "[uuid]", run_id, platform, comment_id, post_url, comment_body, author, likes,
+    comment_type, reply_status: "pending", fetched_at: "[ISO]" }
+  （跳过 comment_id 已存在的条目）
+  写回 data/comment-queue.json。
+
+  comment_type 分类：
+  - thanks（感谢/认同）
+  - question（求助/咨询）
+  - critique（质疑/争议）
+  - discussion（互动话题）
+  - spam（广告/无意义）
+
+  按 likes DESC 排序，输出评论列表摘要（总数、各类型数量）。
+  """
+
+# ── 生成回复草稿 ──
+let reply_drafts = session: creator
+  prompt: """
+  为待回复评论生成高质量回复草稿：
+
+  评论列表：{new_comments}
+  账号风格：{run_config.tone_style}
+
+  处理规则：
+  - spam 类型：更新 data/comment-queue.json 中对应条目 reply_status="skipped"
+  - 其他类型：生成回复草稿
+
+  回复策略：
+  - thanks：感谢 + 补充一个原文没提到的增量知识点
+  - question：直接给出有用答案，如果复杂可引导私信/加关注
+  - critique：理性回应 + 补充数据/案例支撑，不情绪化
+  - discussion：延伸话题，提出新问题引导更多人参与
+
+  回复长度：小红书/B站评论 50-100字，微博评论 ≤ 50字，Twitter ≤ 280字符
+
+  更新 data/comment-queue.json 中对应条目的 reply_draft 字段，写回文件。
+
+  输出回复草稿列表（供 validator 审核）。
+  """
+
+# ── 审核回复 ──
+let reply_check = session: validator
+  prompt: """
+  审核评论回复草稿：
+  {reply_drafts}
+
+  逐条检查：
+  1. 无敏感内容、争议性政治观点
+  2. 保持账号人设一致（风格：{run_config.tone_style}）
+  3. 有实际价值，不是无意义的"谢谢"
+  4. 能引导进一步互动或展示专业度
+
+  更新 data/comment-queue.json：
+  - 通过：reply_status="approved"
+  - 不通过：保持 "pending"，追加 review_note 字段记录问题
+
+  输出 "REPLIES_APPROVED" 或 "REPLIES_NEEDS_FIX: [具体问题]"
+  """
+
+loop until **reply_check 包含 REPLIES_APPROVED** (max: 2):
+  reply_drafts = session: creator
+    prompt: """
+    根据审核意见修改回复：{reply_check}
+    保持人设一致，更新 data/comment-queue.json 中对应条目的 reply_draft。
+    """
+  reply_check = session: validator
+    prompt: """
+    重新审核修改后的回复：{reply_drafts}
+    输出 "REPLIES_APPROVED" 或 "REPLIES_NEEDS_FIX: [具体问题]"
+    """
+
+# ── 发送回复 ──
+let send_results = session: publisher
+  prompt: """
+  发送已审核通过的回复：
+
+  读取 data/comment-queue.json，筛选 run_id=[run_id] 且 reply_status="approved" 的条目。
+
+  对每条回复，按平台发送：
+  - 小红书：social-cli xhs 回复对应评论
+  - 微博：social-cli weibo 回复
+  - B站：social-cli bilibili 回复
+  - Twitter：social-cli x 回复
+  - Telegram：social-cli telegram 回复
+
+  发送成功：更新 data/comment-queue.json 对应条目 reply_status="sent", sent_at="[ISO]"
+  发送失败：更新 reply_status="failed", error_msg="[原因]"
+  写回文件。
+
+  写入 docs/comment-replies.md（今日回复记录）
+  输出每条发送结果的 WorkflowEvent。
+  """
+
+# ── 完成 ──
+session: validator
+  prompt: """
+  comments.whip 执行完成。
+
+  读取 data/comment-queue.json，筛选 run_id=[run_id]，统计各 reply_status 数量。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","runId":[id],"stage":"comments","data":{
+    "total_comments": N,
+    "sent": N,
+    "skipped_spam": N,
+    "failed": N,
+    "pending_manual": N
+  }}
+
+  如果有 pending_manual > 0，额外输出 approval_needed 事件。
+  """

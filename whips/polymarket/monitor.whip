@@ -1,0 +1,136 @@
+# whips/polymarket/monitor.whip
+# 功能：持仓监控 —— 检查开放仓位状态，更新 PnL，触发止损/平仓
+# 调用方：scheduler.ts 每15分钟定时
+# 前置：data/positions.json 存在（有开放仓位）
+# 输出：data/positions.json 更新，data/trades.json 状态更新
+
+agent monitor:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  仓位监控专家。实时追踪持仓状态和 PnL 变化，
+  识别需要干预的情况（止损、结算、异常）。
+  发现风控异常时立即输出告警事件。
+  """
+
+agent risk-manager:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  交易风控专家。评估当前持仓组合的整体风险敞口，
+  判断是否需要减仓或暂停交易，给出明确的操作建议。
+  """
+
+# ── 读取持仓 ──
+let positions = session: monitor
+  prompt: """
+  读取当前持仓状态：
+  1. 读取 data/positions.json（不存在或为空则输出 "NO_POSITIONS" 并结束）
+  2. 读取 data/trades.json
+  3. 读取 data/api-creds.json
+
+  只处理 status="open" 的持仓。
+
+  输出：{ positions: [...], open_count: N, total_exposure_usdc: X }
+  """
+
+if **positions 包含 NO_POSITIONS**:
+  session: monitor
+    prompt: """
+    输出 WorkflowEvent：
+    {"ts":"[ISO]","event":"stage_complete","stage":"monitor","data":{"open_positions":0,"message":"无开放仓位"}}
+    """
+  throw "无开放仓位，跳过监控"
+
+# ── 查询最新市场价格 ──
+let current_prices = session: monitor
+  prompt: """
+  查询所有开放仓位的当前市场价格：
+
+  持仓列表：{positions}
+
+  对每个 market_id，调用：
+  https://clob.polymarket.com/book?token_id=[token_id]
+  获取当前 best_bid / best_ask。
+
+  计算每个仓位的浮动 PnL：
+  unrealized_pnl = (current_mid_price - entry_price) * size_usdc / entry_price
+
+  更新 data/positions.json 中每个仓位的：
+  current_price, unrealized_pnl, last_checked_at
+
+  输出：[{ trade_id, city, entry_price, current_price, unrealized_pnl, size_usdc }]
+  """
+
+# ── 检查结算状态 ──
+let settlement_check = session: monitor
+  prompt: """
+  检查已到期合约的结算状态：
+
+  持仓列表：{positions}
+  当前时间：{ts}
+
+  对每个合约检查：
+  1. 合约到期日是否已过（市场关闭）
+  2. 调用 Gamma API 查询 resolved=true 的合约：
+     https://gamma-api.polymarket.com/markets/{market_id}
+  3. 如果已结算：
+     - 读取结算结果（winning outcome）
+     - 计算最终 PnL
+     - 更新 data/trades.json 对应条目：status="settled", pnl=X, settled_at="[ISO]"
+     - 从 data/positions.json 移除该仓位（或标记 status="settled"）
+
+  输出已结算仓位列表和 PnL 汇总。
+  """
+
+# ── 风控评估 ──
+let risk_assessment = session: risk-manager
+  prompt: """
+  评估当前持仓组合的风险状况：
+
+  持仓和 PnL：{current_prices}
+  结算情况：{settlement_check}
+
+  检查风控触发条件：
+
+  1. 日亏损熔断：读取 data/trades.json 今日所有 settled 记录的 PnL 总和
+     如果 total_daily_loss > initial_capital * 0.05：
+     → 输出 CIRCUIT_BREAKER: 日亏损超限，暂停交易1小时
+
+  2. 连续亏损检查：最近5笔已结算交易是否全部亏损
+     如果是：→ 输出 CONSECUTIVE_LOSS: 连续5笔亏损，建议人工审查
+
+  3. 单仓浮亏预警：任意仓位 unrealized_pnl < -(size_usdc * 0.5)
+     → 输出 POSITION_WARNING: [city] 仓位浮亏超50%
+
+  4. 总敞口检查：total_exposure > available_capital * 0.80
+     → 输出 EXPOSURE_WARNING: 总敞口超限
+
+  将风控状态写入 data/risk-status.json：
+  { ts, circuit_breaker: bool, warnings: [...], daily_pnl: X, open_positions: N }
+
+  输出风控摘要。
+  """
+
+# ── 完成 ──
+session: monitor
+  prompt: """
+  monitor.whip 执行完成。
+
+  读取 data/positions.json 和 data/risk-status.json 汇总状态。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"monitor","data":{
+    "open_positions": N,
+    "total_unrealized_pnl": X,
+    "settled_today": N,
+    "daily_pnl": X,
+    "circuit_breaker": bool,
+    "warnings": [...]
+  }}
+
+  如果有 circuit_breaker=true 或 warnings 非空，额外输出 alert 事件：
+  {"ts":"[ISO]","event":"alert","stage":"monitor","data":{"message":"[告警内容]"}}
+  """

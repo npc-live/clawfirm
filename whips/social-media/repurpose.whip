@@ -1,0 +1,146 @@
+# whips/repurpose.whip
+# 功能：微信公众号文章 → 多平台内容改写
+# 调用方：Tauri App "导入微信文章" 功能
+# 输入：data/current-run.json 中的 wechat_url 字段
+# 输出：data/content-drafts.json（source=wechat），docs/repurposed-content.md
+
+agent creator:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write", "edit"]
+  prompt: """
+  多平台内容改写专家。将长篇文章精准改写为各平台最佳格式：
+  核心原则：提炼价值，而非简单摘要。每个平台的改写都必须是独立完整的内容。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "内容合规审核专家。检查改写后的内容是否有价值、格式正确、符合平台规范。"
+
+# ── 读取配置 ──
+let run_config = session: creator
+  prompt: """
+  读取运行配置：
+  1. 读取 data/current-run.json
+     获取：run_id, wechat_url, platforms（已配置的平台列表）
+  2. 读取 data/config.json：tone_style, niche, target_audience
+
+  如果 wechat_url 为空：
+  输出错误 {"event":"error","message":"wechat_url 为空，请在 Tauri App 中输入文章链接后重试"}
+
+  输出：{ run_id, wechat_url, tone_style, niche, platforms }
+  """
+
+if **run_config 包含 wechat_url 为空**:
+  throw "未提供微信文章 URL，请在应用界面输入后重试"
+
+# ── 提取原文 ──
+let original_content = session: creator
+  prompt: """
+  将微信公众号文章转换为干净的 Markdown：
+
+  文章链接：{run_config.wechat_url}
+
+  使用 social-cli wechat 处理：
+  - 去除广告、格式噪音、无关内容
+  - 保留所有核心观点、数据、案例
+  - 保存到 docs/wechat-converted.md
+
+  输出原文的结构摘要：
+  { title, word_count, key_points: [...], core_value: "一句话概括核心价值" }
+  """
+
+# ── 多平台改写 ──
+let repurposed = session: creator
+  prompt: """
+  将以下微信文章内容改写为各平台适配版本：
+
+  原文摘要：{original_content}
+  完整原文：读取 docs/wechat-converted.md
+  账号配置：{run_config}
+
+  为每个已配置的平台生成改写版本：
+
+  ▸ 小红书版（如果 platforms 含 xhs）：
+    - 标题：提炼最强痛点/价值点，加 emoji（≤50字）
+    - 正文：800-1000字，分段，emoji 点缀
+    - 结构：痛点引入 → 核心干货 → 实操建议 → 引导互动3问
+    - 标签：10个（爆款大词 + 垂直词 + 精准词）
+
+  ▸ 微博版（如果 platforms 含 weibo）：
+    - 正文：≤140字，浓缩精华，带话题标签
+    - 制造讨论点（引发转发欲望）
+
+  ▸ B站脚本版（如果 platforms 含 bilibili）：
+    - 改写为口播稿，3-5章节，适合5-8分钟视频
+    - 标题（悬念化/数字化）+ 简介（关键词植入）+ Tags
+
+  ▸ Twitter版（如果 platforms 含 twitter）：
+    - 英文精炼版，≤280字符
+    - 突出核心洞察，带3个精准 hashtag
+
+  ▸ Telegram版（如果 platforms 含 telegram）：
+    - 深度扩展版，500-800字
+    - 补充延伸观点和独家见解，Markdown 格式
+
+  读取 data/content-drafts.json（不存在则 []），为每个平台追加条目：
+  { id: "[uuid]", run_id, calendar_day: "[today]", platform, title, body, tags,
+    status: "draft", source: "wechat", created_at: "[ISO]", updated_at: "[ISO]" }
+  写回 data/content-drafts.json。
+
+  写入 docs/repurposed-content.md（按平台分组）
+
+  输出所有改写版本摘要。
+  """
+
+# ── 质量审核 ──
+let quality_check = session: validator
+  prompt: """
+  审核改写内容质量：
+  {repurposed}
+
+  检查每个平台版本：
+  1. 是否提炼了原文核心价值（不是简单摘要）？
+  2. 是否完全适配平台格式要求？
+  3. 是否有独立的吸引力（不依赖看原文）？
+  4. 是否与账号定位一致？
+
+  更新 data/content-drafts.json 中对应条目：
+  通过：status="approved"
+  不通过：status="rejected", rejection_reason="[原因]"
+  写回文件。
+
+  输出 "REPURPOSE_APPROVED: [平台列表]"
+  或 "REPURPOSE_NEEDS_REVISION: [平台 + 原因]"
+  """
+
+loop until **quality_check 包含 REPURPOSE_APPROVED** (max: 2):
+  repurposed = session: creator
+    prompt: """
+    根据审核意见修改以下改写内容：{quality_check}
+    更新 data/content-drafts.json 和 docs/repurposed-content.md。
+    """
+  quality_check = session: validator
+    prompt: """
+    重新审核修改后的内容：{repurposed}
+    输出 "REPURPOSE_APPROVED" 或 "REPURPOSE_NEEDS_REVISION: [原因]"
+    """
+
+# ── 完成 ──
+session: creator
+  prompt: """
+  repurpose.whip 执行完成。
+
+  读取 data/content-drafts.json，筛选 run_id=[run_id] 且 source="wechat" 且 calendar_day=today 的条目，
+  统计各平台状态。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","runId":[id],"stage":"repurpose","data":{
+    "source_url": "{run_config.wechat_url}",
+    "platforms_created": [...],
+    "doc_path": "docs/repurposed-content.md",
+    "ready_for_publish": true
+  }}
+  """

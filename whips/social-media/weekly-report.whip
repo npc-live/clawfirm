@@ -1,0 +1,136 @@
+# whips/weekly-report.whip
+# 功能：周报生成 + 策略迭代 —— 汇总本周数据，生成周报，更新内容策略
+# 调用方：Tauri App "生成周报" 按钮 / scheduler.ts 每周日定时
+# 前置：analytics.whip 本周已运行（data/analytics.json 有数据）
+# 输出：data/weekly-reports.json，docs/weekly-report-N.md，更新 docs/content-strategy.md
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  自媒体数据分析专家。生成深度周报，所有结论有数据支撑，每条洞察附行动建议。
+  持续通过 stdout 输出 WorkflowEvent 进度事件。
+  """
+
+agent strategist:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write", "edit"]
+  prompt: """
+  资深自媒体运营策略专家。基于数据迭代策略，识别有效模式，调整无效打法。
+  策略更新必须有数据依据，追加到现有 content-strategy.md（注明版本号和日期），不覆盖历史。
+  """
+
+# ── 读取配置 ──
+let run_config = session: analyst
+  prompt: """
+  读取运行配置：
+  1. 读取 data/current-run.json
+  2. 读取 data/config.json
+  3. 读取 data/weekly-reports.json（不存在则 []），
+     计算本周周数：筛选 run_id 相同的记录数量 + 1
+
+  输出：{ run_id, niche, growth_goal, current_week, platforms }
+  """
+
+# ── 汇总本周数据 ──
+let weekly_data = session: analyst
+  prompt: """
+  汇总第 {run_config.current_week} 周全平台数据：
+
+  读取 data/analytics.json，筛选 run_id=[run_id] 且 week_number=[current_week] 的记录，
+  按平台聚合：new_followers 总和、total_views 总和、engagement_rate 均值。
+
+  读取 data/content-drafts.json 和 data/publish-log.json，
+  关联 data/viral-content.json，找出本周（近7天）已发布内容，按 viral_score 降序排列。
+
+  读取 data/analytics.json 中所有 run_id 相同的记录，
+  计算累计新增粉丝（距离目标差距）。
+
+  输出：结构化的本周数据摘要（供生成周报）
+  """
+
+# ── 生成周报 ──
+let weekly_report = session: analyst
+  prompt: """
+  生成第 {run_config.current_week} 周运营周报：
+
+  本周数据：{weekly_data}
+  增长目标：{run_config.growth_goal}
+  当前领域：{run_config.niche}
+
+  周报结构（写入 docs/weekly-report-{current_week}.md）：
+
+  # 第 {week} 周运营周报
+
+  ## 核心指标
+  | 平台 | 粉丝总数 | 本周新增 | 总曝光 | 互动率 |
+
+  ## 本周爆款
+  排名前3的内容（含平台、数据、成功原因分析）
+
+  ## 本周低谷
+  表现最差3条内容（含平台、数据、失败原因分析）
+
+  ## 关键洞察（3条）
+  每条格式：[数据发现] → [原因分析] → [下周行动建议]
+
+  ## 下周执行计划
+  - 复制哪个爆款的逻辑（具体说明复制哪些元素）
+  - 调整哪类内容的方向
+  - 布局哪些即将到来的热点（附具体日期）
+
+  ## 目标完成度
+  - 已累计新增：X 粉丝
+  - 目标：{growth_goal}
+  - 完成率：X%
+  - 预计达标时间：X 周后
+
+  读取 data/weekly-reports.json（不存在则 []），追加：
+  { run_id, week_number, report_file: "docs/weekly-report-[N].md",
+    insights_json: {...}, generated_at: "[ISO]" }
+  写回 data/weekly-reports.json。
+
+  输出 WorkflowEvent progress：{"stage":"weekly-report","phase":"report_generated"}
+  """
+
+# ── 策略迭代 ──
+let strategy_update = session: strategist
+  prompt: """
+  基于第 {run_config.current_week} 周数据，迭代内容策略：
+
+  周报：{weekly_report}
+  当前策略：读取 docs/content-strategy.md
+
+  分析框架：
+  1. 原策略中哪些假设已被数据验证？哪些被推翻？
+  2. 需要调整哪些核心参数？（内容类型比例、发布时间、标签策略）
+  3. 账号定位或风格是否需要微调？
+  4. 下周有哪些可借势的热点或节点？
+  5. 增长瓶颈在哪里？突破方向是什么？
+
+  将迭代要点追加到 docs/content-strategy.md 末尾：
+  ---
+  ## 策略更新 v{week+1}.0（{当前日期}）
+  [迭代内容，注明基于什么数据做出此调整]
+
+  读取 data/config.json，更新 strategy_version = {week+1}，写回文件。
+
+  输出策略迭代摘要（供下周 daily-content.whip 参考）。
+  """
+
+# ── 完成 ──
+session: analyst
+  prompt: """
+  weekly-report.whip 执行完成。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","runId":[id],"stage":"weekly-report","data":{
+    "week_number": N,
+    "report_file": "docs/weekly-report-N.md",
+    "strategy_updated": true,
+    "next_week_focus": "[下周重点方向摘要]",
+    "target_completion": "X%"
+  }}
+  """

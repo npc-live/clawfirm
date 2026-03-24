@@ -1,0 +1,200 @@
+# whips/polymarket/setup.whip
+# 功能：首次配置 —— 环境检测、钱包验证、API 连通性测试、策略参数初始化
+# 前置：Node.js >= 18，tsx，PRIVATE_KEY 环境变量已设置
+# 输出：data/api-creds.json，data/config.json，data/stage-log.json
+
+agent env-checker:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "环境检测专家。验证工具和配置是否就绪，给出精确的修复命令。"
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: "配置验证专家。验证 API 连通性和钱包状态，输出 APPROVED 或 FAILED: [原因]。"
+
+# ── 读取初始配置 ──
+let run_config = session: env-checker
+  prompt: """
+  读取初始配置：
+  1. 读取 data/current-run.json（Tauri App 写入，包含用户填写的参数）
+  2. 如果文件不存在，输出错误提示
+
+  输出：{
+    run_id,
+    wallet_address,
+    poly_api_key,
+    poly_secret,
+    poly_passphrase,
+    budget_usdc,
+    regions,          # 要交易的城市列表，如 ["shanghai", "seoul"]
+    min_edge,         # 默认 0.05
+    half_kelly,       # 默认 0.5
+    max_position_pct  # 默认 0.10
+  }
+  """
+
+# ── 阶段 0：环境验证 ──
+let env_check = session: env-checker
+  prompt: """
+  验证运行环境：
+  配置：{run_config}
+
+  检查：
+  1. node --version（需要 >= 18）
+  2. tsx 是否可用：which tsx
+  3. PRIVATE_KEY 环境变量是否已设置（只检查是否存在，不输出值）：
+     [ -n "$PRIVATE_KEY" ] && echo "SET" || echo "NOT_SET"
+  4. data/ 目录是否存在且可写
+
+  追加 data/stage-log.json：
+  { run_id, stage: "env-check", index: 0, status: "done"/"failed", ts: "[ISO]", output: "[结果]" }
+
+  输出 "ENV_OK" 或 "ENV_FAILED: [具体问题和修复命令]"
+  """
+
+if **env_check 包含 ENV_FAILED**:
+  throw "环境检测失败：{env_check}"
+
+# ── 阶段 1：API 连通性测试 ──
+let api_check = session: validator
+  prompt: """
+  测试各 API 端点连通性：
+
+  配置：{run_config}
+
+  依次测试：
+
+  1. Open-Meteo 集合预报 API（无需认证）：
+     curl -s "https://ensemble-api.open-meteo.com/v1/ensemble?latitude=31.23&longitude=121.47&hourly=temperature_2m&models=icon_seamless&forecast_days=1"
+     检查返回是否包含 "hourly"
+
+  2. Polymarket Gamma API（无需认证）：
+     curl -s "https://gamma-api.polymarket.com/markets?tag=weather&active=true&limit=5"
+     检查返回是否为有效 JSON 数组
+
+  3. Polymarket CLOB API（需要 L2 HMAC）：
+     使用 tsx src/core/order-manager.ts --test-auth
+     验证 api_key + secret + passphrase 是否有效
+
+  追加 data/stage-log.json：{ stage: "api-check", index: 1, status, ts }
+
+  输出 "API_OK" 或 "API_FAILED: [哪个端点失败 + 原因]"
+  """
+
+if **api_check 包含 API_FAILED**:
+  throw "API 连通性测试失败：{api_check}"
+
+# ── 阶段 2：钱包状态验证 ──
+let wallet_check = session: validator
+  prompt: """
+  验证钱包状态和余额：
+
+  配置：{run_config}
+
+  执行：
+  tsx src/core/index.ts --check-wallet
+
+  验证：
+  1. PRIVATE_KEY 对应的地址与 wallet_address 一致
+  2. Polygon 主网 USDC.e 余额（合约 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174）
+  3. 余额 >= budget_usdc（预算必须有对应资金）
+  4. Polygon MATIC 余额 > 0（支付 gas 费用）
+
+  追加 data/stage-log.json：{ stage: "wallet-check", index: 2, status, ts }
+
+  输出：
+  "WALLET_OK: 余额 X USDC.e，X MATIC"
+  或 "WALLET_FAILED: [具体问题]"
+  """
+
+if **wallet_check 包含 WALLET_FAILED**:
+  throw "钱包验证失败：{wallet_check}"
+
+# ── 阶段 3：市场可用性扫描 ──
+let market_check = session: validator
+  prompt: """
+  确认目标城市的市场存在且有足够流动性：
+
+  配置：{run_config}
+  目标城市：{run_config.regions}
+
+  调用：
+  https://gamma-api.polymarket.com/markets?tag=weather&active=true&limit=100
+
+  对每个目标城市检查：
+  - 是否有活跃的温度合约
+  - 流动性（volumeNum）是否 >= 5000 USDC
+  - 合约结构（bin 数量、宽度）
+
+  追加 data/stage-log.json：{ stage: "market-check", index: 3, status, ts }
+
+  输出可用城市列表和不可用城市（附原因）。
+  输出 "MARKET_OK: [可用城市列表]" 或 "MARKET_WARN: [部分城市不可用]"
+  """
+
+# ── 阶段 4：写入配置文件 ──
+session: env-checker
+  prompt: """
+  将配置持久化：
+
+  配置：{run_config}
+
+  写入 data/api-creds.json（敏感信息，mode 0600）：
+  {
+    "wallet_address": "...",
+    "poly_api_key": "...",
+    "poly_secret": "...",
+    "poly_passphrase": "..."
+  }
+
+  写入 data/config.json（策略参数）：
+  {
+    "run_id": "...",
+    "budget_usdc": X,
+    "regions": [...],
+    "min_edge": X,
+    "min_edge_precip": 0.15,
+    "summer_min_edge": 0.12,
+    "half_kelly": X,
+    "max_position_pct": X,
+    "skip_edge_low": 0.30,
+    "skip_edge_high": 0.40,
+    "max_positions": 3,
+    "max_exposure_pct": 0.80,
+    "daily_loss_limit_pct": 0.05,
+    "created_at": "[ISO]"
+  }
+
+  初始化空数据文件（如果不存在）：
+  - data/trades.json → []
+  - data/positions.json → []
+  - data/reports.json → []
+  - data/opportunities.json → []
+
+  追加 data/stage-log.json：{ stage: "config-saved", index: 4, status: "done", ts }
+
+  确认写入成功。
+  """
+
+# ── 完成 ──
+session: env-checker
+  prompt: """
+  setup.whip 执行完成。
+
+  更新 data/runs.json：
+  读取现有文件（不存在则 []），追加：
+  { id: run_id, type: "polymarket", status: "ready", created_at: "[ISO]" }
+  写回文件。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "wallet": "[wallet_address 前6位]...",
+    "regions": [...],
+    "budget_usdc": X,
+    "markets_available": [...],
+    "ready_to_trade": true
+  }}
+  """

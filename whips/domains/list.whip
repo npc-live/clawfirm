@@ -1,0 +1,91 @@
+# whips/domains/list.whip
+# 功能：上架出售 —— 将注册好的域名挂到交易平台，生成销售文案，设定价格
+# 调用方：snipe.whip 成功后 / 手动触发
+# 前置：data/portfolio.json 有 status=registered 的域名
+# 输出：data/portfolio.json status=listed，各平台挂单链接
+
+agent lister:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  域名销售专家。撰写有说服力的域名销售文案，制定合理的定价策略。
+  文案必须清晰描述：谁适合买这个域名，以及为什么值这个价。
+  定价策略：挂牌价 = 目标售价 × 1.3（留还价空间），最低接受价 = 目标售价 × 0.7。
+  """
+
+# ── 读取待上架域名 ──
+let portfolio = session: lister
+  prompt: """
+  读取待上架域名：
+  1. 读取 data/portfolio.json，筛选 status=registered
+  2. 读取 data/domain-config.json
+
+  如果无待上架域名，输出 "NO_REGISTERED"
+  输出：{ domains: [...], config }
+  """
+
+if **portfolio 包含 NO_REGISTERED**:
+  throw "无待上架域名"
+
+# ── 定价策略 ──
+let pricing = session: lister
+  prompt: """
+  为每个域名制定定价策略：
+
+  域名列表：{portfolio}
+
+  参考数据：
+  - 搜索 Namebio 同类域名近期成交价（品类 + 长度 + 后缀相似）
+  - 搜索 Estibot / GoDaddy Domain Appraisal 估值
+
+  定价模型：
+  - 纯 .com 品类词（单词）：成交参考 × 0.8（折扣换速度）
+  - 两词组合 .com：$500-$2000 区间
+  - .io / .ai 科技词：$300-$1500 区间
+  - 含年份/数字：降价 30%
+
+  每个域名输出：
+  - list_price（挂牌价，Buy Now）
+  - min_accept_price（最低接受价，Make Offer 下限）
+  - target_sale_timeframe（预期售出周期：快速30天/正常90天/长线1年）
+  """
+
+# ── 生成销售文案 ──
+let listings = session: lister
+  prompt: """
+  为每个域名生成销售文案并上架：
+
+  域名列表：{portfolio}
+  定价策略：{pricing}
+
+  ▸ 销售文案（每个域名）：
+    标题：[Domain] — Perfect for [行业] Businesses
+    描述（100-200字）：
+    - 域名的记忆性和发音
+    - 适合的使用场景（具体举例：3-5种业务类型）
+    - 关键词价值（搜索量、CPC）
+    - 为什么现在是购买时机
+
+  ▸ 上架到各平台：
+    Sedo（主要）：通过 Sedo API 或手动填写
+    Dan.com：通过 API 提交
+    Afternic（GoDaddy 网络）：通过 GoDaddy API 开启 premium listing
+
+    设置：
+    - Buy Now Price = {pricing.list_price}
+    - Make Offer = 开启，minimum = {pricing.min_accept_price}
+    - Fast Transfer = 开启（加快成交）
+
+  上架成功后，更新 data/portfolio.json：
+  status="listed", listed_at="[ISO]",
+  list_price, min_accept_price,
+  listings: { sedo: "[url]", dan: "[url]", afternic: "[url]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"list","data":{
+    "listed": N,
+    "total_list_value": X,
+    "avg_roi_target": X
+  }}
+  """

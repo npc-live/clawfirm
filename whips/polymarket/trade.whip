@@ -1,0 +1,131 @@
+# whips/polymarket/trade.whip
+# 功能：执行下单 —— 读取 opportunities.json，通过风控检查，提交 EIP-712 签名订单
+# 调用方：scan.whip 完成后自动触发 / 手动触发
+# 前置：scan.whip 已完成（data/opportunities.json 存在且非空）
+# 输出：data/trades.json 新增成交记录，data/positions.json 更新
+
+agent risk-manager:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  交易风控专家。在任何下单前执行严格的风险检查。
+  发现任何风控违规立即中止，输出明确的拒绝原因。
+  宁可错过机会，不可超出风控边界。
+  """
+
+agent trader:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  Polymarket CLOB 订单执行专家。使用 viem 构造 EIP-712 签名订单，
+  通过 L2 HMAC 认证提交到 CLOB API。
+  每笔订单执行后立即写入日志，异常时输出完整错误信息。
+  """
+
+# ── 读取机会列表 ──
+let opportunities = session: risk-manager
+  prompt: """
+  读取交易机会：
+  1. 读取 data/opportunities.json
+  2. 如果文件不存在或为空：
+     输出 "NO_OPPORTUNITIES: 请先运行 scan.whip"
+
+  读取 data/positions.json（不存在则 []）
+  读取 data/trades.json（不存在则 []），计算今日 PnL
+
+  输出：{
+    opportunities: [...],
+    current_positions: [...],
+    positions_count: N,
+    daily_pnl: X,
+    available_capital: X
+  }
+  """
+
+if **opportunities 包含 NO_OPPORTUNITIES**:
+  throw "没有可交易机会，请先运行 scan.whip"
+
+# ── 风控检查 ──
+let risk_check = session: risk-manager
+  prompt: """
+  对每个交易机会执行风控检查：
+
+  机会列表：{opportunities}
+
+  检查项：
+  1. 持仓数量：current_positions_count + 新增仓位 <= 3
+  2. 单仓上限：position_size_usdc <= available_capital * 0.10
+  3. 总敞口：所有仓位合计 <= available_capital * 0.80
+  4. 日亏损熔断：daily_pnl < -(initial_capital * 0.05)（亏损超 5% 停止交易）
+  5. 最小订单：position_size_usdc >= 5 USDC（CLOB 最小限制）
+  6. 数据新鲜度：opportunities.ts 距今不超过 30 分钟
+
+  对每个机会标记：
+  - APPROVED：通过所有检查
+  - REJECTED: [具体原因]
+
+  输出 "RISK_PASSED: [通过数量]" 或 "RISK_BLOCKED: [原因]"（全部被拒时）
+  """
+
+if **risk_check 包含 RISK_BLOCKED**:
+  throw "全部机会未通过风控：{risk_check}"
+
+# ── 执行下单 ──
+let trade_results = session: trader
+  prompt: """
+  对风控通过的机会执行下单：
+
+  机会列表：{opportunities}（只处理 APPROVED 的条目）
+  风控报告：{risk_check}
+
+  对每笔订单：
+  1. 从环境变量读取 PRIVATE_KEY
+  2. 使用 tsx src/core/order-manager.ts 构造并提交订单：
+     - Chain: Polygon Mainnet (chainId: 137)
+     - CTF Exchange: 0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E
+     - EIP-712 签名 + L2 HMAC 认证
+     - 订单类型：GTC（Good Till Cancel），超时自动取消
+
+  3. 订单提交后：
+     读取 data/trades.json（不存在则 []），追加：
+     {
+       id: "[uuid]",
+       ts: "[ISO]",
+       city, market_id, token_id,
+       bin_low, bin_high,
+       p_model, p_market, edge,
+       size_usdc,
+       order_id: "[CLOB返回的orderId]",
+       status: "open" | "filled" | "failed",
+       error: "[如有]"
+     }
+     写回 data/trades.json
+
+  4. 更新 data/positions.json：
+     读取现有文件，追加新持仓（status=open 的订单）：
+     { trade_id, city, market_id, token_id, size_usdc, p_model, p_market, edge, opened_at }
+
+  每笔订单输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"order_submitted","data":{"city":"...","edge":X,"size":X,"order_id":"..."}}
+  失败时输出：
+  {"ts":"[ISO]","event":"order_failed","data":{"city":"...","error":"..."}}
+  """
+
+# ── 完成 ──
+session: risk-manager
+  prompt: """
+  trade.whip 执行完成。
+
+  读取 data/trades.json，统计本次下单结果。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"trade","data":{
+    "orders_submitted": N,
+    "orders_filled": N,
+    "orders_failed": N,
+    "total_size_usdc": X,
+    "positions_open": N
+  }}
+  """
