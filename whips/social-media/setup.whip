@@ -1,6 +1,6 @@
-# whips/setup.whip
+# whips/social-media/setup.whip
 # 功能：首次配置 —— 环境检测、账号设置、竞品分析、内容策略
-# 前置：whipflow 已安装，social-cli 已安装
+# 前置：whipflow 已安装，social-cli 已安装，openvault（推荐）
 # 输出：data/config.json 已填写，docs/content-strategy.md 已生成
 
 agent env-checker:
@@ -51,8 +51,13 @@ let env_check = session: env-checker
 
   检查：
   1. node --version（需要 >= 18）
-  3. tsx 是否可用：which tsx
-  4. whipflow 是否可用：which whipflow
+  2. tsx 是否可用：which tsx
+  3. whipflow 是否可用：which whipflow
+  4. social-cli 是否可用：which social-cli
+  5. openvault 检测（只检查可用性，不输出任何凭证值）：
+     which openvault > /dev/null 2>&1 && openvault version
+     如果可用：输出 "OPENVAULT: available"
+     否则：输出 "OPENVAULT: not found（建议安装：GOPROXY=direct go install github.com/npc-live/openvault@latest）"
 
   将检测结果追加写入 data/stage-log.json：
   读取现有文件（不存在则用 []），追加：
@@ -74,11 +79,45 @@ if **env_check 包含 ENV_FAILED**:
 # ── 阶段 1：账号配置持久化 ──
 session: env-checker
   prompt: """
-  将账号配置持久化到 data/config.json：
+  将平台 token 存入 OpenVault（推荐）或写入本地文件（回退），再持久化账号配置：
 
   配置：{run_config}
 
-  写入文件（覆盖已有内容）：
+  如果 openvault 可用：
+    # 只对非空账号设置 token，openvault set 交互式提示，不接受命令行参数
+    [ -n "{run_config.xhs_account}" ]       && openvault set clawfirm/xhs-token
+    [ -n "{run_config.weibo_account}" ]     && openvault set clawfirm/weibo-token
+    [ -n "{run_config.bilibili_account}" ]  && openvault set clawfirm/bilibili-token
+    [ -n "{run_config.twitter_account}" ]   && openvault set clawfirm/twitter-token
+    [ -n "{run_config.telegram_channel}" ]  && openvault set clawfirm/telegram-bot-token
+
+    写入 data/social-creds.json（可安全提交 git，无明文）：
+    {
+      "secrets_backend": "openvault",
+      "xhs_token_ref":           "clawfirm/xhs-token",
+      "weibo_token_ref":         "clawfirm/weibo-token",
+      "bilibili_token_ref":      "clawfirm/bilibili-token",
+      "twitter_token_ref":       "clawfirm/twitter-token",
+      "telegram_bot_token_ref":  "clawfirm/telegram-bot-token"
+    }
+
+    运行时解析凭证（在内存中，不落盘）：
+    eval "$(openvault resolve data/social-creds.json --export)"
+    social-cli auth --from-env   # social-cli 从环境变量读取已注入的 token
+
+  否则（openvault 不可用，回退）：
+    写入 data/social-creds.json（mode 0600，明文，禁止提交 git）：
+    {
+      "secrets_backend": "plaintext",
+      "xhs_token": "...",
+      "weibo_token": "...",
+      "bilibili_token": "...",
+      "twitter_token": "...",
+      "telegram_bot_token": "..."
+    }
+    输出警告："⚠ 建议安装 OpenVault：GOPROXY=direct go install github.com/npc-live/openvault@latest"
+
+  写入 data/config.json（账号 ID，无 token 明文）：
   {
     "run_id": ...,
     "niche": ...,

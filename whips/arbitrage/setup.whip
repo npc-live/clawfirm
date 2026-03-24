@@ -1,6 +1,6 @@
 # whips/arbitrage/setup.whip
 # 功能：首次配置 —— 平台账号验证、品类选择、利润模型初始化
-# 前置：有闲鱼/拼多多/eBay/Amazon 账号
+# 前置：有闲鱼/拼多多/eBay/Amazon 账号，openvault（推荐）或明文凭证
 # 输出：data/arbitrage-config.json，docs/category-strategy.md
 
 agent env-checker:
@@ -45,6 +45,10 @@ let env_check = session: env-checker
   1. social-cli 是否可用：which social-cli
   2. node --version（>= 18）
   3. 各平台账号格式验证（非空）
+  4. openvault 检测（优先级，只检查可用性，不输出任何凭证值）：
+     which openvault > /dev/null 2>&1 && openvault version
+     如果可用：输出 "OPENVAULT: available"
+     否则：输出 "OPENVAULT: not found（建议安装：GOPROXY=direct go install github.com/npc-live/openvault@latest）"
 
   追加 data/stage-log.json：{ stage: "env-check", status, ts }
   输出 "ENV_OK" 或 "ENV_FAILED: [原因]"
@@ -88,6 +92,35 @@ let category_analysis = session: analyst
 # ── 写入配置 ──
 session: env-checker
   prompt: """
+  将平台凭证存入 OpenVault（推荐）或写入本地文件（回退）：
+
+  如果 openvault 可用：
+    # openvault set 交互式提示输入，不接受命令行参数（防止 shell history 泄漏）
+    openvault set clawfirm/xianyu-cookie
+    openvault set clawfirm/pdd-session
+    openvault set clawfirm/ebay-oauth-token
+    openvault set clawfirm/amazon-sp-secret
+
+    写入 data/arbitrage-creds.json（可安全提交 git，无明文）：
+    {
+      "secrets_backend": "openvault",
+      "xianyu_cookie_ref":    "clawfirm/xianyu-cookie",
+      "pdd_session_ref":      "clawfirm/pdd-session",
+      "ebay_token_ref":       "clawfirm/ebay-oauth-token",
+      "amazon_secret_ref":    "clawfirm/amazon-sp-secret"
+    }
+
+  否则（openvault 不可用，回退）：
+    写入 data/arbitrage-creds.json（mode 0600，明文，禁止提交 git）：
+    {
+      "secrets_backend": "plaintext",
+      "xianyu_cookie": "...",
+      "pdd_session": "...",
+      "ebay_oauth_token": "...",
+      "amazon_sp_secret": "..."
+    }
+    输出警告："⚠ 建议安装 OpenVault：GOPROXY=direct go install github.com/npc-live/openvault@latest"
+
   写入 data/arbitrage-config.json：
   {
     "run_id": ...,
@@ -97,8 +130,8 @@ session: env-checker
     "accounts": { xianyu, pdd, ebay, amazon },
     "approved_categories": [利润率达标的品类列表],
     "min_profit_rate": ...,
-    "max_inventory_per_item": 3,   # 单品最多备货数量
-    "max_category_exposure": 0.30, # 单品类最大资金占比
+    "max_inventory_per_item": 3,
+    "max_category_exposure": 0.30,
     "created_at": "[ISO]"
   }
 

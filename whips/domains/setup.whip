@@ -1,6 +1,6 @@
 # whips/domains/setup.whip
 # 功能：首次配置 —— 注册商账号验证、评估标准设定、关键词方向初始化
-# 前置：有 GoDaddy/Namecheap/Dynadot 账号，有域名交易平台账号（Sedo/Dan/Afternic）
+# 前置：有 GoDaddy/Namecheap/Dynadot 账号，有域名交易平台账号（Sedo/Dan/Afternic），openvault（推荐）
 # 输出：data/domain-config.json，docs/domain-strategy.md
 
 agent env-checker:
@@ -44,10 +44,18 @@ let env_check = session: env-checker
   验证环境：
   1. node --version（>= 18）
   2. whois 是否可用：which whois
-  3. registrar API 连通性：
-     curl -s -H "Authorization: sso-key {registrar_api_key}" \
+  3. openvault 检测（只检查可用性，不输出任何凭证值）：
+     which openvault > /dev/null 2>&1 && openvault version
+     如果可用：
+       openvault get clawfirm/registrar-api-key > /dev/null 2>&1
+       退出码为 0 则输出 "OPENVAULT: available, key loaded"
+       否则输出 "OPENVAULT: available, key not set（运行 openvault set clawfirm/registrar-api-key 写入）"
+     否则：输出 "OPENVAULT: not found（建议安装：GOPROXY=direct go install github.com/npc-live/openvault@latest）"
+  4. registrar API 连通性（使用内存中解析的 key，不从 run_config 明文读取）：
+     eval "$(openvault resolve data/domain-creds.json --export 2>/dev/null || echo '')"
+     curl -s -H "Authorization: sso-key ${REGISTRAR_API_KEY:-{run_config.registrar_api_key}}" \
      https://api.godaddy.com/v1/domains/available?domain=test-domain-check.com
-  4. 检查 data/ 目录可写
+  5. 检查 data/ 目录可写
 
   追加 data/stage-log.json：{ stage: "env-check", status, ts }
   输出 "ENV_OK" 或 "ENV_FAILED: [原因]"
@@ -93,11 +101,36 @@ let keyword_research = session: analyst
 # ── 写入配置 ──
 session: env-checker
   prompt: """
-  写入 data/domain-config.json：
+  将 API 凭证存入 OpenVault（推荐）或写入本地文件（回退）：
+
+  如果 openvault 可用：
+    # openvault set 交互式提示输入，不接受命令行参数（防止 shell history 泄漏）
+    openvault set clawfirm/registrar-api-key
+    openvault set clawfirm/marketplace-api-key   # Sedo/Dan/Afternic API key（如有）
+
+    写入 data/domain-creds.json（可安全提交 git，无明文）：
+    {
+      "secrets_backend": "openvault",
+      "registrar_api_key_ref":   "clawfirm/registrar-api-key",
+      "marketplace_api_key_ref": "clawfirm/marketplace-api-key"
+    }
+
+    运行时解析凭证（在内存中，不落盘）：
+    eval "$(openvault resolve data/domain-creds.json --export)"
+
+  否则（openvault 不可用，回退）：
+    写入 data/domain-creds.json（mode 0600，明文，禁止提交 git）：
+    {
+      "secrets_backend": "plaintext",
+      "registrar_api_key": "...",
+      "marketplace_api_key": "..."
+    }
+    输出警告："⚠ 建议安装 OpenVault：GOPROXY=direct go install github.com/npc-live/openvault@latest"
+
+  写入 data/domain-config.json（无明文凭证）：
   {
     "run_id": ...,
     "registrar": ...,
-    "registrar_api_key": ...,
     "marketplace": ...,
     "budget_usd": ...,
     "max_reg_fee_usd": ...,

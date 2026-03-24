@@ -1,6 +1,6 @@
 # whips/polymarket/setup.whip
 # 功能：首次配置 —— 环境检测、钱包验证、API 连通性测试、策略参数初始化
-# 前置：Node.js >= 18，tsx，PRIVATE_KEY 环境变量已设置
+# 前置：Node.js >= 18，tsx，openvault（推荐）或 PRIVATE_KEY 环境变量
 # 输出：data/api-creds.json，data/config.json，data/stage-log.json
 
 agent env-checker:
@@ -45,8 +45,11 @@ let env_check = session: env-checker
   检查：
   1. node --version（需要 >= 18）
   2. tsx 是否可用：which tsx
-  3. PRIVATE_KEY 环境变量是否已设置（只检查是否存在，不输出值）：
-     [ -n "$PRIVATE_KEY" ] && echo "SET" || echo "NOT_SET"
+  3. 私钥来源检测（优先级顺序，只检查是否可用，绝不输出密钥值）：
+     a. OpenVault（推荐）：openvault get clawfirm/polygon-private-key > /dev/null 2>&1
+        如果退出码为 0，输出 "PRIVATE_KEY_SOURCE: openvault"
+     b. 环境变量（回退）：[ -n "$PRIVATE_KEY" ] && echo "SET" || echo "NOT_SET"
+        如果使用环境变量，输出警告："⚠ 建议迁移至 OpenVault：openvault set clawfirm/polygon-private-key"
   4. data/ 目录是否存在且可写
 
   追加 data/stage-log.json：
@@ -94,8 +97,13 @@ let wallet_check = session: validator
 
   配置：{run_config}
 
-  执行：
+  执行（优先用 openvault run 注入私钥，密钥只在子进程环境中存在，不落盘）：
+  openvault run -- tsx src/core/index.ts --check-wallet
+  （openvault run 会自动将 vault 中所有 secret 以环境变量形式注入子进程）
+
+  如果 openvault 不可用，回退：
   tsx src/core/index.ts --check-wallet
+  （此时依赖 $PRIVATE_KEY 环境变量已在外部 export）
 
   验证：
   1. PRIVATE_KEY 对应的地址与 wallet_address 一致
@@ -142,13 +150,42 @@ session: env-checker
 
   配置：{run_config}
 
-  写入 data/api-creds.json（敏感信息，mode 0600）：
-  {
-    "wallet_address": "...",
-    "poly_api_key": "...",
-    "poly_secret": "...",
-    "poly_passphrase": "..."
-  }
+  将敏感凭证存入 OpenVault（推荐）或写入本地文件（回退）：
+
+  如果 openvault 可用：
+    # openvault set 会交互式提示输入值，不接受命令行参数（防止 shell history 泄漏）
+    openvault set clawfirm/poly-api-key
+    openvault set clawfirm/poly-secret
+    openvault set clawfirm/poly-passphrase
+    openvault set clawfirm/polygon-private-key
+
+    写入 data/api-creds.json（可安全提交 git，无明文）：
+    {
+      "wallet_address": "{run_config.wallet_address}",
+      "secrets_backend": "openvault",
+      "poly_api_key_ref":     "clawfirm/poly-api-key",
+      "poly_secret_ref":      "clawfirm/poly-secret",
+      "poly_passphrase_ref":  "clawfirm/poly-passphrase"
+    }
+
+    运行时解析凭证（在内存中，不落盘）：
+    openvault resolve data/api-creds.json          # 输出完整 JSON
+    openvault resolve data/api-creds.json --export # 输出 export 语句
+    eval "$(openvault resolve data/api-creds.json --export)"
+
+    启动交易引擎（secrets 自动注入子进程环境变量）：
+    openvault run -- tsx src/core/index.ts
+
+  否则（openvault 不可用，回退）：
+    写入 data/api-creds.json（mode 0600，明文，禁止提交 git）：
+    {
+      "wallet_address": "{run_config.wallet_address}",
+      "secrets_backend": "plaintext",
+      "poly_api_key": "...",
+      "poly_secret": "...",
+      "poly_passphrase": "..."
+    }
+    输出警告："⚠ 建议安装 OpenVault：GOPROXY=direct go install github.com/npc-live/openvault@latest"
 
   写入 data/config.json（策略参数）：
   {

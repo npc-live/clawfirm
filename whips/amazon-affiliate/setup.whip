@@ -1,6 +1,6 @@
 # whips/amazon-affiliate/setup.whip
 # 功能：首次配置 —— 环境检测、联盟账号、网站、关键词方向初始化
-# 前置：有 Amazon Associates 账号，有建站平台（WordPress/Hugo）
+# 前置：有 Amazon Associates 账号，有建站平台（WordPress/Hugo），openvault（推荐）
 # 输出：data/affiliate-config.json，docs/niche-strategy.md
 
 agent env-checker:
@@ -49,6 +49,10 @@ let env_check = session: env-checker
   2. whipflow 是否可用：which whipflow
   3. site_url 是否可访问：curl -s -o /dev/null -w "%{http_code}" {run_config.site_url}
   4. Amazon Associates 账号：{run_config.amazon_tag} 格式是否正确（含 -20/-21 后缀）
+  5. openvault 检测（只检查可用性，不输出任何凭证值）：
+     which openvault > /dev/null 2>&1 && openvault version
+     如果可用：输出 "OPENVAULT: available"
+     否则：输出 "OPENVAULT: not found（建议安装：GOPROXY=direct go install github.com/npc-live/openvault@latest）"
 
   追加 data/stage-log.json：{ stage: "env-check", status, ts }
   输出 "ENV_OK" 或 "ENV_FAILED: [原因]"
@@ -141,13 +145,38 @@ loop until **strategy_check 包含 STRATEGY_APPROVED** (max: 2):
 # ── 阶段 3：写入配置 ──
 session: env-checker
   prompt: """
-  写入 data/affiliate-config.json：
+  将敏感凭证存入 OpenVault（推荐）或写入本地文件（回退）：
+
+  如果 openvault 可用：
+    # amazon_tag 虽为 tracking ID，但与账号绑定，统一入 vault
+    openvault set clawfirm/amazon-associate-tag
+    openvault set clawfirm/site-deploy-key   # WordPress/Hugo 部署凭证（如有）
+
+    写入 data/affiliate-creds.json（可安全提交 git，无明文）：
+    {
+      "secrets_backend": "openvault",
+      "amazon_tag_ref":      "clawfirm/amazon-associate-tag",
+      "site_deploy_key_ref": "clawfirm/site-deploy-key"
+    }
+
+    运行时解析凭证（在内存中，不落盘）：
+    eval "$(openvault resolve data/affiliate-creds.json --export)"
+
+  否则（openvault 不可用，回退）：
+    写入 data/affiliate-creds.json（mode 0600，明文，禁止提交 git）：
+    {
+      "secrets_backend": "plaintext",
+      "amazon_tag": "...",
+      "site_deploy_key": "..."
+    }
+    输出警告："⚠ 建议安装 OpenVault：GOPROXY=direct go install github.com/npc-live/openvault@latest"
+
+  写入 data/affiliate-config.json（无明文凭证）：
   {
     "run_id": ...,
     "niche": ...,
     "site_url": ...,
     "site_platform": ...,
-    "amazon_tag": ...,
     "amazon_locale": ...,
     "target_monthly_revenue_usd": ...,
     "publish_cadence": ...,
