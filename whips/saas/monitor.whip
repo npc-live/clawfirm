@@ -1,0 +1,170 @@
+# whips/saas/monitor.whip
+# 功能：持续追踪 —— 监控发布帖子评论/反馈、竞品动态、SEO 排名变化
+# 调用方：手动启动，长期运行（建议每天执行一次）
+# 前置：setup.whip 已完成，至少有一个 acquire/launch 任务在运行中
+# 输出：持续更新 data/saas-posts.json，data/saas-metrics.json
+
+agent monitor:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  SaaS 增长监控专家。追踪各渠道发布效果、用户反馈、竞品变化。
+  发现需要立即处理的负面反馈时输出 URGENT 标记。
+  汇总每日数据，识别增长信号和风险信号。
+  """
+
+agent responder:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  社区互动专家。对用户评论快速生成真实、有帮助的回复。
+  避免模板化回复，每条回复都要针对具体内容。
+  负面反馈优先处理，保持专业态度。
+  """
+
+# ── 读取配置 ──
+let config = session: monitor
+  prompt: """
+  读取配置：
+  1. 读取 data/saas-config.json
+  2. 读取 data/saas-posts.json，找出 status=published 的帖子
+  3. 读取 data/saas-metrics.json（不存在则 []），获取上次监控数据
+
+  输出：{
+    product_name, product_url,
+    published_posts: [{ id, type, channel_url, published_at }],
+    last_check_ts: "..."
+  }
+  """
+
+# ── 检查评论和反馈 ──
+let feedback = session: monitor
+  prompt: """
+  检查所有已发布渠道的新评论和反馈：
+
+  配置：{config}
+
+  对每个 published_post：
+
+  1. Reddit 帖子（type=reddit）：
+     curl -s "{channel_url}.json" | 提取评论列表
+     找出 {config.last_check_ts} 之后的新评论
+     分类：positive / question / negative / feature-request
+
+  2. HN 帖子（type=hn）：
+     curl -s "https://hacker-news.firebaseio.com/v0/item/{hn_id}.json"
+     提取 kids（评论 id），获取每个评论内容
+     找出新评论并分类
+
+  3. 检查 Product Hunt 评论（如有 PH 链接）：
+     curl -s "{ph_url}" 提取评论数据
+
+  汇总输出：
+  {
+    new_comments: [{ source, author, content, type, sentiment, ts }],
+    urgent_items: [需要立即回复的负面/bug反馈],
+    questions: [用户提问列表],
+    feature_requests: [功能请求列表]
+  }
+  """
+
+# ── 生成回复草稿 ──
+let replies = session: responder
+  prompt: """
+  为新评论生成回复草稿：
+
+  评论列表：{feedback}
+  产品信息：{config.product_name} — {config.product_url}
+
+  优先处理顺序：
+  1. urgent_items（负面/bug）— 必须回复，30 分钟内
+  2. questions — 应该回复，提供帮助
+  3. positive — 感谢 + 引导下一步
+  4. feature_requests — 确认收到 + 路线图说明
+
+  对每条评论生成回复：
+  - 不超过 100 词
+  - 开头不要用 "Great question!" 等套话
+  - 如果是 bug，说明排查步骤或预计修复时间
+  - 如果是功能请求，说明是否在 roadmap 中
+  - 结尾可以引导进一步行动（试用/联系/关注）
+
+  写入 docs/reply-drafts-{today}.md。
+  对 urgent_items 输出 "URGENT_REPLY_NEEDED: [摘要]"
+  """
+
+if **replies 包含 URGENT_REPLY_NEEDED**:
+  session: monitor
+    prompt: """
+    发现紧急反馈需要立即处理：{replies}
+
+    输出 WorkflowEvent：
+    {"ts":"[ISO]","event":"urgent_feedback","data":{
+      "items": [...],
+      "reply_draft_file": "docs/reply-drafts-[today].md",
+      "action_required": "Review and post replies immediately"
+    }}
+    """
+
+# ── 检查竞品动态 ──
+let competitor_updates = session: monitor
+  prompt: """
+  检查竞品最新动态：
+
+  读取 docs/competitor-analysis.md，提取竞品列表和网站
+
+  对每个主要竞品（最多 3 个）：
+  1. 检查 Product Hunt 最新发布：
+     curl -s "https://www.producthunt.com/@[competitor]" 或搜索产品名
+  2. 检查官网是否有新功能/定价变化（对比上次记录）
+  3. 检查社交媒体最新帖子（Twitter/LinkedIn）
+
+  识别：
+  - 竞品新发布的功能（我们是否需要跟进？）
+  - 竞品定价调整（我们的竞争力变化？）
+  - 竞品的市场活动（对我们的影响？）
+
+  输出竞品动态摘要（只列有变化的内容）。
+  """
+
+# ── 记录指标 ──
+session: monitor
+  prompt: """
+  记录今日指标快照：
+
+  配置：{config}
+  反馈数据：{feedback}
+
+  尝试获取可访问的公开指标：
+  1. Product Hunt 帖子 upvote 数（如有 PH 链接）
+  2. Reddit 帖子 karma / 评论数
+  3. HN 帖子分数 / 评论数
+
+  读取 data/saas-metrics.json（不存在则 []），追加今日快照：
+  {
+    "ts": "[ISO]",
+    "date": "[YYYY-MM-DD]",
+    "ph_upvotes": N,
+    "reddit_karma": N,
+    "hn_score": N,
+    "new_comments": N,
+    "new_questions": N,
+    "new_feature_requests": N,
+    "competitor_updates": N,
+    "urgent_items": N
+  }
+  写回文件。
+
+  追加 data/stage-log.json：{ stage: "monitor-round", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"monitor_round","data":{
+    "new_feedback": N,
+    "urgent_items": N,
+    "competitor_changes": N,
+    "reply_drafts": "docs/reply-drafts-[today].md",
+    "next_check": "24h"
+  }}
+  """

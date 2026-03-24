@@ -1,0 +1,210 @@
+# whips/saas/setup.whip
+# 功能：SaaS 出海初始化 —— 产品定位分析、目标市场选择、竞品调研、出海策略生成
+# 前置：data/current-run.json 包含产品描述和目标市场
+# 输出：data/saas-config.json，docs/saas-strategy.md，docs/competitor-analysis.md
+
+agent researcher:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  SaaS 出海市场研究专家。深度分析目标市场竞争格局、用户痛点、定价模型。
+  所有结论必须有数据支撑，避免泛泛而谈。给出可执行的差异化方向。
+  """
+
+agent strategist:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  SaaS 出海 GTM 策略专家。擅长 PLG（产品增长）、SEO 内容获客、社区运营。
+  了解 Product Hunt、Hacker News、Reddit 等海外渠道规则和技巧。
+  输出策略必须分阶段、有优先级、可立即执行。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "策略质量审核专家。验证定位是否清晰、策略是否可执行，输出 APPROVED 或 NEEDS_REVISION: [原因]。"
+
+# ── 读取配置 ──
+let run_config = session: researcher
+  prompt: """
+  读取 data/current-run.json，提取以下字段：
+  - run_id
+  - product_name:       产品名称
+  - product_desc:       产品一句话描述（英文）
+  - product_url:        产品网站或 App Store 链接
+  - product_category:   产品类别（如 productivity / devtools / marketing / finance）
+  - target_market:      目标市场（如 US / Global / Europe / SEA）
+  - target_persona:     目标用户（如 indie developers / SMB marketing teams）
+  - pricing_model:      定价模式（freemium / free-trial / paid-only）
+  - monthly_price_usd:  付费版月价格
+  - current_mrr_usd:    当前 MRR（0 表示刚起步）
+  - launch_channels:    希望使用的渠道列表（如 ["producthunt","reddit","seo","cold-email"]）
+  - competitor_names:   已知竞品名称列表（可选）
+
+  如果文件不存在，输出 "CONFIG_MISSING"。
+  """
+
+if **run_config 包含 CONFIG_MISSING**:
+  throw "请先创建 data/current-run.json，参考 whips/saas/README.md 中的示例配置"
+
+# ── 阶段 0：竞品分析 ──
+let competitor_analysis = session: researcher
+  prompt: """
+  对 {run_config.product_category} 类 SaaS 产品做竞品分析：
+
+  产品信息：{run_config}
+  已知竞品：{run_config.competitor_names}（如为空则自行搜索）
+
+  分析维度：
+
+  1. **竞品矩阵**（找出 5-8 个主要竞品）：
+     对每个竞品分析：
+     - 核心功能和定位
+     - 定价区间（免费/付费梯度）
+     - 主要获客渠道（SEO 流量/PH 排名/社区/广告）
+     - G2/Capterra/Product Hunt 评分和评论数
+     - 用户负面反馈（差评关键词，就是市场机会）
+
+     搜索方式（按优先级）：
+     curl -s "https://api.producthunt.com/v2/api/graphql" （不需要 key 也可查公开数据）
+     或直接分析 G2/Capterra 等公开数据
+
+  2. **差异化机会**（最重要）：
+     - 现有产品做得不好的 3 个痛点
+     - {run_config.product_name} 可以切入的蓝海角度
+     - 定价策略建议（对标竞品 + 差异化理由）
+
+  3. **关键词机会**（SEO）：
+     - 竞品主攻的核心关键词（从其 title/meta 推断）
+     - 搜索量高但竞争度低的长尾词方向（不需要付费工具，基于分析推断）
+
+  写入 docs/competitor-analysis.md（Markdown 格式，含竞品对比表格）。
+  追加 data/stage-log.json：{ stage: "competitor-analysis", index: 0, status: "done", ts: "[ISO]" }
+
+  输出分析摘要。
+  """
+
+# ── 阶段 1：GTM 策略制定 ──
+let gtm_strategy = session: strategist
+  prompt: """
+  基于竞品分析，为 {run_config.product_name} 制定出海 GTM 策略：
+
+  产品配置：{run_config}
+  竞品分析：{competitor_analysis}
+
+  制定完整策略，写入 docs/saas-strategy.md：
+
+  ## 1. 产品定位
+  - 一句话定位（英文，用于 tagline / PH 副标题）
+  - 目标客户画像（具体职位、公司规模、使用场景）
+  - 核心价值主张（3 条，每条对应一个竞品痛点）
+  - 差异化 USP：我们 vs 竞品
+
+  ## 2. 冷启动方案（0-100 用户，前 30 天）
+  根据 {run_config.launch_channels} 选择对应渠道：
+
+  ▸ producthunt：
+    - 发布时间：周二/周三 00:01 PST
+    - Hunter 选择策略（找谁 hunt 效果更好）
+    - 发布前 1 周预热动作清单（maker 社区互动、邮件列表准备）
+    - 首页评论模板（第一条评论最关键）
+    - 发布当天小时级行动计划
+
+  ▸ reddit：
+    - 目标 subreddit 列表（按相关性排序）
+    - 各 subreddit 规则摘要（哪些可以推广，哪些只能软推）
+    - 帖子类型建议（教程/Ask HN 式/Show HN 式）
+    - 不被封禁的发帖技巧
+
+  ▸ seo：
+    - 内容矩阵（3 类文章：对比/教程/用例）
+    - 优先级最高的 10 个关键词
+    - 发布节奏（每周几篇）
+
+  ▸ cold-email：
+    - ICP 定义（用于精准找邮箱）
+    - 邮件模板（主题行 + 正文，100 字内）
+    - 工具推荐（Apollo/Hunter.io）
+
+  ▸ hacker-news：
+    - Show HN / Ask HN 标题公式
+    - 发布时间（周一周二 8-9am ET）
+    - 第一条评论策略
+
+  ## 3. 增长飞轮（100 用户后）
+  - 免费用户转付费路径设计
+  - 口碑/推荐机制（referral / affiliate）
+  - 内容 SEO 复利策略
+
+  ## 4. 指标体系
+  - 北极星指标
+  - 各阶段关键 milestone（用户数/MRR）
+
+  追加 data/stage-log.json：{ stage: "gtm-strategy", index: 1, status: "done", ts: "[ISO]" }
+  """
+
+let strategy_check = session: validator
+  prompt: """
+  审核 GTM 策略质量：{gtm_strategy}
+
+  检查：
+  1. 定位是否有明确差异化（非复制竞品）？
+  2. 冷启动方案是否有具体可操作步骤？
+  3. 各渠道建议是否符合该渠道的真实规则？
+  4. 关键词方向是否与产品类别匹配？
+  5. 指标体系是否合理？
+
+  输出 "STRATEGY_APPROVED" 或 "STRATEGY_NEEDS_REVISION: [具体问题]"
+  """
+
+loop until **strategy_check 包含 STRATEGY_APPROVED** (max: 2):
+  gtm_strategy = session: strategist
+    prompt: "根据审核意见修订策略：{strategy_check}，更新 docs/saas-strategy.md（版本号递增）。"
+  strategy_check = session: validator
+    prompt: "重新审核：{gtm_strategy}，输出 STRATEGY_APPROVED 或 STRATEGY_NEEDS_REVISION。"
+
+# ── 阶段 2：写入配置 ──
+session: researcher
+  prompt: """
+  将出海配置持久化：
+
+  产品配置：{run_config}
+
+  写入 data/saas-config.json：
+  {
+    "run_id": "...",
+    "product_name": "...",
+    "product_desc": "...",
+    "product_url": "...",
+    "product_category": "...",
+    "target_market": "...",
+    "target_persona": "...",
+    "pricing_model": "...",
+    "monthly_price_usd": X,
+    "current_mrr_usd": X,
+    "launch_channels": [...],
+    "strategy_file": "docs/saas-strategy.md",
+    "competitor_file": "docs/competitor-analysis.md",
+    "created_at": "[ISO]"
+  }
+
+  初始化空数据文件（如果不存在）：
+  - data/saas-leads.json    → []
+  - data/saas-posts.json    → []
+  - data/saas-metrics.json  → []
+
+  追加 data/stage-log.json：{ stage: "config-saved", index: 2, status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "product": "{run_config.product_name}",
+    "target_market": "{run_config.target_market}",
+    "channels": [...],
+    "strategy_file": "docs/saas-strategy.md",
+    "ready": true
+  }}
+  """
