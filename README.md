@@ -46,16 +46,12 @@ bun run build        # 编译为单文件 / Compile to single binary
 ## CLI 命令 / CLI Commands
 
 ```bash
-<<<<<<< HEAD
-whipflow run flows/hello.whip
-=======
 whipflow run <file.whip>          # 执行工作流 / Execute a workflow
 whipflow validate <file.whip>     # 校验语法 / Validate syntax
 whipflow compile <file.whip>      # 查看编译结果 / Show compiled form
 whipflow install-skills           # 安装 skills 到 Claude Code / Install skills to Claude Code
 whipflow install-skills --force   # 强制覆盖 / Force overwrite
 whipflow help                     # 帮助 / Help
->>>>>>> b3e30d9 (Update README with comprehensive bilingual project documentation)
 ```
 
 ---
@@ -96,6 +92,64 @@ loop until **check 包含 APPROVED** (max: 2):
 session: writer
   prompt: "将最终报告写入 docs/report.md：{research}"
 ```
+
+---
+
+## ACP 模式 / ACP Mode
+
+WhipFlow 可作为 MCP 兼容的工具服务器，让其他 agent（Cursor、Claude Code 等）通过 JSON-RPC 2.0 stdio 调用。
+
+WhipFlow can act as an MCP-compatible tool server so other agents (Cursor, Claude Code, etc.) can call it over JSON-RPC 2.0 via stdio.
+
+```bash
+whipflow acp
+```
+
+在 `.cursor/mcp.json` 或任何 MCP 兼容主机中注册 / Register in MCP-compatible host:
+
+```json
+{
+  "mcpServers": {
+    "whipflow": {
+      "command": "whipflow",
+      "args": ["acp"]
+    }
+  }
+}
+```
+
+**暴露的工具 / Exposed Tools:**
+
+| 工具 / Tool | 说明 / Description |
+|------|-------------|
+| `whipflow_run_file` | 执行 `.whip` 工作流文件 / Execute a `.whip` workflow file |
+| `whipflow_run_source` | 执行内联 `.whip` 源码 / Execute inline `.whip` source code |
+| `whipflow_validate` | 校验 `.whip` 语法 / Validate `.whip` syntax without running |
+
+---
+
+## 配置 / Configuration
+
+项目级配置文件 `.whipflow.json` / Project-level config:
+
+```json
+{
+  "providers": {
+    "mymodel": {
+      "bin": "opencode",
+      "args": ["run"],
+      "promptMode": "arg"
+    }
+  },
+  "defaultProvider": "claude",
+  "conditionProvider": "claude",
+  "toolsDir": "~/.whipflow/tools"
+}
+```
+
+`defaultProvider` 为所有 session 设置默认 provider（agent 未指定时使用，默认 `claude-code`）。`conditionProvider` 仅用于条件判断（`discretion`）和选项选择（`choice`）的评估，未设置时回退到 `defaultProvider`。
+
+`defaultProvider` sets the provider for all sessions when not specified on the agent (default: `claude-code`). `conditionProvider` overrides the provider for `discretion` and `choice` evaluation only; falls back to `defaultProvider`.
 
 ---
 
@@ -166,81 +220,18 @@ WhipFlow provides workflow definitions for ClawFirm's seven business modules, ea
 Full pipeline from competitor analysis to Product Hunt launch.
 
 ```bash
-<<<<<<< HEAD
-whipflow install-skills
-=======
 whipflow run whips/saas/setup.whip      # 竞品分析 + GTM 策略 / Competitor analysis + GTM strategy
 whipflow run whips/saas/landing.whip    # 英文落地页文案（A/B 版本）/ Landing page copy (A/B variants)
 whipflow run whips/saas/acquire.whip    # 多渠道获客 / Multi-channel acquisition
 whipflow run whips/saas/launch.whip     # Product Hunt 发布素材 + 小时级计划 / PH launch kit
 whipflow run whips/saas/monitor.whip    # 每日反馈监控 / Daily feedback monitoring
 whipflow run whips/saas/report.whip     # 增长周报 / Growth weekly report
->>>>>>> b3e30d9 (Update README with comprehensive bilingual project documentation)
 ```
 
 **获客渠道 / Acquisition channels:** Reddit, Hacker News, Cold Email, SEO Article
 
 #### 2. hyperliquid — 新闻驱动期货交易 / News-Driven Futures Trading
 
-<<<<<<< HEAD
-Create a `.whip` file in `flows/` and run it with:
-
-```bash
-whipflow validate flows/my-flow.whip
-whipflow run flows/my-flow.whip
-```
-
-## ACP mode
-
-whipflow can act as an **MCP-compatible tool server** so other agents (Cursor, Claude Code, etc.) can call it over JSON-RPC 2.0 via stdio.
-
-```bash
-whipflow acp
-```
-
-Register it in `.cursor/mcp.json` or any MCP-compatible host:
-
-```json
-{
-  "mcpServers": {
-    "whipflow": {
-      "command": "whipflow",
-      "args": ["acp"]
-    }
-  }
-}
-```
-
-### Exposed tools
-
-| Tool | Description |
-|------|-------------|
-| `whipflow_run_file` | Execute a `.whip` workflow file |
-| `whipflow_run_source` | Execute inline `.whip` source code |
-| `whipflow_validate` | Validate `.whip` syntax without running |
-
-## Configuration
-
-Project-level config in `.whipflow.json`:
-
-```json
-{
-  "providers": {
-    "mymodel": {
-      "bin": "opencode",
-      "args": ["run"],
-      "promptMode": "arg"
-    }
-  },
-  "defaultProvider": "claude",
-  "conditionProvider": "claude",
-  "toolsDir": "~/.whipflow/tools"
-}
-```
-
-`defaultProvider` sets the provider for all sessions when not specified on the agent (default: `claude-code`).
-`conditionProvider` overrides the provider for `discretion` and `choice` evaluation only; falls back to `defaultProvider`.
-=======
 用 Claude 评估加密货币新闻信号，在 Hyperliquid 自动开多/空。
 
 Uses Claude to assess crypto news signals, auto-opens long/short on Hyperliquid.
@@ -453,7 +444,7 @@ openvault set clawfirm/polygon-private-key
 
 ---
 
-## ⚠️ 免责声明 / Disclaimer
+## 免责声明 / Disclaimer
 
 本项目及其所有代码、工作流、策略仅供学习和技术演示之用，**不构成任何投资建议或财务咨询**。交易类模块可能导致本金亏损，使用者自行承担一切风险。项目按"原样"提供，不做任何明示或暗示的保证。
 
@@ -464,4 +455,3 @@ This project and all its code, workflows, and strategies are provided solely for
 ## License
 
 MIT
->>>>>>> b3e30d9 (Update README with comprehensive bilingual project documentation)
