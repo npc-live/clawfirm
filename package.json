@@ -1,41 +1,39 @@
-{
-  "name": "@harness.farm/clawfirm",
-  "version": "0.1.1",
-  "description": "clawfirm 7*24 engine",
-  "type": "module",
-  "bin": {
-    "clawfirm": "./bin/cli.js"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "bin",
-    "lib",
-    "src/core",
-    "clawfirm.config.js"
-  ],
-  "scripts": {
-    "trade": "tsx src/core/index.ts",
-    "trade:dry": "DRY_RUN=true tsx src/core/index.ts",
-    "typecheck": "tsc --noEmit --project tsconfig.core.json",
-    "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "@tauri-apps/api": "^2.0.0",
-    "better-sqlite3": "^9.4.3",
-    "undici": "^7.24.5",
-    "viem": "^2.21.0"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.8",
-    "@types/node": "^20.0.0",
-    "tsx": "^4.7.0",
-    "typescript": "^5.4.0",
-    "vitest": "^4.1.0"
-  }
+﻿{
+    "name":  "@harness.farm/clawfirm",
+    "version":  "0.1.1",
+    "description":  "clawfirm 7*24 engine",
+    "type":  "module",
+    "bin":  {
+                "clawfirm":  "./bin/cli.js"
+            },
+    "publishConfig":  {
+                          "access":  "public"
+                      },
+    "files":  [
+                  "bin",
+                  "lib",
+                  "src/core",
+                  "clawfirm.config.js"
+              ],
+    "scripts":  {
+                    "trade":  "tsx src/core/index.ts",
+                    "trade:dry":  "DRY_RUN=true tsx src/core/index.ts",
+                    "typecheck":  "tsc --noEmit --project tsconfig.core.json",
+                    "test":  "vitest run",
+                    "test:watch":  "vitest"
+                },
+    "engines":  {
+                    "node":  "\u003e=18"
+                },
+    "dependencies":  {
+                         "@tauri-apps/api":  "^2.0.0",
+                         "undici":  "^7.24.5",
+                         "viem":  "^2.21.0"
+                     },
+    "devDependencies":  {
+                            "@types/node":  "^20.0.0",
+                            "tsx":  "^4.7.0",
+                            "typescript":  "^5.4.0",
+                            "vitest":  "^4.1.0"
+                        }
 }
