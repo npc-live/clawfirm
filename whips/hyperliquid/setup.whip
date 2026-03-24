@@ -1,0 +1,186 @@
+# whips/hyperliquid/setup.whip
+# 功能：首次配置 —— 环境检测、钱包验证、HL API 连通性测试、策略参数初始化
+# 前置：Node.js >= 18，openvault（推荐）或 HL_PRIVATE_KEY 环境变量，ANTHROPIC_API_KEY
+# 输出：data/hl-config.json，data/stage-log.json
+
+agent env-checker:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "环境检测专家。验证工具和配置是否就绪，给出精确的修复命令。"
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: "配置验证专家。验证 API 连通性和账户状态，输出 APPROVED 或 FAILED: [原因]。"
+
+# ── 读取初始配置 ──
+let run_config = session: env-checker
+  prompt: """
+  读取初始配置：
+  1. 读取 data/current-run.json（包含用户填写的参数）
+  2. 如果文件不存在，使用以下默认值
+
+  输出：{
+    run_id,
+    wallet_address,
+    budget_usd,
+    max_position_usd,       # 默认 50
+    max_open_trades,        # 默认 4
+    min_signal_score,       # 默认 60
+    stop_loss_pct,          # 默认 0.04
+    take_profit_pct,        # 默认 0.08
+    default_leverage,       # 默认 3
+    max_leverage,           # 默认 5
+    entry_window_minutes,   # 默认 5
+    poll_interval_seconds,  # 默认 60
+    claude_model            # 默认 "claude-haiku-4-5-20251001"
+  }
+  """
+
+# ── 阶段 0：环境验证 ──
+let env_check = session: env-checker
+  prompt: """
+  验证运行环境：
+  配置：{run_config}
+
+  检查：
+  1. node --version（需要 >= 18）
+  2. 私钥来源检测（绝不输出密钥值）：
+     a. OpenVault（推荐）：openvault get clawfirm/hl-private-key > /dev/null 2>&1
+        如果退出码为 0，输出 "PRIVATE_KEY_SOURCE: openvault"
+     b. 环境变量（回退）：[ -n "$HL_PRIVATE_KEY" ] && echo "SET" || echo "NOT_SET"
+        如果使用环境变量，输出警告："⚠ 建议迁移至 OpenVault"
+  3. ANTHROPIC_API_KEY 是否已设置：[ -n "$ANTHROPIC_API_KEY" ] && echo "SET" || echo "NOT_SET"
+  4. data/ 目录是否存在且可写
+
+  追加 data/stage-log.json：
+  { run_id, stage: "env-check", index: 0, status: "done"/"failed", ts: "[ISO]", output: "[结果]" }
+
+  输出 "ENV_OK" 或 "ENV_FAILED: [具体问题和修复命令]"
+  """
+
+if **env_check 包含 ENV_FAILED**:
+  throw "环境检测失败：{env_check}"
+
+# ── 阶段 1：API 连通性测试 ──
+let api_check = session: validator
+  prompt: """
+  测试各 API 端点连通性：
+
+  1. Hyperliquid Info API：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d '{"type":"meta"}'
+     检查返回是否包含 "universe"
+
+  2. Hyperliquid 实时价格：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d '{"type":"allMids"}'
+     检查 BTC、ETH 价格是否存在
+
+  3. Claude API（使用 ANTHROPIC_API_KEY）：
+     curl -s https://api.anthropic.com/v1/messages \
+       -H "x-api-key: $ANTHROPIC_API_KEY" \
+       -H "anthropic-version: 2023-06-01" \
+       -H "Content-Type: application/json" \
+       -d '{"model":"claude-haiku-4-5-20251001","max_tokens":10,"messages":[{"role":"user","content":"ping"}]}'
+     检查返回是否包含 "content"
+
+  4. CryptoPanic 公开 API（可选）：
+     curl -s "https://cryptopanic.com/api/v1/posts/?auth_token=public&public=true&filter=hot&kind=news"
+     检查返回是否包含 "results"
+
+  追加 data/stage-log.json：{ stage: "api-check", index: 1, status, ts }
+
+  输出 "API_OK" 或 "API_FAILED: [哪个端点失败 + 原因]"
+  """
+
+if **api_check 包含 API_FAILED**:
+  throw "API 连通性测试失败：{api_check}"
+
+# ── 阶段 2：钱包状态验证 ──
+let wallet_check = session: validator
+  prompt: """
+  验证 Hyperliquid 账户状态：
+
+  配置：{run_config}
+
+  1. 读取账户净值（优先用 openvault run 注入私钥）：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d "{\"type\":\"clearinghouseState\",\"user\":\"{run_config.wallet_address}\"}"
+
+     检查：
+     - marginSummary.accountValue >= budget_usd（余额需满足预算）
+     - 记录当前持仓数量
+
+  2. 读取历史成交（验证地址是否有效）：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d "{\"type\":\"userFills\",\"user\":\"{run_config.wallet_address}\",\"startTime\":0}"
+
+  追加 data/stage-log.json：{ stage: "wallet-check", index: 2, status, ts }
+
+  输出：
+  "WALLET_OK: 净值 $X，当前持仓 N 个"
+  或 "WALLET_FAILED: [具体问题]"
+  """
+
+if **wallet_check 包含 WALLET_FAILED**:
+  throw "钱包验证失败：{wallet_check}"
+
+# ── 阶段 3：写入配置文件 ──
+session: env-checker
+  prompt: """
+  将配置持久化：
+
+  配置：{run_config}
+
+  如果 openvault 可用，存储私钥：
+    openvault set clawfirm/hl-private-key
+    openvault set clawfirm/anthropic-api-key
+
+  写入 data/hl-config.json（策略参数，无明文密钥）：
+  {
+    "run_id": "...",
+    "wallet_address": "{run_config.wallet_address}",
+    "secrets_backend": "openvault" 或 "env",
+    "budget_usd": X,
+    "max_position_usd": X,
+    "max_total_exposure_usd": X,
+    "max_open_trades": X,
+    "min_signal_score": X,
+    "stop_loss_pct": X,
+    "take_profit_pct": X,
+    "default_leverage": X,
+    "max_leverage": X,
+    "entry_window_minutes": X,
+    "poll_interval_seconds": X,
+    "claude_model": "...",
+    "created_at": "[ISO]"
+  }
+
+  初始化空数据文件（如果不存在）：
+  - data/hl-signals.json → []
+  - data/hl-trades.json  → []
+
+  追加 data/stage-log.json：{ stage: "config-saved", index: 3, status: "done", ts }
+  """
+
+# ── 完成 ──
+session: env-checker
+  prompt: """
+  setup.whip 执行完成。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "wallet": "[前6位]...",
+    "budget_usd": X,
+    "claude_model": "...",
+    "apis_verified": ["hyperliquid","claude","cryptopanic"],
+    "ready_to_trade": true
+  }}
+  """
