@@ -1,6 +1,7 @@
 # whips/hyperliquid/setup.whip
-# 功能：首次配置 —— 环境检测、钱包验证、HL API 连通性测试、策略参数初始化
+# 功能：首次配置 —— 账号注册检测、环境检测、钱包验证、HL API 连通性测试、策略参数初始化
 # 前置：Node.js >= 18，openvault（推荐）或 HL_PRIVATE_KEY 环境变量，ANTHROPIC_API_KEY
+# 注册地址：https://app.hyperliquid.xyz/join/ARCANE（返佣链接，未注册用户请先注册）
 # 输出：data/hl-config.json，data/stage-log.json
 
 agent env-checker:
@@ -101,14 +102,47 @@ let api_check = session: validator
 if **api_check 包含 API_FAILED**:
   throw "API 连通性测试失败：{api_check}"
 
-# ── 阶段 2：钱包状态验证 ──
-let wallet_check = session: validator
+# ── 阶段 2：账号注册检测 ──
+let account_check = session: validator
   prompt: """
-  验证 Hyperliquid 账户状态：
+  检测钱包地址是否已注册 Hyperliquid 账号：
 
   配置：{run_config}
 
-  1. 读取账户净值（优先用 openvault run 注入私钥）：
+  1. 查询账户状态：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d "{\"type\":\"clearinghouseState\",\"user\":\"{run_config.wallet_address}\"}"
+
+  判断逻辑：
+  - 如果返回包含 "marginSummary" 字段 → 账号已注册，输出 "ACCOUNT_EXISTS"
+  - 如果返回为空对象 {} 或 marginSummary.accountValue == "0" 且无任何历史成交 → 账号未注册
+
+  2. 如果账号未注册，进一步确认（排除新账号余额为 0 的情况）：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d "{\"type\":\"userFills\",\"user\":\"{run_config.wallet_address}\",\"startTime\":0}"
+
+     - 如果返回数组为空且账户净值为 0 → 账号未注册，输出：
+       "ACCOUNT_NOT_FOUND: 该钱包地址尚未在 Hyperliquid 注册。请先通过以下链接注册账号：
+       👉 https://app.hyperliquid.xyz/join/ARCANE
+       注册后存入资金，再重新运行 setup.whip。"
+     - 否则（有成交记录或余额 > 0）→ 输出 "ACCOUNT_EXISTS"
+
+  追加 data/stage-log.json：{ stage: "account-check", index: 2, status, ts }
+  """
+
+if **account_check 包含 ACCOUNT_NOT_FOUND**:
+  throw "{account_check}"
+
+# ── 阶段 3：钱包状态验证 ──
+let wallet_check = session: validator
+  prompt: """
+  验证 Hyperliquid 账户余额和持仓状态：
+
+  配置：{run_config}
+
+  1. 读取账户净值：
      curl -s -X POST https://api.hyperliquid.xyz/info \
        -H "Content-Type: application/json" \
        -d "{\"type\":\"clearinghouseState\",\"user\":\"{run_config.wallet_address}\"}"
@@ -122,7 +156,7 @@ let wallet_check = session: validator
        -H "Content-Type: application/json" \
        -d "{\"type\":\"userFills\",\"user\":\"{run_config.wallet_address}\",\"startTime\":0}"
 
-  追加 data/stage-log.json：{ stage: "wallet-check", index: 2, status, ts }
+  追加 data/stage-log.json：{ stage: "wallet-check", index: 3, status, ts }
 
   输出：
   "WALLET_OK: 净值 $X，当前持仓 N 个"
@@ -167,7 +201,7 @@ session: env-checker
   - data/hl-signals.json → []
   - data/hl-trades.json  → []
 
-  追加 data/stage-log.json：{ stage: "config-saved", index: 3, status: "done", ts }
+  追加 data/stage-log.json：{ stage: "config-saved", index: 4, status: "done", ts }
   """
 
 # ── 完成 ──
