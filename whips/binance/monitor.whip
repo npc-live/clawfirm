@@ -1,0 +1,149 @@
+# whips/binance/monitor.whip
+# 功能：持续监控循环 —— 每 60s 触发一次 scan + trade，管理持仓止损/止盈
+# 调用方：手动启动，长期运行
+# 前置：setup.whip 已完成
+# 输出：持续更新 data/bn-trades.json，每轮输出 WorkflowEvent
+
+agent watcher:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  持仓监控专家。实时检查未平仓仓位是否触及止损或止盈价格，
+  及时平仓锁定结果。决策必须基于实时价格，不做预测。
+  """
+
+agent orchestrator:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  工作流协调专家。按时间间隔触发扫描和交易循环，
+  记录每轮运行状态。发现异常时记录错误并继续下一轮。
+  """
+
+# ── 读取配置 ──
+let config = session: orchestrator
+  prompt: """
+  读取配置：
+  1. 读取 data/bn-config.json
+  2. 读取 data/bn-trades.json（不存在则 []），统计当前 open 状态的仓位
+
+  输出：{
+    poll_interval_seconds,
+    trade_mode,
+    stop_loss_pct,
+    take_profit_pct,
+    open_trades: [{ id, coin, direction, entry_price, sl_price, tp_price, size_usdt, ts, leverage }]
+  }
+  """
+
+# ── 检查持仓止损/止盈 ──
+let position_check = session: watcher
+  prompt: """
+  检查所有未平仓仓位是否需要平仓：
+
+  持仓列表：{config.open_trades}
+  交易模式：{config.trade_mode}
+
+  1. 获取相关币种实时价格：
+     symbols 参数：["{coin}USDT",...] → JSON 编码
+
+     如果 trade_mode="futures"：
+       curl -s "https://fapi.binance.com/fapi/v1/ticker/price"
+     如果 trade_mode="spot"：
+       curl -s "https://api.binance.com/api/v3/ticker/price"
+
+     提取每个 coin+"USDT" 的当前价格。
+
+  2. 对每个 open 仓位检查：
+     a. 止损触发：
+        - long: current_price <= sl_price
+        - short: current_price >= sl_price
+     b. 止盈触发：
+        - long: current_price >= tp_price
+        - short: current_price <= tp_price
+     c. 超时强平：
+        - (now - trade.ts) > 120 分钟
+
+  3. 对需要平仓的仓位输出：
+     CLOSE: { trade_id, coin, direction, reason: 'sl'|'tp'|'timeout', entry_price, current_price, pnl_pct }
+
+  4. 对仍在持有范围内的仓位输出：
+     HOLD: { trade_id, coin, current_price, unrealized_pnl_pct }
+
+  汇总输出所有平仓指令和持仓状态。
+  """
+
+# ── 执行平仓 ──
+let close_results = session: watcher
+  prompt: """
+  对需要平仓（CLOSE）的仓位执行市价平仓：
+
+  平仓列表：{position_check} 中所有 CLOSE 条目
+  交易模式：{config.trade_mode}
+
+  对每个平仓：
+  1. 读取 API 密钥（优先 openvault，回退环境变量）：
+     BN_KEY=$(openvault get clawfirm/bn-api-key 2>/dev/null || echo $BINANCE_API_KEY)
+     BN_SECRET=$(openvault get clawfirm/bn-api-secret 2>/dev/null || echo $BINANCE_API_SECRET)
+
+  2. 构造签名并执行市价平仓：
+     symbol=<coin>USDT
+     timestamp=$(curl -s https://api.binance.com/api/v3/time | grep -o '"serverTime":[0-9]*' | cut -d: -f2)
+     close_side=$([ "<direction>" = "long" ] && echo "SELL" || echo "BUY")
+
+     如果 trade_mode="futures"：
+       # 从持仓中读取实际数量
+       pos_params="symbol=$symbol&timestamp=$timestamp"
+       pos_sig=$(echo -n "$pos_params" | openssl dgst -sha256 -hmac "$BN_SECRET" | cut -d' ' -f2)
+       qty=$(curl -s -H "X-MBX-APIKEY: $BN_KEY" \
+         "https://fapi.binance.com/fapi/v2/positionRisk?$pos_params&signature=$pos_sig" \
+         | grep -o '"positionAmt":"[^"]*"' | cut -d'"' -f4 | tr -d -)
+
+       params="symbol=$symbol&side=$close_side&type=MARKET&quantity=$qty&reduceOnly=true&timestamp=$timestamp"
+       sig=$(echo -n "$params" | openssl dgst -sha256 -hmac "$BN_SECRET" | cut -d' ' -f2)
+       curl -s -X POST -H "X-MBX-APIKEY: $BN_KEY" \
+         "https://fapi.binance.com/fapi/v1/order?$params&signature=$sig"
+
+     如果 trade_mode="spot"（只能买入方向平仓）：
+       # 读取持有数量（从 data/bn-trades.json 中的 size_usdt / entry_price 估算）
+       qty=$(echo "scale=4; <size_usdt> / <entry_price>" | bc)
+       params="symbol=$symbol&side=$close_side&type=MARKET&quantity=$qty&timestamp=$timestamp"
+       sig=$(echo -n "$params" | openssl dgst -sha256 -hmac "$BN_SECRET" | cut -d' ' -f2)
+       curl -s -X POST -H "X-MBX-APIKEY: $BN_KEY" \
+         "https://api.binance.com/api/v3/order?$params&signature=$sig"
+
+  3. 更新 data/bn-trades.json：
+     找到对应 trade_id，更新：
+     { status: 'closed', closed_at: '[ISO]', close_price: X, pnl_usdt: X, close_reason: 'sl'|'tp'|'timeout' }
+
+  每次平仓输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"position_closed","data":{"coin":"...","reason":"...","pnl_usdt":X,"pnl_pct":X}}
+  """
+
+# ── 触发新一轮扫描 + 交易 ──
+session: orchestrator
+  prompt: """
+  等待 {config.poll_interval_seconds} 秒后，触发新一轮信号扫描和下单：
+
+  1. 运行 scan.whip
+  2. 如果 scan.whip 发现有效信号，运行 trade.whip
+
+  记录本轮运行摘要：
+  读取 data/bn-trades.json，统计：
+  - open_positions: 当前持仓数
+  - today_pnl_usdt: 今日已实现 PnL
+  - unrealized_pnl_usdt: 浮动盈亏（基于 open 仓位的当前价格估算）
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"monitor_round","data":{
+    "round": N,
+    "positions_closed": N,
+    "positions_open": N,
+    "today_pnl_usdt": X,
+    "next_scan_in": "{poll_interval_seconds}s"
+  }}
+
+  然后循环回到 position_check 步骤（持续运行直到手动停止）。
+  """

@@ -1,0 +1,190 @@
+# whips/binance/scan.whip
+# 功能：拉取最新加密新闻，调用 Claude AI 识别强驱动事件，输出交易信号
+# 调用方：手动触发 / monitor.whip 每60s定时触发
+# 前置：setup.whip 已完成（data/bn-config.json 存在）
+# 输出：data/bn-signals.json（评分达标的信号列表）
+
+agent news-fetcher:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  新闻数据获取专家。从多个来源并发拉取加密货币新闻，去重，过滤入场时间窗口内的新鲜内容。
+  不分析内容，只负责数据清洗和整合。
+  """
+
+agent signal-analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  加密市场信号分析专家。调用 Claude AI 对新闻批量打分，识别具有明确价格驱动力的事件。
+  严格过滤噪声，只输出有交易价值的信号。
+  """
+
+# ── 读取配置 ──
+let config = session: news-fetcher
+  prompt: """
+  读取策略配置：
+  1. 读取 data/bn-config.json
+  2. 读取 data/bn-trades.json（不存在则 []），统计今日已执行交易数
+
+  输出：{
+    trade_mode,
+    min_signal_score,
+    entry_window_minutes,
+    claude_model,
+    max_open_trades,
+    today_trades: N
+  }
+  """
+
+# ── 并发拉取新闻 ──
+let raw_news = session: news-fetcher
+  prompt: """
+  并发从以下来源拉取加密货币新闻：
+
+  配置：{config}
+  入场窗口：{config.entry_window_minutes} 分钟内发布的新闻才有效
+
+  1. CryptoPanic 热门新闻（无需 key 也可用）：
+     curl -s "https://cryptopanic.com/api/v1/posts/?auth_token=$CRYPTOPANIC_KEY&public=true&filter=hot&kind=news"
+     提取：title, body, url, published_at
+
+  2. CoinTelegraph RSS：
+     curl -s "https://cointelegraph.com/rss"
+     解析 <item> 标签，提取 title, description, pubDate, link
+
+  3. The Block RSS：
+     curl -s "https://www.theblock.co/rss.xml"
+     解析 <item> 标签，提取 title, description, pubDate, link
+
+  4. Decrypt RSS：
+     curl -s "https://decrypt.co/feed"
+     解析 <item> 标签，提取 title, description, pubDate, link
+
+  整合去重（按 title 前60字符判断）。
+
+  只保留 {config.entry_window_minutes} 分钟内的新闻（对比当前时间）。
+
+  写入 data/bn-raw-news.json：
+  [{ id, title, body(前200字), url, published_at, source }]
+
+  输出新闻统计：{ total_fetched: N, fresh_count: N, sources: {...} }
+  """
+
+if **raw_news 中 fresh_count == 0**:
+  throw "入场窗口内无新鲜新闻，跳过本轮分析"
+
+# ── 拉取实时价格 ──
+let market_prices = session: news-fetcher
+  prompt: """
+  从币安获取主流合约实时价格：
+
+  如果 trade_mode="futures"：
+    curl -s "https://fapi.binance.com/fapi/v1/ticker/price"
+    过滤出 USDT 结尾的永续合约（如 BTCUSDT, ETHUSDT）
+
+  如果 trade_mode="spot"：
+    curl -s "https://api.binance.com/api/v3/ticker/price"
+    过滤出 USDT 结尾的交易对
+
+  输出：{ BTCUSDT: "95000.0", ETHUSDT: "3500.0", ... }（只保留价格 > 0 的交易对）
+  同时记录可用交易对列表（去掉 USDT 后缀作为 coin 名：BTC, ETH...）。
+  """
+
+# ── Claude AI 信号分析 ──
+let ai_signals = session: signal-analyst
+  prompt: """
+  调用 Claude AI 对新闻批量打分，识别交易信号。
+
+  新闻列表：{raw_news}（data/bn-raw-news.json 中的内容）
+  可用交易对：{market_prices} 中所有去掉 USDT 后缀的 coin 名
+
+  System Prompt（逐字传给 Claude）：
+  """
+  You are a crypto trading signal analyst. Given a batch of news headlines and summaries,
+  analyze each item and decide if it has clear, immediate price impact on any cryptocurrency.
+
+  Return ONLY a JSON array. Each item that has a tradeable signal should produce one object:
+  {
+    "id": <number, 0-based index from input>,
+    "coins": <string[], tickers from the available list ONLY, without USDT suffix>,
+    "direction": "long" | "short",
+    "score": <0-100, confidence × impact magnitude>,
+    "category": "etf"|"listing"|"delisting"|"security"|"regulation"|"macro"|"onchain"|"liquidation"|"protocol"|"ecosystem",
+    "decay_fast": <boolean, true if impact fades within 2 minutes>,
+    "reason": <string, one sentence in Chinese>
+  }
+
+  Scoring guide:
+  90-100: Confirmed ETF approval/rejection, major exchange hack >$50M, DoJ arrest of exchange CEO
+  75-89:  Major exchange listing (Coinbase/Binance), bridge exploit, SEC lawsuit filed
+  60-74:  Smaller exchange listing, institutional buy, Fed pivot signal
+  40-59:  Whale movement, protocol upgrade, partnership
+  <40 or ambiguous direction: omit the item entirely
+
+  Rules:
+  - Only include coins DIRECTLY mentioned or clearly implicated
+  - For macro news (Fed, CPI): include BTC and ETH
+  - Noise/opinion/price-analysis articles: omit
+  """
+
+  使用以下参数调用：
+  curl -s -X POST https://api.anthropic.com/v1/messages \
+    -H "x-api-key: $ANTHROPIC_API_KEY" \
+    -H "anthropic-version: 2023-06-01" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"model\": \"{config.claude_model}\",
+      \"max_tokens\": 2048,
+      \"system\": \"<上方 System Prompt>\",
+      \"messages\": [{\"role\":\"user\",\"content\":\"Analyze these crypto news items:\\n$(cat data/bn-raw-news.json)\"}]
+    }"
+
+  解析返回的 JSON 数组（去掉可能的 ```json 包装）。
+  如果解析失败，记录原始响应到 data/bn-ai-error.log 并输出 "AI_PARSE_FAILED"。
+
+  输出原始信号数组：[{ id, coins, direction, score, category, decay_fast, reason }]
+  """
+
+if **ai_signals 包含 AI_PARSE_FAILED**:
+  throw "Claude 返回格式异常，已记录到 data/bn-ai-error.log"
+
+# ── 过滤 & 附加价格 ──
+let signals = session: signal-analyst
+  prompt: """
+  对 AI 返回的原始信号进行过滤，附加实时价格和新闻元数据。
+
+  AI 原始信号：{ai_signals}
+  实时价格：{market_prices}
+  新闻列表：{raw_news}（读取 data/bn-raw-news.json 对应 id 的条目）
+  最低分阈值：{config.min_signal_score}
+
+  处理逻辑：
+  1. 过滤 score < {config.min_signal_score} 的信号
+  2. 对每个信号的每个 coin，查找 {market_prices} 中 coin+"USDT" 的当前价格
+     - 如果币安不支持该 coin（价格不存在），跳过
+  3. decay_fast=true 的信号：检查新闻发布时间，超过 2 分钟则标记为 expired=true
+  4. 去重：同一 coin + direction 只保留最高分的信号
+  5. 按 score 降序排列
+
+  写入 data/bn-signals.json：
+  {
+    "ts": "[ISO]",
+    "signals": [{
+      coin, direction, score, category, decay_fast, expired,
+      reason, price, headline, url, published_at, source
+    }]
+  }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"scan","data":{
+    "news_fetched": N,
+    "fresh_news": N,
+    "ai_raw_signals": N,
+    "signals_qualified": N,
+    "signals_expired": N,
+    "top_signal": { coin, direction, score, reason } 或 null
+  }}
+  """

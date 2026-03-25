@@ -1,0 +1,184 @@
+# whips/binance/trade.whip
+# 功能：读取信号，通过风控检查，向币安提交现货/合约订单
+# 调用方：scan.whip 完成后自动触发 / 手动触发
+# 前置：scan.whip 已完成（data/bn-signals.json 存在且非空）
+# 输出：data/bn-trades.json 新增成交记录
+
+agent risk-manager:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  交易风控专家。在任何下单前执行严格的风险检查。
+  发现任何风控违规立即中止，输出明确的拒绝原因。
+  宁可错过机会，不可超出风控边界。
+  """
+
+agent trader:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  币安订单执行专家。通过币安 REST API 签名下单。
+  每笔订单执行后立即写入日志，异常时输出完整错误信息。
+  """
+
+# ── 读取信号和账户状态 ──
+let context = session: risk-manager
+  prompt: """
+  读取当前状态：
+  1. 读取 data/bn-signals.json
+     - 如果不存在或 signals 为空：输出 "NO_SIGNALS: 请先运行 scan.whip"
+     - 检查 ts 时间戳，超过 10 分钟的信号视为过期
+
+  2. 构造签名后查询账户余额：
+     timestamp=$(curl -s https://api.binance.com/api/v3/time | grep -o '"serverTime":[0-9]*' | cut -d: -f2)
+     queryString="timestamp=$timestamp"
+     signature=$(echo -n "$queryString" | openssl dgst -sha256 -hmac "$BINANCE_API_SECRET" | cut -d' ' -f2)
+
+     如果 trade_mode="futures"：
+       curl -s -H "X-MBX-APIKEY: $BINANCE_API_KEY" \
+         "https://fapi.binance.com/fapi/v2/account?$queryString&signature=$signature"
+       提取：totalWalletBalance, availableBalance, positions（过滤 positionAmt != 0）
+
+     如果 trade_mode="spot"：
+       curl -s -H "X-MBX-APIKEY: $BINANCE_API_KEY" \
+         "https://api.binance.com/api/v3/account?$queryString&signature=$signature"
+       提取 USDT 余额 free
+
+  3. 读取 data/bn-config.json 获取风控参数
+  4. 读取 data/bn-trades.json（不存在则 []），统计今日已执行交易 PnL
+
+  输出：{
+    signals: [...],
+    trade_mode,
+    available_usdt: X,
+    open_positions: [...],
+    open_positions_count: N,
+    today_pnl: X,
+    config: { max_position_usdt, max_open_trades, min_signal_score, stop_loss_pct, take_profit_pct, default_leverage, max_leverage }
+  }
+  """
+
+if **context 包含 NO_SIGNALS**:
+  throw "没有可交易信号，请先运行 scan.whip"
+
+# ── 风控检查 ──
+let risk_check = session: risk-manager
+  prompt: """
+  对每个信号执行风控检查：
+
+  上下文：{context}
+
+  对每个 signal 检查：
+  1. 持仓数量：open_positions_count + 1 <= config.max_open_trades
+  2. 单仓上限：calcPositionSize(signal.score, available_usdt) <= config.max_position_usdt
+  3. 可用余额：available_usdt >= calcPositionSize(...)（现货需要足够的 USDT）
+  4. 日亏损熔断：today_pnl < -(available_usdt * 0.05)（亏损超 5% 停止全部交易）
+  5. 信号新鲜度：decay_fast=true 的信号，published_at 距今 > 120s → 标记 SKIP
+  6. 重复仓位：open_positions 中已有相同 coin + direction → REJECTED
+
+  仓位大小计算（Half-Kelly）：
+  - p = 0.45 + (score / 100) * 0.25
+  - b = config.take_profit_pct / config.stop_loss_pct
+  - kelly = (p * b - (1 - p)) / b
+  - size_usdt = min(config.max_position_usdt, max(10, available_usdt * kelly * 0.5))
+
+  杠杆计算（仅 futures 模式）：
+  - score >= 85 → max_leverage
+  - score >= 70 → 4x
+  - 否则 → default_leverage
+
+  对每个信号标记：
+  - APPROVED: { size_usdt, leverage（futures）, limit_px }
+  - REJECTED: [具体原因]
+  - SKIP: [过期/重复]
+
+  输出 "RISK_PASSED: N个信号通过" 或 "RISK_BLOCKED: [所有信号均未通过原因]"
+  """
+
+if **risk_check 包含 RISK_BLOCKED**:
+  throw "全部信号未通过风控：{risk_check}"
+
+# ── 执行下单 ──
+let trade_results = session: trader
+  prompt: """
+  对风控通过（APPROVED）的信号依次执行下单：
+
+  信号列表：{context.signals}（只处理 APPROVED 的条目）
+  风控报告：{risk_check}
+  配置：{context.config}
+  交易模式：{context.trade_mode}
+
+  对每笔订单：
+
+  1. 读取 API 密钥（优先 openvault，回退环境变量）：
+     BN_KEY=$(openvault get clawfirm/bn-api-key 2>/dev/null || echo $BINANCE_API_KEY)
+     BN_SECRET=$(openvault get clawfirm/bn-api-secret 2>/dev/null || echo $BINANCE_API_SECRET)
+
+  2. 构造签名并下单：
+     symbol=<coin>USDT
+     timestamp=$(curl -s https://api.binance.com/api/v3/time | grep -o '"serverTime":[0-9]*' | cut -d: -f2)
+
+     如果 trade_mode="futures"：
+       # 先设置杠杆
+       lev_params="symbol=$symbol&leverage=<leverage>&timestamp=$timestamp"
+       lev_sig=$(echo -n "$lev_params" | openssl dgst -sha256 -hmac "$BN_SECRET" | cut -d' ' -f2)
+       curl -s -X POST -H "X-MBX-APIKEY: $BN_KEY" \
+         "https://fapi.binance.com/fapi/v1/leverage?$lev_params&signature=$lev_sig"
+
+       # 下限价单
+       qty=$(echo "scale=4; <size_usdt> / <price>" | bc)
+       side=$([ "<direction>" = "long" ] && echo "BUY" || echo "SELL")
+       params="symbol=$symbol&side=$side&type=LIMIT&quantity=$qty&price=<limit_px>&timeInForce=GTC&timestamp=$timestamp"
+       sig=$(echo -n "$params" | openssl dgst -sha256 -hmac "$BN_SECRET" | cut -d' ' -f2)
+       curl -s -X POST -H "X-MBX-APIKEY: $BN_KEY" \
+         "https://fapi.binance.com/fapi/v1/order?$params&signature=$sig"
+
+     如果 trade_mode="spot"：
+       qty=$(echo "scale=4; <size_usdt> / <price>" | bc)
+       side=$([ "<direction>" = "long" ] && echo "BUY" || echo "SELL")
+       params="symbol=$symbol&side=$side&type=LIMIT&quantity=$qty&price=<limit_px>&timeInForce=GTC&timestamp=$timestamp"
+       sig=$(echo -n "$params" | openssl dgst -sha256 -hmac "$BN_SECRET" | cut -d' ' -f2)
+       curl -s -X POST -H "X-MBX-APIKEY: $BN_KEY" \
+         "https://api.binance.com/api/v3/order?$params&signature=$sig"
+
+  3. 无论成功失败，追加到 data/bn-trades.json：
+     读取现有文件（不存在则 []），追加：
+     {
+       id: '[timestamp-coin]',
+       ts: '[ISO]',
+       coin, direction, score, category, trade_mode,
+       size_usdt, leverage（futures 才有）,
+       entry_price: limit_px,
+       sl_price: limit_px * (isBuy ? (1 - stop_loss_pct) : (1 + stop_loss_pct)),
+       tp_price: limit_px * (isBuy ? (1 + take_profit_pct) : (1 - take_profit_pct)),
+       status: 'open' | 'failed',
+       order_id: '[币安返回的 orderId]',
+       reason: signal.reason,
+       headline: signal.headline,
+       error: '[如有]'
+     }
+     写回 data/bn-trades.json
+
+  每笔订单输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"order_submitted","data":{"coin":"...","direction":"...","score":X,"size_usdt":X,"leverage":X}}
+  失败时：
+  {"ts":"[ISO]","event":"order_failed","data":{"coin":"...","error":"..."}}
+  """
+
+# ── 完成汇总 ──
+session: risk-manager
+  prompt: """
+  trade.whip 执行完成。读取 data/bn-trades.json 统计本次结果。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"trade","data":{
+    "signals_evaluated": N,
+    "orders_approved": N,
+    "orders_submitted": N,
+    "orders_failed": N,
+    "total_size_usdt": X,
+    "positions_open": N
+  }}
+  """

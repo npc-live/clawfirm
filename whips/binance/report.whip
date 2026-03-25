@@ -1,0 +1,109 @@
+# whips/binance/report.whip
+# 功能：生成交易绩效报告 —— 统计 PnL、胜率、最佳/最差信号类别
+# 调用方：手动触发 / 每日定时
+# 前置：data/bn-trades.json 有历史记录
+# 输出：控制台打印 + data/bn-reports.json 追加
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  量化交易绩效分析专家。从历史交易记录中提取关键指标，
+  识别哪类新闻信号最有效，哪类应该过滤掉。
+  输出必须包含可操作的策略调整建议。
+  """
+
+# ── 读取历史数据 ──
+let trades = session: analyst
+  prompt: """
+  读取所有历史交易数据：
+  1. 读取 data/bn-trades.json（不存在则输出 "NO_DATA"）
+  2. 读取 data/bn-config.json 获取策略参数
+
+  只分析 status='closed' 的已完成交易。
+
+  输出：{
+    total_trades: N,
+    closed_trades: [...],
+    open_trades: [...],
+    config: { trade_mode, ... }
+  }
+  """
+
+if **trades 包含 NO_DATA**:
+  throw "暂无交易历史数据，请先运行 monitor.whip 一段时间"
+
+# ── 绩效分析 ──
+session: analyst
+  prompt: """
+  对历史交易记录进行全面绩效分析：
+
+  数据：{trades}
+
+  计算以下指标：
+
+  【总体绩效】
+  - 总交易次数、胜率（pnl_usdt > 0 的比例）
+  - 总 PnL（USDT）、平均每笔 PnL
+  - 最大单笔盈利、最大单笔亏损
+  - 盈亏比（平均盈利 / 平均亏损）
+  - Sharpe Ratio（如果数据足够）
+
+  【按信号类别分析】
+  categories: etf, listing, delisting, security, regulation, macro, onchain, liquidation, protocol, ecosystem
+  对每个 category 计算：胜率、平均 PnL、交易次数
+
+  【按信号分数段分析】
+  - 60-69 分：胜率、平均 PnL
+  - 70-79 分：胜率、平均 PnL
+  - 80-89 分：胜率、平均 PnL
+  - 90-100 分：胜率、平均 PnL
+
+  【按方向分析】
+  - long 胜率 vs short 胜率
+  - long 平均 PnL vs short 平均 PnL
+
+  【平仓原因分析】
+  - sl（止损）触发次数和平均亏损
+  - tp（止盈）触发次数和平均盈利
+  - timeout（超时）触发次数和平均 PnL
+
+  【decay_fast 信号分析】
+  - decay_fast=true 的胜率 vs decay_fast=false 的胜率
+
+  【策略调整建议】
+  基于上述分析，输出 3-5 条具体可操作的建议，例如：
+  - 是否应该提高/降低 min_signal_score
+  - 哪些 category 应该过滤掉
+  - 止损/止盈比例是否合理
+  - decay_fast 事件的入场窗口是否需要调整
+  - 杠杆水平是否需要调整
+
+  写入 data/bn-reports.json：
+  读取现有文件（不存在则 []），追加：
+  {
+    ts: "[ISO]",
+    trade_mode: "...",
+    period: "all" | "7d" | "30d",
+    total_trades: N,
+    win_rate: X,
+    total_pnl_usdt: X,
+    avg_pnl_usdt: X,
+    best_category: "...",
+    worst_category: "...",
+    recommendations: ["...", "..."],
+    breakdown: { by_category: {...}, by_score: {...}, by_direction: {...} }
+  }
+
+  输出完整报告（中文，格式清晰）。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"report","data":{
+    "trades_analyzed": N,
+    "win_rate": X,
+    "total_pnl_usdt": X,
+    "best_category": "...",
+    "top_recommendation": "..."
+  }}
+  """

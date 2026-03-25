@@ -1,6 +1,6 @@
 ﻿{
     "name":  "@harness.farm/clawfirm",
-    "version":  "0.1.1",
+    "version":  "0.1.2",
     "description":  "clawfirm 7*24 engine",
     "type":  "module",
     "bin":  {
