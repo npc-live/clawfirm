@@ -1,0 +1,8 @@
+.env
+dist/
+build/
+*.egg-info/
+__pycache__/
+.pytest_cache/
+*.pyc
+~/.tavily_cache/

@@ -1,0 +1,39 @@
+# pi-go configuration
+# Default path: ~/.pi-go/config.yml
+# All values support ${ENV_VAR} expansion.
+
+providers:
+  # ZenMux — aggregation platform (https://zenmux.ai)
+  # One key gives access to OpenAI, Anthropic, Google models.
+  # api_key format: sk-ss-v1-...  (subscription) or Pay-As-You-Go key
+  zenmux:
+    api_key: ${ZENMUX_API_KEY}
+    base_url: https://zenmux.ai/api/v1          # OpenAI-compatible endpoint
+
+  # To call Anthropic models through ZenMux's Anthropic-compatible endpoint:
+  # anthropic:
+  #   api_key: ${ZENMUX_API_KEY}
+  #   base_url: https://zenmux.ai/api/anthropic
+
+  # Native Anthropic (sk-ant-...)
+  anthropic:
+    api_key: ${ANTHROPIC_API_KEY}
+
+  # OpenAI
+  openai:
+    api_key: ${OPENAI_API_KEY}
+
+  # Google Gemini
+  gemini:
+    api_key: ${GEMINI_API_KEY}
+
+  # Ollama (local, no key needed)
+  ollama:
+    base_url: http://localhost:11434
+
+# Provider used when none is specified in code.
+default_provider: zenmux
+
+# Model used when none is specified in code.
+# ZenMux uses "provider/model" slugs.
+default_model: anthropic/claude-haiku-4-5

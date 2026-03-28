@@ -1,0 +1,4 @@
+// Test: verify claude-code provider is being used
+let result = session "请用一句话回答：你是哪个模型？说明你的版本信息。"
+
+print result
