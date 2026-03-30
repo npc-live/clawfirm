@@ -202,7 +202,11 @@ func (p *CliProvider) ProviderName() string {
 func (p *CliProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error) {
 	prompt := buildPrompt(spec, enableTools, allowedTools, skillPrompts, p.cfg.RawPrompt)
 
-	output, err := runCli(p.cfg, prompt, cfg.VaultEnv)
+	ctx := cfg.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	output, err := runCli(ctx, p.cfg, prompt, cfg.VaultEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %s: %w", p.cfg.Name, err)
 	}
@@ -478,7 +482,7 @@ func formatContextVariable(name string, value any) string {
 // CLI execution
 // ---------------------------------------------------------------------------
 
-func runCli(cfg CliConfig, prompt string, vaultEnv func() map[string]string) (string, error) {
+func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv func() map[string]string) (string, error) {
 	binPath, err := resolveRealPath(cfg.Bin)
 	if err != nil {
 		return "", fmt.Errorf("binary not found: %s: %w", cfg.Bin, err)
@@ -489,7 +493,7 @@ func runCli(cfg CliConfig, prompt string, vaultEnv func() map[string]string) (st
 		timeout = 1800000 // default 30 minutes
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(parentCtx, time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 
 	var args []string

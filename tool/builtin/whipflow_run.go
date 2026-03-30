@@ -3,6 +3,7 @@ package builtin
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/ai-gateway/pi-go/config"
@@ -21,7 +22,9 @@ type WhipflowRun struct {
 }
 
 func (w *WhipflowRun) Name() string        { return "whipflow_run" }
-func (w *WhipflowRun) Description() string  { return "Execute a WhipFlow (.whip) workflow from source code or a file path." }
+func (w *WhipflowRun) Description() string {
+	return "Execute a WhipFlow (.whip) workflow from source code or a file path. If the workflow contains `ask` statements (user input variables), you MUST provide their values via user_inputs. Ask the user for these values BEFORE calling this tool."
+}
 func (w *WhipflowRun) Label() string        { return "Run Workflow" }
 func (w *WhipflowRun) Schema() map[string]any {
 	return map[string]any{
@@ -34,6 +37,15 @@ func (w *WhipflowRun) Schema() map[string]any {
 			"file": map[string]any{
 				"type":        "string",
 				"description": "Path to a .whip file to execute.",
+			},
+			"user_inputs": map[string]any{
+				"type":        "object",
+				"description": "Required when the workflow has `ask` statements. Map of variable name → value. Example: if the whip has `ask asset_class: \"What asset class?\"`, pass {\"asset_class\": \"Real Estate\"}. Ask the user for these values before running.",
+				"additionalProperties": map[string]any{"type": "string"},
+			},
+			"retry_from_session": map[string]any{
+				"type":        "integer",
+				"description": "Session index (0-based) to retry from. Sessions before this index are replayed from saved state; this session and all after it are re-executed.",
 			},
 		},
 	}
@@ -56,6 +68,24 @@ type WhipflowSessionStep struct {
 func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]any, onUpdate func(tool.ToolUpdate)) (tool.ToolResult, error) {
 	source, _ := params["source"].(string)
 	filePath, _ := params["file"].(string)
+
+	// Extract user_inputs (map[string]string) from params.
+	var userInputs map[string]string
+	if raw, ok := params["user_inputs"]; ok {
+		switch v := raw.(type) {
+		case map[string]string:
+			userInputs = v
+		case map[string]any:
+			userInputs = make(map[string]string, len(v))
+			for k, val := range v {
+				if s, ok := val.(string); ok {
+					userInputs[k] = s
+				}
+			}
+		}
+	}
+
+	log.Printf("whipflow_run: source_len=%d file=%q user_inputs=%v\nsource:\n%s", len(source), filePath, userInputs, source)
 
 	if source == "" && filePath == "" {
 		return tool.ToolResult{
@@ -88,7 +118,23 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 			}
 		}
 		rCfg.VaultEnv = w.VaultEnv
+		rCfg.Ctx = ctx
 		execOpts = append(execOpts, whipflow.WithRuntimeConfig(&rCfg))
+	}
+
+	// Pre-filled ask inputs (from desktop UI form).
+	if len(userInputs) > 0 {
+		execOpts = append(execOpts, whipflow.WithInitialInputs(userInputs))
+	}
+
+	// Retry from a specific session index.
+	if raw, ok := params["retry_from_session"]; ok {
+		switch v := raw.(type) {
+		case float64:
+			execOpts = append(execOpts, whipflow.WithRetryFromSession(int(v)))
+		case int:
+			execOpts = append(execOpts, whipflow.WithRetryFromSession(v))
+		}
 	}
 
 	// Emit a ToolUpdate for each session start/end so the frontend can render

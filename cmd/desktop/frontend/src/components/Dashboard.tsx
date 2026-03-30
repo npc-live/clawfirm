@@ -10,6 +10,7 @@ import {
   ListCronJobs, AddCronJob, UpdateCronJob, DeleteCronJob,
   ToggleCronJob, GetCronJobHistory, TriggerCronJob,
   GetVault, SetVaultEntry, DeleteVaultEntry,
+  ListWhipFiles, GetWhipFileContent,
 } from "../wailsjs/go/app/App";
 import type { ChannelInfo, HistoryMessage, SkillInfo, CronJob, CronJobHistory, Config, ProviderInfo, VaultEntry } from "../wailsjs/go/app/App";
 import { EventsOn } from "../wailsjs/runtime/runtime";
@@ -34,33 +35,55 @@ export function Dashboard({ onOpenChat }: Props) {
   const [sessionMap, setSessionMap] = useState<Record<string, SessionPreview[]>>({});
 
   async function loadChannels() {
-    const ch = await GetChannels();
-    setChannels(ch ?? []);
-    const sm: Record<string, SessionPreview[]> = {};
-    for (const c of ch ?? []) {
-      const ids = (await GetChatSessions(c.name)) ?? [];
-      const previews: SessionPreview[] = [];
-      for (const sid of ids) {
-        const msgs: HistoryMessage[] = (await GetHistory("webchat/" + c.name, sid)) ?? [];
-        const last = msgs[msgs.length - 1];
-        const lastMs = parseInt(sid.replace(/^s/, ""), 10) || 0;
-        previews.push({
+    try {
+      const ch = await GetChannels();
+      setChannels(ch ?? []);
+
+      // First pass: populate session list immediately with placeholders so UI renders fast.
+      const sm: Record<string, SessionPreview[]> = {};
+      for (const c of ch ?? []) {
+        const ids = (await GetChatSessions(c.name)) ?? [];
+        sm[c.name] = ids.map((sid) => ({
           id: sid,
-          lastMs,
-          preview: last
-            ? (last.content.length > 60 ? last.content.slice(0, 60) + "…" : last.content)
-            : "(empty)",
-        });
+          lastMs: parseInt(sid.replace(/^s/, ""), 10) || 0,
+          preview: "…",
+        }));
       }
-      sm[c.name] = previews;
+      setSessionMap({ ...sm });
+
+      // Second pass: fill in previews from message history.
+      for (const c of ch ?? []) {
+        const previews = sm[c.name] ?? [];
+        const filled: SessionPreview[] = await Promise.all(
+          previews.map(async (p) => {
+            try {
+              const msgs: HistoryMessage[] = (await GetHistory("webchat/" + c.name, p.id)) ?? [];
+              const last = msgs[msgs.length - 1];
+              return {
+                ...p,
+                preview: last
+                  ? (last.content.length > 60 ? last.content.slice(0, 60) + "…" : last.content)
+                  : "(empty)",
+              };
+            } catch {
+              return p;
+            }
+          })
+        );
+        sm[c.name] = filled;
+        setSessionMap({ ...sm });
+      }
+    } catch (e) {
+      console.error("loadChannels:", e);
     }
-    setSessionMap(sm);
   }
 
   useEffect(() => {
+    // Wails bindings may not be ready immediately on mount — retry once after a short delay.
     loadChannels();
+    const t = setTimeout(() => loadChannels(), 800);
     const unsub = EventsOn("message:new", () => loadChannels());
-    return unsub;
+    return () => { clearTimeout(t); unsub(); };
   }, []);
 
   return (
@@ -90,7 +113,7 @@ export function Dashboard({ onOpenChat }: Props) {
       </aside>
 
       {/* Content */}
-      <main className={`flex-1 min-h-0 ${nav === "canvas" ? "overflow-hidden" : "overflow-y-auto"}`}>
+      <main className={`flex-1 min-h-0 ${nav === "canvas" || nav === "whipflow" ? "overflow-hidden" : "overflow-y-auto"}`}>
         {nav === "chats" && <ChatsPane sessionMap={sessionMap} channels={channels} onOpenChat={onOpenChat} />}
         {nav === "canvas" && <div className="w-full h-full"><CanvasPane /></div>}
         {nav === "skills" && <SkillsPane key={skillsKey} />}
@@ -932,6 +955,77 @@ function AgentsEditor() {
 
 const BUILTIN_PROVIDERS = ["claude-code", "claude", "opencode", "aider", "pi"];
 
+// Minimal WhipFlow syntax highlighter
+function WhipHighlight({ code }: { code: string }) {
+  const lines = code.split("\n");
+  return (
+    <pre className="text-[12.5px] leading-[1.6] font-mono whitespace-pre-wrap break-words">
+      {lines.map((line, i) => <WhipLine key={i} line={line} />)}
+    </pre>
+  );
+}
+
+function WhipLine({ line }: { line: string }) {
+  // Comment
+  if (/^\s*#/.test(line)) {
+    return <div><span className="text-[rgba(255,255,255,0.3)] italic">{line}</span>{"\n"}</div>;
+  }
+  // Keywords: agent, let, const, session, for, in, if, else, parallel, run
+  const tokenized = tokenizeWhip(line);
+  return <div>{tokenized}{"\n"}</div>;
+}
+
+function tokenizeWhip(line: string): React.ReactNode[] {
+  const KEYWORDS = /\b(agent|let|const|session|for|in|if|else|parallel|run|model|prompt|end)\b/g;
+  const STRING = /(["'`])(?:\\.|(?!\1)[^\\])*?\1/g;
+  const INTERP = /\{[^}]+\}/g;
+  const NUMBER = /\b\d+(\.\d+)?\b/g;
+
+  type Token = { type: "kw" | "str" | "interp" | "num" | "plain"; value: string };
+  const tokens: Token[] = [];
+  let pos = 0;
+
+  const allMatches: { index: number; end: number; type: Token["type"]; value: string }[] = [];
+
+  for (const re of [
+    { re: KEYWORDS, type: "kw" as const },
+    { re: STRING, type: "str" as const },
+    { re: INTERP, type: "interp" as const },
+    { re: NUMBER, type: "num" as const },
+  ]) {
+    re.re.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.re.exec(line)) !== null) {
+      allMatches.push({ index: m.index, end: m.index + m[0].length, type: re.type, value: m[0] });
+    }
+  }
+
+  // Sort by index, remove overlaps
+  allMatches.sort((a, b) => a.index - b.index);
+  const deduped: typeof allMatches = [];
+  let lastEnd = 0;
+  for (const m of allMatches) {
+    if (m.index >= lastEnd) { deduped.push(m); lastEnd = m.end; }
+  }
+
+  for (const m of deduped) {
+    if (m.index > pos) tokens.push({ type: "plain", value: line.slice(pos, m.index) });
+    tokens.push({ type: m.type, value: m.value });
+    pos = m.end;
+  }
+  if (pos < line.length) tokens.push({ type: "plain", value: line.slice(pos) });
+
+  return tokens.map((t, i) => {
+    const cls =
+      t.type === "kw"     ? "text-[#7dd3fc] font-semibold" :
+      t.type === "str"    ? "text-[#86efac]" :
+      t.type === "interp" ? "text-[#fcd34d]" :
+      t.type === "num"    ? "text-[#f9a8d4]" :
+                            "text-[rgba(255,255,255,0.75)]";
+    return <span key={i} className={cls}>{t.value}</span>;
+  });
+}
+
 const inputCls =
   "w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl " +
   "focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] " +
@@ -1106,8 +1200,15 @@ function WhipflowPane() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [cfgOpen, setCfgOpen] = useState(false);
 
-  useEffect(() => { load(); }, []);
+  // file browser
+  const [whipFiles, setWhipFiles] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [fileContent, setFileContent] = useState<string>("");
+  const [fileError, setFileError] = useState("");
+
+  useEffect(() => { load(); loadFiles(); }, []);
 
   async function load() {
     try {
@@ -1122,6 +1223,25 @@ function WhipflowPane() {
         setCustomProvider(dp);
       }
     } catch (e) { setError(String(e)); }
+  }
+
+  async function loadFiles() {
+    try {
+      const files = await ListWhipFiles();
+      setWhipFiles(files ?? []);
+      if (files?.length > 0) {
+        await selectFile(files[0]);
+      }
+    } catch (e) { /* ignore */ }
+  }
+
+  async function selectFile(path: string) {
+    setSelectedFile(path);
+    setFileError("");
+    try {
+      const content = await GetWhipFileContent(path);
+      setFileContent(content);
+    } catch (e) { setFileError(String(e)); setFileContent(""); }
   }
 
   async function handleSave() {
@@ -1142,78 +1262,106 @@ function WhipflowPane() {
     } finally { setSaving(false); }
   }
 
-  // Collect agent names as additional provider choices.
   const agentNames = cfg?.agents?.map(a => a.name) ?? [];
+  const basename = (p: string) => p.split("/").pop() ?? p;
 
   return (
-    <div className="p-8 max-w-xl">
-      <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">WhipFlow</h2>
-        <p className="text-[13px] text-[rgba(255,255,255,0.3)] mt-1">Configure WhipFlow workflow engine defaults</p>
-      </header>
-
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] rounded-xl text-[13px] text-red-400">
-          {error}
+    <div className="flex h-full overflow-hidden">
+      {/* ── Left: file list ── */}
+      <div className="w-52 flex-shrink-0 border-r border-[rgba(255,255,255,0.07)] flex flex-col">
+        <div className="px-4 py-3 border-b border-[rgba(255,255,255,0.07)]">
+          <span className="text-[11px] font-semibold text-[rgba(255,255,255,0.35)] uppercase tracking-wider">Workflows</span>
         </div>
-      )}
+        <div className="flex-1 overflow-y-auto py-1">
+          {whipFiles.length === 0 ? (
+            <p className="px-4 py-3 text-[12px] text-[rgba(255,255,255,0.25)]">No .whip files in<br/>~/.pi-go/workflows/</p>
+          ) : whipFiles.map(f => (
+            <button
+              key={f}
+              onClick={() => selectFile(f)}
+              className={`w-full text-left px-4 py-2 text-[12.5px] truncate transition-colors ${
+                selectedFile === f
+                  ? "bg-[rgba(255,255,255,0.08)] text-[rgb(240,237,229)]"
+                  : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[rgb(240,237,229)]"
+              }`}
+            >
+              <span className="text-[rgba(255,255,255,0.25)] mr-1">⚡</span>{basename(f)}
+            </button>
+          ))}
+        </div>
 
-      <div className="space-y-5 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl p-5">
-        <div>
-          <label className="block text-[13px] font-medium text-[rgb(240,237,229)] mb-1">Default Provider</label>
-          <p className="text-[12px] text-[rgba(255,255,255,0.35)] mb-2">
-            Used when a <code className="font-mono bg-[rgba(255,255,255,0.06)] px-1 rounded">session</code> statement doesn't specify a provider.
-            Built-in presets use the local CLI (e.g. <code className="font-mono bg-[rgba(255,255,255,0.06)] px-1 rounded">claude</code>).
-            Agents from your config can also be used.
-          </p>
-          <select
-            className={selectCls}
-            value={defaultProvider}
-            onChange={e => setDefaultProvider(e.target.value)}
+        {/* ── Config section (collapsed by default) ── */}
+        <div className="border-t border-[rgba(255,255,255,0.07)]">
+          <button
+            onClick={() => setCfgOpen(o => !o)}
+            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(255,255,255,0.35)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
           >
-            <option value="">— system default (first agent) —</option>
-            <optgroup label="Built-in CLI">
-              {BUILTIN_PROVIDERS.map(p => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </optgroup>
-            {agentNames.length > 0 && (
-              <optgroup label="Agents (from config)">
-                {agentNames.map(n => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </optgroup>
-            )}
-            <option value="__custom__">Custom…</option>
-          </select>
-          {defaultProvider === "__custom__" && (
-            <input
-              className={`${inputCls} mt-2`}
-              placeholder="e.g. my-agent or custom:python my_script.py"
-              value={customProvider}
-              onChange={e => setCustomProvider(e.target.value)}
-            />
+            <span className="font-semibold uppercase tracking-wider">Config</span>
+            <span>{cfgOpen ? "▲" : "▼"}</span>
+          </button>
+          {cfgOpen && (
+            <div className="px-3 pb-3 space-y-2">
+              {error && <p className="text-[11px] text-red-400">{error}</p>}
+              <select
+                className="w-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg px-2 py-1.5 text-[11.5px] text-[rgb(240,237,229)] outline-none"
+                value={defaultProvider}
+                onChange={e => setDefaultProvider(e.target.value)}
+              >
+                <option value="">— default (first agent) —</option>
+                <optgroup label="Built-in">
+                  {BUILTIN_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+                </optgroup>
+                {agentNames.length > 0 && (
+                  <optgroup label="Agents">
+                    {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  </optgroup>
+                )}
+                <option value="__custom__">Custom…</option>
+              </select>
+              {defaultProvider === "__custom__" && (
+                <input
+                  className="w-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg px-2 py-1.5 text-[11.5px] text-[rgb(240,237,229)] outline-none"
+                  placeholder="provider name"
+                  value={customProvider}
+                  onChange={e => setCustomProvider(e.target.value)}
+                />
+              )}
+              <div className="flex items-center gap-2">
+                <button onClick={handleSave} disabled={saving || !cfg}
+                  className="px-3 py-1 bg-[#2688f9] text-white text-[11px] rounded-lg hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
+                  {saving ? "…" : "Save"}
+                </button>
+                {success && <span className="text-[11px] text-emerald-400">{success}</span>}
+              </div>
+            </div>
           )}
         </div>
-
-        {/* Info cards for built-in presets */}
-        {BUILTIN_PROVIDERS.includes(defaultProvider) && (
-          <div className="text-[12px] text-[rgba(255,255,255,0.4)] bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-xl p-3 font-mono space-y-0.5">
-            {defaultProvider === "claude-code" && <><p>bin: claude</p><p>mode: stdin · output: stream-json</p><p>flags: --output-format stream-json --verbose --dangerously-skip-permissions</p></>}
-            {defaultProvider === "claude" && <><p>bin: claude</p><p>mode: stdin · output: stream-json</p></>}
-            {defaultProvider === "opencode" && <><p>bin: opencode</p><p>mode: arg · args: run</p></>}
-            {defaultProvider === "aider" && <><p>bin: aider</p><p>mode: arg · args: --message</p></>}
-            {defaultProvider === "pi" && <><p>bin: pi</p><p>mode: stdin · flags: -p --no-session --provider anthropic</p></>}
-          </div>
-        )}
       </div>
 
-      <div className="flex items-center gap-3 mt-4">
-        <button onClick={handleSave} disabled={saving || !cfg}
-          className="px-4 py-2 bg-[#2688f9] text-white text-[13px] rounded-xl hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
-          {saving ? "Saving…" : "Save"}
-        </button>
-        {success && <p className="text-[13px] text-emerald-400">{success}</p>}
+      {/* ── Right: code viewer ── */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {selectedFile ? (
+          <>
+            <div className="px-5 py-3 border-b border-[rgba(255,255,255,0.07)] flex items-center gap-2">
+              <span className="text-[rgba(255,255,255,0.4)] text-[12px]">⚡</span>
+              <span className="text-[13px] font-medium text-[rgb(240,237,229)]">{basename(selectedFile)}</span>
+              <span className="text-[11px] text-[rgba(255,255,255,0.25)] ml-1 truncate">{selectedFile}</span>
+            </div>
+            <div className="flex-1 overflow-auto p-5">
+              {fileError ? (
+                <p className="text-[12px] text-red-400">{fileError}</p>
+              ) : (
+                <div className="bg-[rgba(0,0,0,0.25)] rounded-xl p-4 border border-[rgba(255,255,255,0.06)]">
+                  <WhipHighlight code={fileContent} />
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-[13px] text-[rgba(255,255,255,0.2)]">
+            Select a .whip file to preview
+          </div>
+        )}
       </div>
     </div>
   );

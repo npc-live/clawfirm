@@ -11,8 +11,16 @@ export interface ToolExecution {
   endTime?: number;
 }
 
+export interface WhipflowArgs {
+  file?: string;
+  source?: string;
+  user_inputs?: Record<string, string>;
+}
+
 interface Props {
   executions: ToolExecution[];
+  onRetryFromSession?: (sessionIndex: number, args: WhipflowArgs) => void;
+  whipflowArgs?: WhipflowArgs;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,7 +148,7 @@ function WhipflowSource({ exec }: { exec: ToolExecution }) {
   );
 }
 
-function WhipflowSessionSteps({ exec }: { exec: ToolExecution }) {
+function WhipflowSessionSteps({ exec, onRetryFromSession }: { exec: ToolExecution; onRetryFromSession?: (sessionIndex: number) => void }) {
   // Collect all session step updates from partialResult (latest snapshot).
   // We accumulate updates in ChatView as an array in partialResult.
   const stepsMap = mergeSessionSteps(exec.partialResult);
@@ -162,13 +170,13 @@ function WhipflowSessionSteps({ exec }: { exec: ToolExecution }) {
       </div>
       {/* Per-session cards */}
       {steps.map((step) => (
-        <SessionStepCard key={step.index} step={step} />
+        <SessionStepCard key={step.index} step={step} onRetry={onRetryFromSession ? () => onRetryFromSession(step.index) : undefined} />
       ))}
     </div>
   );
 }
 
-function SessionStepCard({ step }: { step: WhipflowSessionStep }) {
+function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry?: () => void }) {
   const [open, setOpen] = useState(false);
   const isRunning = !step.done;
   const isError = step.done && !!step.error;
@@ -213,6 +221,15 @@ function SessionStepCard({ step }: { step: WhipflowSessionStep }) {
           <span className="text-[10px] text-[rgba(255,255,255,0.25)] font-mono flex-shrink-0">
             {step.duration_ms < 1000 ? `${step.duration_ms}ms` : `${(step.duration_ms / 1000).toFixed(1)}s`}
           </span>
+        )}
+        {/* Retry button */}
+        {(isDone || isError) && onRetry && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onRetry(); }}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(38,136,249,0.15)] text-[rgba(38,136,249,0.8)] hover:bg-[rgba(38,136,249,0.25)] transition-colors flex-shrink-0"
+          >
+            Retry from here
+          </button>
         )}
         {/* Expand toggle */}
         <span className={`text-[rgba(255,255,255,0.2)] text-[10px] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
@@ -308,7 +325,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 // Main ToolPanel
 // ---------------------------------------------------------------------------
 
-export function ToolPanel({ executions }: Props) {
+export function ToolPanel({ executions, onRetryFromSession, whipflowArgs }: Props) {
   return (
     <div className="flex flex-col h-full bg-[rgb(26,26,24)] text-[rgb(240,237,229)]">
       {/* Task summary bar */}
@@ -344,7 +361,7 @@ export function ToolPanel({ executions }: Props) {
             {exec.name === "whipflow_run" ? (
               <>
                 <WhipflowSource exec={exec} />
-                <WhipflowSessionSteps exec={exec} />
+                <WhipflowSessionSteps exec={exec} onRetryFromSession={whipflowArgs && onRetryFromSession ? (idx) => onRetryFromSession(idx, whipflowArgs) : undefined} />
               </>
             ) : (
               <>

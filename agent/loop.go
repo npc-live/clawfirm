@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ai-gateway/pi-go/provider"
@@ -16,6 +17,8 @@ type AgentLoopConfig struct {
 	Model types.Model
 	// ToolExecution controls whether tools run sequentially or in parallel.
 	ToolExecution types.ToolExecutionMode
+	// MaxTurns limits the number of LLM round-trips per prompt (0 = unlimited).
+	MaxTurns int
 
 	// ConvertToLLM optionally transforms messages before sending to the LLM.
 	ConvertToLLM func([]types.Message) ([]types.Message, error)
@@ -80,9 +83,20 @@ func AgentLoop(
 		})
 	}
 
+	turn := 0
 	for {
+		turn++
+		log.Printf("[agent-loop] === turn %d start, history=%d msgs ===", turn, len(agentCtx.Messages))
+
 		if err := ctx.Err(); err != nil {
+			log.Printf("[agent-loop] ctx cancelled: %v", err)
 			return agentCtx.Messages, err
+		}
+
+		// Enforce max turns if configured
+		if config.MaxTurns > 0 && turn > config.MaxTurns {
+			log.Printf("[agent-loop] max turns (%d) reached, stopping", config.MaxTurns)
+			break
 		}
 
 		// Optionally transform context (e.g., prune)
@@ -125,8 +139,10 @@ func AgentLoop(
 		emit(types.AgentEvent{Type: types.EventTurnStart})
 
 		// Call provider
+		log.Printf("[agent-loop] turn %d: calling LLM (model=%s, tools=%d, msgs=%d)", turn, config.Model.ID, len(toolSchemas), len(msgs))
 		eventCh, err := prov.Stream(ctx, req)
 		if err != nil {
+			log.Printf("[agent-loop] turn %d: stream error: %v", turn, err)
 			return agentCtx.Messages, fmt.Errorf("agent loop: stream: %w", err)
 		}
 
@@ -170,6 +186,22 @@ func AgentLoop(
 			assistantMsg.Timestamp = time.Now().UnixMilli()
 		}
 
+		// Log what the LLM returned
+		contentTypes := make([]string, 0, len(assistantMsg.Content))
+		for _, b := range assistantMsg.Content {
+			switch b.(type) {
+			case *types.TextContent:
+				contentTypes = append(contentTypes, "text")
+			case *types.ToolCall:
+				tc := b.(*types.ToolCall)
+				contentTypes = append(contentTypes, "tool_call:"+tc.Name)
+			default:
+				contentTypes = append(contentTypes, fmt.Sprintf("%T", b))
+			}
+		}
+		log.Printf("[agent-loop] turn %d: LLM done — stopReason=%q, content=%v, usage=in:%d/out:%d",
+			turn, assistantMsg.StopReason, contentTypes, assistantMsg.Usage.Input, assistantMsg.Usage.Output)
+
 		emit(types.AgentEvent{
 			Type:         types.EventMessageEnd,
 			AssistantMsg: assistantMsg,
@@ -181,6 +213,7 @@ func AgentLoop(
 		// Handle tool calls if stop reason is toolUse
 		var toolResults []types.ToolResultMessage
 		if assistantMsg.StopReason == types.StopReasonToolUse {
+			log.Printf("[agent-loop] turn %d: executing tool calls...", turn)
 			// Collect tool calls from assistant message content
 			var toolCalls []types.ToolCall
 			for _, block := range assistantMsg.Content {
@@ -223,8 +256,24 @@ func AgentLoop(
 			}
 		}
 
+		// Auto-continue when output was truncated by token limit.
+		if assistantMsg.StopReason == types.StopReasonLength {
+			log.Printf("[agent-loop] turn %d: length-truncated, auto-continuing", turn)
+			agentCtx.Messages = append(agentCtx.Messages, &types.UserMessage{
+				Role: "user",
+				Content: []types.ContentBlock{
+					&types.TextContent{
+						Type: types.ContentTypeText,
+						Text: "[System: your previous response was truncated due to length. Please continue from where you left off.]",
+					},
+				},
+			})
+			continue
+		}
+
 		// If stop reason is not toolUse, check for follow-up
 		if assistantMsg.StopReason != types.StopReasonToolUse {
+			log.Printf("[agent-loop] turn %d: not toolUse (reason=%q), checking follow-ups", turn, assistantMsg.StopReason)
 			if config.GetFollowUpMessages != nil {
 				followUpMsgs, err := config.GetFollowUpMessages()
 				if err == nil && len(followUpMsgs) > 0 {
@@ -233,10 +282,13 @@ func AgentLoop(
 				}
 			}
 			// No more follow-ups; agent is done
+			log.Printf("[agent-loop] turn %d: no follow-ups, breaking loop", turn)
 			break
 		}
-		// toolUse continues the loop naturally
+		log.Printf("[agent-loop] turn %d: toolUse — continuing loop", turn)
 	}
+
+	log.Printf("[agent-loop] === agent done after %d turns, total %d msgs ===", turn, len(agentCtx.Messages))
 
 	emit(types.AgentEvent{
 		Type:     types.EventAgentEnd,

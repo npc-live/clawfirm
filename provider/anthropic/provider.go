@@ -217,6 +217,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 
 func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<- types.AssistantMessageEvent, modelID string) {
 	defer body.Close()
+	log.Printf("[anthropic-stream] starting stream read (model=%s)", modelID)
 
 	sseEvents := stream.ParseSSEStream(ctx, body)
 
@@ -250,12 +251,15 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 
 	emit(types.AssistantMessageEvent{Type: types.StreamEventStart})
 
+	eventCount := 0
 	for sseEv := range sseEvents {
+		eventCount++
 		if sseEv.Event == "" && sseEv.Data == "" {
 			continue
 		}
 		switch sseEv.Event {
 		case "message_start":
+			log.Printf("[anthropic-stream] event: message_start")
 			var ms messageStartEvent
 			if err := json.Unmarshal([]byte(sseEv.Data), &ms); err == nil {
 				inputTokens = ms.Message.Usage.InputTokens
@@ -380,8 +384,10 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 			}
 			outputTokens += md.Usage.OutputTokens
 			partial.StopReason = mapStopReason(md.Delta.StopReason)
+			log.Printf("[anthropic-stream] event: message_delta — stop_reason=%q", md.Delta.StopReason)
 
 		case "message_stop":
+			log.Printf("[anthropic-stream] event: message_stop — emitting Done (content=%d blocks)", len(partial.Content))
 			partial.Usage = types.Usage{
 				Input:  inputTokens,
 				Output: outputTokens,
@@ -407,6 +413,7 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 			if errMsg == "" {
 				errMsg = sseEv.Data
 			}
+			log.Printf("[anthropic-stream] event: error — %s", errMsg)
 			errAMsg := &types.AssistantMessage{
 				Role:         "assistant",
 				Provider:     "anthropic",
@@ -420,7 +427,32 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 				Error: errAMsg,
 			})
 			return
+		default:
+			log.Printf("[anthropic-stream] unknown event type: %q", sseEv.Event)
 		}
+	}
+	// SSE channel closed without message_stop — stream was interrupted
+	log.Printf("[anthropic-stream] WARNING: SSE channel closed without message_stop (events=%d, content=%d blocks, stopReason=%q)",
+		eventCount, len(partial.Content), partial.StopReason)
+
+	// Emit whatever we have so the loop doesn't hang forever
+	if len(partial.Content) > 0 || partial.StopReason != "" {
+		partial.Usage = types.Usage{
+			Input:  inputTokens,
+			Output: outputTokens,
+			Total:  inputTokens + outputTokens,
+		}
+		partial.Timestamp = time.Now().UnixMilli()
+		if partial.StopReason == "" {
+			partial.StopReason = types.StopReasonError
+			partial.ErrorMessage = "stream interrupted: connection closed without message_stop"
+		}
+		finalMsg := *partial
+		emit(types.AssistantMessageEvent{
+			Type:    types.StreamEventDone,
+			Message: &finalMsg,
+			Reason:  finalMsg.StopReason,
+		})
 	}
 }
 

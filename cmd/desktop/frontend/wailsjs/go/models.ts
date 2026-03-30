@@ -76,6 +76,48 @@ export namespace app {
 	        this.hasKey = source["hasKey"];
 	    }
 	}
+	export class SessionDetail {
+	    sessionKey: string;
+	    sessionId: string;
+	    agentName: string;
+	    channelId: string;
+	    userId: string;
+	    subject: string;
+	    chatType: string;
+	    inputTokens: number;
+	    outputTokens: number;
+	    totalTokens: number;
+	    estimatedCostUsd: number;
+	    model: string;
+	    modelProvider: string;
+	    createdAt: number;
+	    updatedAt: number;
+	    isActive: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionKey = source["sessionKey"];
+	        this.sessionId = source["sessionId"];
+	        this.agentName = source["agentName"];
+	        this.channelId = source["channelId"];
+	        this.userId = source["userId"];
+	        this.subject = source["subject"];
+	        this.chatType = source["chatType"];
+	        this.inputTokens = source["inputTokens"];
+	        this.outputTokens = source["outputTokens"];
+	        this.totalTokens = source["totalTokens"];
+	        this.estimatedCostUsd = source["estimatedCostUsd"];
+	        this.model = source["model"];
+	        this.modelProvider = source["modelProvider"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.isActive = source["isActive"];
+	    }
+	}
 	export class SessionInfo {
 	    agentName: string;
 	    channelId: string;
@@ -146,6 +188,9 @@ export namespace config {
 	    tools: string[];
 	    skill_paths: string[];
 	    workspace_dir: string;
+	    reset_mode: string;
+	    reset_at_hour: number;
+	    idle_minutes: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentConfig(source);
@@ -161,6 +206,9 @@ export namespace config {
 	        this.tools = source["tools"];
 	        this.skill_paths = source["skill_paths"];
 	        this.workspace_dir = source["workspace_dir"];
+	        this.reset_mode = source["reset_mode"];
+	        this.reset_at_hour = source["reset_at_hour"];
+	        this.idle_minutes = source["idle_minutes"];
 	    }
 	}
 	export class Schedule {

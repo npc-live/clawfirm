@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"context"
 	"io"
+	"log"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // SSEEvent represents a single Server-Sent Events message.
@@ -100,30 +102,59 @@ func (r *SSEReader) ReadEvent() (*SSEEvent, error) {
 }
 
 // ParseSSEStream reads SSE events from body and sends them on the returned channel.
-// The channel is closed when body is exhausted or ctx is cancelled.
+// The channel is closed when body is exhausted, ctx is cancelled, or no event
+// arrives within 3 minutes (stall timeout).
 func ParseSSEStream(ctx context.Context, body io.ReadCloser) <-chan SSEEvent {
 	ch := make(chan SSEEvent, 16)
+
+	// Close body when ctx is cancelled to unblock scanner.Scan().
+	go func() {
+		<-ctx.Done()
+		body.Close()
+	}()
+
 	go func() {
 		defer close(ch)
 		defer body.Close()
 		reader := NewSSEReader(body)
+
+		const stallTimeout = 3 * time.Minute
+
 		for {
+			if ctx.Err() != nil {
+				return
+			}
+
+			// Read event in a goroutine with stall timeout.
+			type readResult struct {
+				ev  *SSEEvent
+				err error
+			}
+			resultCh := make(chan readResult, 1)
+			go func() {
+				ev, err := reader.ReadEvent()
+				resultCh <- readResult{ev, err}
+			}()
+
 			select {
 			case <-ctx.Done():
 				return
-			default:
-			}
-			ev, err := reader.ReadEvent()
-			if err != nil {
+			case <-time.After(stallTimeout):
+				log.Printf("[sse-stream] stall timeout (%v) — no SSE event received, closing body", stallTimeout)
+				body.Close() // force-close to unblock the scanner
 				return
-			}
-			if ev == nil {
-				continue
-			}
-			select {
-			case ch <- *ev:
-			case <-ctx.Done():
-				return
+			case res := <-resultCh:
+				if res.err != nil {
+					return
+				}
+				if res.ev == nil {
+					continue
+				}
+				select {
+				case ch <- *res.ev:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()

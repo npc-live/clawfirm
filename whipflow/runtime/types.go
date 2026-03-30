@@ -1,6 +1,10 @@
 package runtime
 
-import "github.com/ai-gateway/pi-go/whipflow/token"
+import (
+	"context"
+
+	"github.com/ai-gateway/pi-go/whipflow/token"
+)
 
 // RuntimeValue is the universal value type in WhipFlow (Go's any/interface{}).
 type RuntimeValue = any
@@ -76,6 +80,9 @@ type RuntimeConfig struct {
 	LogLevel              string // debug, info, warn, error
 	DefaultProvider       string
 	ConditionProvider     string
+	// Ctx is the parent context for cancellation. When cancelled, running
+	// CLI subprocesses (e.g. claude-code) are killed immediately.
+	Ctx context.Context
 	// VaultEnv, if set, is called before each CLI provider execution to
 	// obtain extra environment variables (secrets from the vault).
 	VaultEnv func() map[string]string

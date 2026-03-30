@@ -323,7 +323,8 @@ func (v *Validator) validateAssignment(n *ast.Assignment) {
 	v.validateExpression(n.Value)
 	b := v.lookupVar(n.Name.Name)
 	if b == nil {
-		v.addError(fmt.Sprintf("variable '%s' is not declared", n.Name.Name), n.GetSpan())
+		// Implicit declaration: treat undeclared assignment as a let binding.
+		v.declareVar(n.Name.Name, false, n.GetSpan())
 		return
 	}
 	if b.isConst {

@@ -179,8 +179,9 @@ func TestSummarize_FileContentMatchesSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(data) != wantContent {
-		t.Errorf("file content = %q, want %q", string(data), wantContent)
+	// File now contains a timestamp header followed by the summary body.
+	if !strings.Contains(string(data), wantContent) {
+		t.Errorf("file content = %q, want it to contain %q", string(data), wantContent)
 	}
 }
 

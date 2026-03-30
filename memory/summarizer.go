@@ -139,15 +139,27 @@ func (s *Summarizer) LastSummaryTime() time.Time {
 	return s.lastSummary
 }
 
-// writeFile writes the summary text to a timestamped .md file in the memory dir.
+// writeFile appends the summary text to today's daily .md file in the memory dir.
+// File name: {prefix}-YYYYMMDD.md  — one file per calendar day, UTC.
+// Each append is separated by a timestamp header so the file remains readable.
 func (s *Summarizer) writeFile(text string) (string, error) {
 	if err := os.MkdirAll(s.cfg.MemoryDir, 0o700); err != nil {
 		return "", fmt.Errorf("memory: mkdir: %w", err)
 	}
-	ts := time.Now().Format("20060102-150405")
-	name := fmt.Sprintf("%s-%s.md", s.cfg.filenamePrefix(), ts)
+	date := time.Now().UTC().Format("20060102")
+	name := fmt.Sprintf("%s-%s.md", s.cfg.filenamePrefix(), date)
 	path := filepath.Join(s.cfg.MemoryDir, name)
-	if err := os.WriteFile(path, []byte(text), 0o600); err != nil {
+
+	// Build the section to append: a time-stamped header + body.
+	ts := time.Now().UTC().Format("15:04 UTC")
+	section := fmt.Sprintf("\n\n## %s\n\n%s", ts, strings.TrimSpace(text))
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return "", fmt.Errorf("memory: open summary: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.WriteString(section); err != nil {
 		return "", fmt.Errorf("memory: write summary: %w", err)
 	}
 	return path, nil

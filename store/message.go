@@ -138,6 +138,12 @@ func (s *MessageStore) ListUserIDs(channelID string) ([]string, error) {
 	return out, rows.Err()
 }
 
+// DeleteByChannelUser deletes all messages for a channel+user (used on session reset).
+func (s *MessageStore) DeleteByChannelUser(channelID, userID string) error {
+	_, err := s.db.sql.Exec(`DELETE FROM messages WHERE channel_id=? AND user_id=?`, channelID, userID)
+	return err
+}
+
 // CountByChannel returns the total number of messages for a channel (all users).
 func (s *MessageStore) CountByChannel(channelID string) (int64, error) {
 	var n int64

@@ -36,9 +36,12 @@ var upgrader = websocket.Upgrader{
 
 // clientMessage is the JSON format clients send to the server.
 type clientMessage struct {
-	Type    string      `json:"type"`    // "message"
-	Content string      `json:"content"` // text
-	Images  []imageData `json:"images"`  // optional
+	Type     string         `json:"type"`     // "message" | "run_tool"
+	Content  string         `json:"content"`  // text (for "message")
+	Images   []imageData    `json:"images"`   // optional (for "message")
+	ToolName string         `json:"tool_name"` // (for "run_tool")
+	ToolID   string         `json:"tool_id"`   // call ID (for "run_tool")
+	ToolArgs map[string]any `json:"tool_args"` // (for "run_tool")
 }
 
 type imageData struct {
@@ -152,21 +155,27 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				write(serverMessage{Type: "error", Content: "invalid JSON"})
 				continue
 			}
-			if msg.Type != "message" {
-				continue
+			switch msg.Type {
+			case "message":
+				log.Printf("[%s] recv msg: %s/%s: %q", agentName, channelID, sessionID, msg.Content)
+				var images []gateway.ImageData
+				for _, img := range msg.Images {
+					images = append(images, gateway.ImageData{Data: img.Data, MimeType: img.Mime})
+				}
+				sess.Send(gateway.IncomingMessage{
+					ChannelID: channelID,
+					UserID:    sessionID,
+					Content:   msg.Content,
+					Images:    images,
+				})
+			case "run_tool":
+				callID := msg.ToolID
+				if callID == "" {
+					callID = "direct-" + msg.ToolName
+				}
+				log.Printf("[%s] run_tool: %s/%s: tool=%s args=%v", agentName, channelID, sessionID, msg.ToolName, msg.ToolArgs)
+				go sess.RunTool(r.Context(), callID, msg.ToolName, msg.ToolArgs)
 			}
-			log.Printf("[%s] recv msg: %s/%s: %q", agentName, channelID, sessionID, msg.Content)
-
-			var images []gateway.ImageData
-			for _, img := range msg.Images {
-				images = append(images, gateway.ImageData{Data: img.Data, MimeType: img.Mime})
-			}
-			sess.Send(gateway.IncomingMessage{
-				ChannelID: channelID,
-				UserID:    sessionID,
-				Content:   msg.Content,
-				Images:    images,
-			})
 		}
 	}()
 

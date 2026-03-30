@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutions, type SkillInfo } from "../wailsjs/go/app/App";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
-import { ToolPanel, type ToolExecution } from "./ToolPanel";
+import { ToolPanel, type ToolExecution, type WhipflowArgs } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";
 
 interface Message {
@@ -30,6 +31,14 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
   const [skillQuery, setSkillQuery] = useState("");
   const [skillPickerIdx, setSkillPickerIdx] = useState(0);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [whipPlanCode, setWhipPlanCode] = useState<string | null>(null);
+  const [whipPlanEditing, setWhipPlanEditing] = useState(false);
+  const [whipPlanEditText, setWhipPlanEditText] = useState("");
+  // ask statements extracted from whip code: [{varName, prompt}]
+  const [whipAskFields, setWhipAskFields] = useState<{varName: string; prompt: string}[]>([]);
+  const [whipAskValues, setWhipAskValues] = useState<Record<string, string>>({});
+  const [whipAskReady, setWhipAskReady] = useState(false);
+  const [lastWhipflowArgs, setLastWhipflowArgs] = useState<WhipflowArgs | undefined>();
   const [activeTab, setActiveTab] = useState<"tools" | "preview">("tools");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -55,15 +64,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           content: m.content,
         }))
       );
-      // Restore HTML preview from last assistant message containing ```html block.
+      // Restore HTML preview or whip plan from last assistant message.
       for (let i = history.length - 1; i >= 0; i--) {
         if (history[i].role === "assistant") {
           const html = extractHtmlBlock(history[i].content);
-          if (html) {
-            setPreviewHtml(html);
-            setActiveTab("preview");
-            break;
-          }
+          if (html) { setPreviewHtml(html); setActiveTab("preview"); break; }
+          const whip = extractWhipBlock(history[i].content);
+          if (whip) { applyWhipPlan(whip); break; }
         }
       }
     }).catch(() => {});
@@ -88,6 +95,32 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
     return matches.length > 0 ? matches[matches.length - 1][1] : null;
   }
 
+  // Extract the last complete ```whip code block from text.
+  function extractWhipBlock(text: string): string | null {
+    const matches = [...text.matchAll(/```whip\n([\s\S]*?)```/g)];
+    return matches.length > 0 ? matches[matches.length - 1][1] : null;
+  }
+
+  // Parse ask statements from whip source: `ask varName: "prompt text"`
+  function extractAskFields(source: string): {varName: string; prompt: string}[] {
+    const fields: {varName: string; prompt: string}[] = [];
+    const re = /^\s*ask\s+(\w+)\s*:\s*"([^"]*)"/gm;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(source)) !== null) {
+      fields.push({ varName: m[1], prompt: m[2] });
+    }
+    return fields;
+  }
+
+  function applyWhipPlan(code: string) {
+    setWhipPlanCode(code);
+    setWhipPlanEditText(code);
+    const fields = extractAskFields(code);
+    setWhipAskFields(fields);
+    setWhipAskValues(Object.fromEntries(fields.map(f => [f.varName, ""])));
+    setWhipAskReady(fields.length === 0);
+  }
+
   // Stable onMessage — wrapped in useCallback so identity never changes.
   const handleMessage = useCallback((msg: WSMessage) => {
     if (msg.type === "delta" && msg.content) {
@@ -100,10 +133,9 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           updated = { role: "assistant", content: msg.content!, streaming: true };
         }
         const html = extractHtmlBlock(updated.content);
-        if (html) {
-          setPreviewHtml(html);
-          setActiveTab("preview");
-        }
+        if (html) { setPreviewHtml(html); setActiveTab("preview"); }
+        const whip = extractWhipBlock(updated.content);
+        if (whip) { applyWhipPlan(whip); }
         if (last?.role === "assistant" && last.streaming) {
           return [...prev.slice(0, -1), updated];
         }
@@ -122,6 +154,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
         { role: "assistant", content: `⚠️ Error: ${msg.content}` },
       ]);
     } else if (msg.type === "tool_start") {
+      if (msg.tool_name === "whipflow_run" && msg.tool_args) {
+        setLastWhipflowArgs({
+          file: msg.tool_args.file,
+          source: msg.tool_args.source,
+          user_inputs: msg.tool_args.user_inputs,
+        });
+      }
       setToolExecutions((prev) => [{
         id: msg.tool_call_id!,
         name: msg.tool_name!,
@@ -176,6 +215,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
   });
 
   const showNewCommand = showSkillPicker && "new".startsWith(skillQuery.toLowerCase());
+  const showPlanCommand = showSkillPicker && "plan".startsWith(skillQuery.toLowerCase());
 
   function handleInputChange(val: string) {
     setInput(val);
@@ -224,13 +264,25 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
     }
   }
 
-  function handleSend() {
+  async function handleSend() {
     const text = input.trim();
     if (!text || isStreaming) return;
     if (text === "/new") {
       setInput("");
       setShowSkillPicker(false);
       onNewSession();
+      return;
+    }
+    if (text.startsWith("/plan ") || text === "/plan") {
+      const description = text.slice(6).trim();
+      setInput("");
+      setShowSkillPicker(false);
+      if (wsStatus !== "open") return;
+      // Build prompt — let LLM decide whether to read skill for reference.
+      const prompt = `请根据以下需求设计一个 Whipflow 工作流（如需查阅语法，可用 skill 工具读取 "whipflow" skill），**只输出 \`\`\`whip 代码块**，不包含其他解释。\n\n需求：${description || "(no description provided)"}`;
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      setIsStreaming(true);
+      send(JSON.stringify({ type: "message", content: prompt }));
       return;
     }
     if (wsStatus !== "open") return;
@@ -244,6 +296,24 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
   function handleStop() {
     AbortCurrentTurn(agentName, sessionID);
     setIsStreaming(false);
+  }
+
+  function handleRetryFromSession(sessionIndex: number, args: WhipflowArgs) {
+    if (wsStatus !== "open" || isStreaming) return;
+    const callID = "retry-session-" + Date.now();
+    setIsStreaming(true);
+    setActiveTab("tools");
+    send(JSON.stringify({
+      type: "run_tool",
+      tool_name: "whipflow_run",
+      tool_id: callID,
+      tool_args: {
+        file: args.file,
+        source: args.source,
+        user_inputs: args.user_inputs,
+        retry_from_session: sessionIndex,
+      },
+    }));
   }
 
   const statusColor =
@@ -280,13 +350,9 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                       : "bg-[rgba(255,255,255,0.05)] text-[rgba(240,237,229,0.85)] border border-[rgba(255,255,255,0.08)]"
                   }`}
                 >
-                  {msg.role === "assistant" ? (
-                    <div className="prose-pre:overflow-x-auto prose-pre:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
-                  ) : (
-                    msg.content
-                  )}
+                  <div className="prose-pre:overflow-x-auto prose-pre:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-white/20 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-white/20 [&_td]:px-2 [&_td]:py-1">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  </div>
                   {msg.streaming && (
                     <span className="inline-block w-1 h-4 ml-1 bg-current opacity-70 animate-pulse" />
                   )}
@@ -295,10 +361,95 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
             ))}
             <div ref={bottomRef} />
           </div>
+          {/* Whip Plan inline banner */}
+          {whipPlanCode && (
+            <div className="border-t border-[rgba(255,255,255,0.08)] px-4 py-3 flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[rgba(255,255,255,0.4)] font-mono">workflow.whip</span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setWhipPlanEditing((v) => !v); setWhipPlanEditText(whipPlanCode); }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(255,255,255,0.07)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] transition-colors"
+                  >
+                    {whipPlanEditing ? "Done" : "Edit"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const code = whipPlanEditing ? whipPlanEditText : whipPlanCode;
+                      const callID = "plan-" + Date.now();
+                      setIsStreaming(true);
+                      setActiveTab("tools");
+                      send(JSON.stringify({ type: "run_tool", tool_name: "whipflow_run", tool_id: callID, tool_args: { source: code, user_inputs: whipAskValues } }));
+                    }}
+                    disabled={isStreaming || wsStatus !== "open" || !whipAskReady}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#2688f9] text-white hover:bg-[#1a7ae8] disabled:opacity-40 transition-colors"
+                  >
+                    Execute
+                  </button>
+                  <button
+                    onClick={() => { setWhipPlanCode(null); setWhipPlanEditing(false); setWhipAskFields([]); setWhipAskReady(false); }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              {/* Ask fields form — shown when workflow has ask statements */}
+              {whipAskFields.length > 0 && !whipAskReady && (
+                <div className="flex flex-col gap-2 bg-[rgba(38,136,249,0.06)] border border-[rgba(38,136,249,0.2)] rounded-lg p-3">
+                  <span className="text-[11px] text-[rgba(38,136,249,0.8)] font-medium">Workflow inputs required</span>
+                  {whipAskFields.map(({ varName, prompt }) => (
+                    <div key={varName} className="flex flex-col gap-1">
+                      <label className="text-[10px] text-[rgba(255,255,255,0.4)]">{prompt || varName}</label>
+                      <input
+                        type="text"
+                        value={whipAskValues[varName] ?? ""}
+                        onChange={(e) => setWhipAskValues((prev) => ({ ...prev, [varName]: e.target.value }))}
+                        placeholder={varName}
+                        className="bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.1)] rounded-md px-2.5 py-1.5 text-[11px] text-[rgba(240,237,229,0.85)] focus:outline-none focus:ring-1 focus:ring-[rgba(38,136,249,0.4)] placeholder-[rgba(255,255,255,0.2)]"
+                      />
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setWhipAskReady(true)}
+                    disabled={whipAskFields.some(f => !(whipAskValues[f.varName] ?? "").trim())}
+                    className="mt-1 self-end px-3 py-1.5 rounded-lg text-[11px] font-medium bg-[rgba(38,136,249,0.2)] text-[rgba(38,136,249,0.9)] hover:bg-[rgba(38,136,249,0.3)] disabled:opacity-40 transition-colors"
+                  >
+                    Confirm inputs →
+                  </button>
+                </div>
+              )}
+
+              {/* Confirmed inputs summary */}
+              {whipAskFields.length > 0 && whipAskReady && (
+                <div className="flex flex-wrap gap-2">
+                  {whipAskFields.map(({ varName }) => (
+                    <span key={varName} className="text-[10px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-0.5 text-[rgba(255,255,255,0.5)]">
+                      {varName}: <span className="text-[rgba(240,237,229,0.7)]">{whipAskValues[varName]}</span>
+                    </span>
+                  ))}
+                  <button onClick={() => setWhipAskReady(false)} className="text-[10px] text-[rgba(38,136,249,0.6)] hover:text-[rgba(38,136,249,0.9)]">edit</button>
+                </div>
+              )}
+
+              {whipPlanEditing ? (
+                <textarea
+                  value={whipPlanEditText}
+                  onChange={(e) => setWhipPlanEditText(e.target.value)}
+                  rows={6}
+                  className="w-full bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.1)] rounded-lg p-2.5 text-[11px] font-mono text-[rgba(240,237,229,0.85)] resize-none focus:outline-none focus:ring-1 focus:ring-[rgba(38,136,249,0.4)] leading-relaxed"
+                  spellCheck={false}
+                />
+              ) : (
+                <pre className="text-[11px] font-mono text-[rgba(240,237,229,0.7)] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.08)] rounded-lg p-2.5 max-h-36 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">{whipPlanCode}</pre>
+              )}
+            </div>
+          )}
           {/* Input — inside left column */}
           <div className="border-t border-[rgba(255,255,255,0.08)] px-4 py-3">
             {/* Skill Picker */}
-            {showSkillPicker && (showNewCommand || filteredSkills.length > 0) && (
+            {showSkillPicker && (showNewCommand || showPlanCommand || filteredSkills.length > 0) && (
               <div className="mb-2 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgb(40,40,38)] overflow-hidden shadow-xl">
                 <div className="max-h-52 overflow-y-auto">
                   {showNewCommand && (
@@ -308,6 +459,15 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                     >
                       <span className="text-[13px] font-medium text-[rgb(240,237,229)]">/new</span>
                       <span className="text-[11px] text-[rgba(255,255,255,0.4)]">Start a new chat session</span>
+                    </button>
+                  )}
+                  {showPlanCommand && (
+                    <button
+                      onMouseDown={(e) => { e.preventDefault(); setInput("/plan "); setShowSkillPicker(false); inputRef.current?.focus(); }}
+                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(255,255,255,0.05)] border-b border-[rgba(255,255,255,0.06)]"
+                    >
+                      <span className="text-[13px] font-medium text-[rgb(240,237,229)]">/plan</span>
+                      <span className="text-[11px] text-[rgba(255,255,255,0.4)]">Generate a Whipflow workflow from a description</span>
                     </button>
                   )}
                   {filteredSkills.map((s, i) => (
@@ -331,7 +491,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
               <textarea
                 ref={inputRef}
                 rows={1}
-                placeholder={wsStatus === "open" ? "Type a message… (/ for skills, ⌘↵ to send)" : `WebSocket ${wsStatus}…`}
+                placeholder={wsStatus === "open" ? "Type a message… (/ for skills, /plan for workflows, ⌘↵ to send)" : `WebSocket ${wsStatus}…`}
                 value={input}
                 onChange={(e) => { handleInputChange(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }}
                 onKeyDown={handleInputKeyDown}
@@ -386,7 +546,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           {/* Tab content */}
           <div className="flex-1 min-h-0">
             {activeTab === "tools" ? (
-              <ToolPanel executions={toolExecutions} />
+              <ToolPanel executions={toolExecutions} onRetryFromSession={handleRetryFromSession} whipflowArgs={lastWhipflowArgs} />
             ) : previewHtml ? (
               <div className="h-full p-3">
                 <HtmlPreview html={previewHtml} />

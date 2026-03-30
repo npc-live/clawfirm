@@ -60,6 +60,16 @@ type AgentConfig struct {
 	// WorkspaceDir is the root directory used for file operations and bootstrap
 	// context loading (AGENTS.md / CLAUDE.md). Defaults to cwd when empty.
 	WorkspaceDir string `yaml:"workspace_dir" json:"workspace_dir"`
+
+	// ResetMode controls when session history is cleared: "never" | "daily" | "idle".
+	// Default is "never".
+	ResetMode string `yaml:"reset_mode" json:"reset_mode"`
+
+	// ResetAtHour is the UTC hour (0-23) at which daily reset fires (default 0 = midnight UTC).
+	ResetAtHour int `yaml:"reset_at_hour" json:"reset_at_hour"`
+
+	// IdleMinutes is the idle threshold for ResetMode "idle" (default 30).
+	IdleMinutes int `yaml:"idle_minutes" json:"idle_minutes"`
 }
 
 // WhatsAppConfig holds settings for the WhatsApp channel.
@@ -181,6 +191,9 @@ func expandAgentConfig(a AgentConfig) AgentConfig {
 		Tools:        a.Tools,
 		SkillPaths:   make([]string, len(a.SkillPaths)),
 		WorkspaceDir: expandEnv(a.WorkspaceDir),
+		ResetMode:    a.ResetMode,
+		ResetAtHour:  a.ResetAtHour,
+		IdleMinutes:  a.IdleMinutes,
 	}
 	for i, p := range a.SkillPaths {
 		expanded.SkillPaths[i] = expandEnv(p)

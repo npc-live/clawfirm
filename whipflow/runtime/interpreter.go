@@ -52,6 +52,9 @@ type Interpreter struct {
 	// Native provider registry (injected from outside, e.g. app integration).
 	nativeProviders map[string]Provider
 
+	// Pre-filled answers for ask statements (bypasses stdin).
+	initialInputs map[string]string
+
 	// State persistence
 	stateStore     *StateStore
 	currentRunID   int64
@@ -109,6 +112,12 @@ func WithPiConfig(cfg *config.Config) InterpreterOption {
 // WithNativeProviders registers pre-built native providers by name.
 func WithNativeProviders(providers map[string]Provider) InterpreterOption {
 	return func(i *Interpreter) { i.nativeProviders = providers }
+}
+
+// WithInitialInputs pre-fills answers for ask statements, bypassing stdin.
+// Keys are the variable names declared in each ask statement.
+func WithInitialInputs(inputs map[string]string) InterpreterOption {
+	return func(i *Interpreter) { i.initialInputs = inputs }
 }
 
 // NewInterpreter creates a new interpreter with the given environment and options.
@@ -236,6 +245,9 @@ func (interp *Interpreter) executeStatement(stmt ast.Node) error {
 
 	case *ast.Assignment:
 		val := interp.evaluateExpression(n.Value)
+		if !interp.env.Context.HasVariable(n.Name.Name) {
+			return interp.env.Context.DeclareVariable(n.Name.Name, val, false, n.Span)
+		}
 		return interp.env.Context.SetVariable(n.Name.Name, val)
 
 	case *ast.AgentDefinition:
@@ -348,8 +360,16 @@ func (interp *Interpreter) executeSessionStatement(n *ast.SessionStatement) erro
 	for _, p := range n.Properties {
 		val := interp.evaluateExpression(p.Value)
 		props[p.Name.Name] = val
-		// Allow inline `with provider "..."` to override the agent's provider.
-		if p.Name.Name == "provider" {
+		switch p.Name.Name {
+		case "prompt":
+			// Allow `prompt: """..."""` property to set the session prompt.
+			pv := runtimeValueToString(val)
+			interp.env.Log("debug", fmt.Sprintf("session prompt property: len=%d value=%q", len(pv), pv[:min(100, len(pv))]))
+			if pv != "" {
+				prompt = pv
+			}
+		case "provider":
+			// Allow inline `with provider "..."` to override the agent's provider.
 			if pv := runtimeValueToString(val); pv != "" {
 				if agent == nil {
 					agent = &AgentInstance{Name: "default"}
@@ -1364,6 +1384,13 @@ func (interp *Interpreter) executeAskStatement(n *ast.AskStatement) error {
 	prompt := ""
 	if n.Prompt != nil {
 		prompt = runtimeValueToString(interp.evaluateExpression(n.Prompt))
+	}
+
+	// Check pre-filled inputs first (e.g. from desktop app UI).
+	if n.Variable != nil {
+		if answer, ok := interp.initialInputs[n.Variable.Name]; ok {
+			return interp.env.Context.DeclareVariable(n.Variable.Name, answer, false, n.Span)
+		}
 	}
 
 	// Check if we have a saved user input from a previous run.

@@ -261,6 +261,18 @@ func (a *Agent) SetTools(tools []tool.AgentTool) {
 	a.state.Tools = tools
 }
 
+// FindTool returns the tool with the given name, or nil if not found.
+func (a *Agent) FindTool(name string) tool.AgentTool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	for _, t := range a.state.Tools {
+		if t.Name() == name {
+			return t
+		}
+	}
+	return nil
+}
+
 // SetSteeringMode changes how queued steering messages are delivered.
 func (a *Agent) SetSteeringMode(m types.SteeringMode) {
 	a.mu.Lock()
@@ -308,28 +320,3 @@ func (a *Agent) emit(ev types.AgentEvent) {
 	}
 }
 
-// buildLoopConfig constructs the AgentLoopConfig from current agent state.
-func (a *Agent) buildLoopConfig() AgentLoopConfig {
-	a.mu.RLock()
-	cfg := a.loopConfig
-	model := a.state.Model
-	thinkingLevel := a.state.ThinkingLevel
-	a.mu.RUnlock()
-
-	cfg.Model = model
-	cfg.Options.ThinkingLevel = thinkingLevel
-
-	// Wire up steering/follow-up queues
-	steeringQ := a.steeringQ
-	followUpQ := a.followUpQ
-	cfg.GetSteeringMessages = func() ([]types.Message, error) {
-		msgs := steeringQ.Drain()
-		return msgs, nil
-	}
-	cfg.GetFollowUpMessages = func() ([]types.Message, error) {
-		msgs := followUpQ.Drain()
-		return msgs, nil
-	}
-
-	return cfg
-}

@@ -126,6 +126,10 @@ export function GetWhatsAppStatus() {
   return window['go']['app']['App']['GetWhatsAppStatus']();
 }
 
+export function GetWhipFileContent(arg1) {
+  return window['go']['app']['App']['GetWhipFileContent'](arg1);
+}
+
 export function IsFirstRun() {
   return window['go']['app']['App']['IsFirstRun']();
 }
@@ -136,6 +140,14 @@ export function ListCronJobs() {
 
 export function ListMemoryFiles() {
   return window['go']['app']['App']['ListMemoryFiles']();
+}
+
+export function ListSessions(arg1) {
+  return window['go']['app']['App']['ListSessions'](arg1);
+}
+
+export function ListWhipFiles() {
+  return window['go']['app']['App']['ListWhipFiles']();
 }
 
 export function LogoutWhatsApp() {
@@ -152,6 +164,10 @@ export function ReadCanvasFile(arg1) {
 
 export function RemoveSkillPath(arg1, arg2) {
   return window['go']['app']['App']['RemoveSkillPath'](arg1, arg2);
+}
+
+export function ResetSession(arg1, arg2) {
+  return window['go']['app']['App']['ResetSession'](arg1, arg2);
 }
 
 export function SaveAPIKey(arg1, arg2) {

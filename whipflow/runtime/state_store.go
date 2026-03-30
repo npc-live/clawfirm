@@ -237,15 +237,19 @@ func (s *StateStore) GetCompletedSessions(runID int64) ([]SessionRecord, error) 
 }
 
 // FindIncompleteRun returns the most recent run for the given file path that
-// has status "running" or "failed". Returns nil if no such run exists.
+// has status "running" or "failed" and was started within the last hour.
+// Runs older than 1 hour are considered stale and will not be resumed.
+// Returns nil if no such run exists.
 func (s *StateStore) FindIncompleteRun(filePath string) (*RunRecord, error) {
+	cutoff := time.Now().Add(-1 * time.Hour).UnixMilli()
 	row := s.db.QueryRow(
 		`SELECT id, file_path, status, started_at, finished_at, error_msg
 		 FROM runs
 		 WHERE file_path = ? AND status IN ('running', 'failed')
+		   AND started_at >= ?
 		 ORDER BY id DESC
 		 LIMIT 1`,
-		filePath,
+		filePath, cutoff,
 	)
 
 	var r RunRecord
@@ -297,6 +301,20 @@ func (s *StateStore) GetUserInputs(runID int64) (map[string]string, error) {
 		return nil, fmt.Errorf("state_store: iterate user input rows: %w", err)
 	}
 	return inputs, nil
+}
+
+// DeleteSessionsFrom removes all session records for the given run where
+// session_index >= fromIndex. This allows a retry to re-execute from a
+// specific session while keeping earlier completed sessions intact.
+func (s *StateStore) DeleteSessionsFrom(runID int64, fromIndex int) error {
+	_, err := s.db.Exec(
+		"DELETE FROM sessions WHERE run_id = ? AND session_index >= ?",
+		runID, fromIndex,
+	)
+	if err != nil {
+		return fmt.Errorf("state_store: delete sessions from index %d: %w", fromIndex, err)
+	}
+	return nil
 }
 
 // Close closes the underlying database connection.

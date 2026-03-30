@@ -66,11 +66,17 @@ export function GetWhatsAppQR():Promise<string>;
 
 export function GetWhatsAppStatus():Promise<string>;
 
+export function GetWhipFileContent(arg1:string):Promise<string>;
+
 export function IsFirstRun():Promise<boolean>;
 
 export function ListCronJobs():Promise<Array<store.CronJob>>;
 
 export function ListMemoryFiles():Promise<Array<app.MemoryFile>>;
+
+export function ListSessions(arg1:string):Promise<Array<app.SessionDetail>>;
+
+export function ListWhipFiles():Promise<Array<string>>;
 
 export function LogoutWhatsApp():Promise<void>;
 
@@ -79,6 +85,8 @@ export function OpenLogsFolder():Promise<void>;
 export function ReadCanvasFile(arg1:string):Promise<string>;
 
 export function RemoveSkillPath(arg1:string,arg2:string):Promise<void>;
+
+export function ResetSession(arg1:string,arg2:string):Promise<void>;
 
 export function SaveAPIKey(arg1:string,arg2:string):Promise<void>;
 

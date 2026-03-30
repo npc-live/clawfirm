@@ -48,6 +48,8 @@ type executeConfig struct {
 	piConfig                *config.Config
 	nativeProviders         map[string]runtime.Provider
 	sessionProgressCallback func(runtime.SessionProgress)
+	initialInputs           map[string]string
+	retryFromSession        int // -1 means not set
 }
 
 // WithRuntimeConfig sets the runtime configuration.
@@ -95,9 +97,21 @@ func WithNativeProvider(name string, p runtime.Provider) Option {
 	}
 }
 
+// WithInitialInputs pre-fills answers for ask statements, bypassing stdin.
+func WithInitialInputs(inputs map[string]string) Option {
+	return func(c *executeConfig) { c.initialInputs = inputs }
+}
+
+// WithRetryFromSession configures the execution to retry from a specific
+// session index. Sessions before this index are replayed from the state store;
+// sessions at and after this index are re-executed.
+func WithRetryFromSession(idx int) Option {
+	return func(c *executeConfig) { c.retryFromSession = idx }
+}
+
 // Execute runs a parsed WhipFlow program.
 func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, error) {
-	cfg := &executeConfig{}
+	cfg := &executeConfig{retryFromSession: -1}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -127,6 +141,13 @@ func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, er
 		// Check for incomplete run to resume.
 		if cfg.fileName != "" {
 			if prev, err := store.FindIncompleteRun(cfg.fileName); err == nil && prev != nil {
+				// If retrying from a specific session, delete that session and all after it.
+				if cfg.retryFromSession >= 0 {
+					if err := store.DeleteSessionsFrom(prev.ID, cfg.retryFromSession); err != nil {
+						return nil, fmt.Errorf("whipflow: failed to delete sessions for retry: %w", err)
+					}
+					env.Log("info", fmt.Sprintf("Retry: deleted sessions from index %d in run #%d", cfg.retryFromSession, prev.ID))
+				}
 				sessions, err := store.GetCompletedSessions(prev.ID)
 				if err == nil && len(sessions) > 0 {
 					interpOpts = append(interpOpts, runtime.WithReplaySessions(sessions))
@@ -153,6 +174,11 @@ func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, er
 	// Session progress callback.
 	if cfg.sessionProgressCallback != nil {
 		interpOpts = append(interpOpts, runtime.WithSessionProgressCallback(cfg.sessionProgressCallback))
+	}
+
+	// Pre-filled ask inputs.
+	if len(cfg.initialInputs) > 0 {
+		interpOpts = append(interpOpts, runtime.WithInitialInputs(cfg.initialInputs))
 	}
 
 	interp := runtime.NewInterpreter(env, interpOpts...)

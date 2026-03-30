@@ -152,7 +152,17 @@ func (s *CronJobStore) SetEnabled(id string, enabled bool) error {
 }
 
 // InsertHistory creates a new history row with status "running" and returns its ID.
+// Returns (0, nil) if there is already a running row for this job (overlap guard).
 func (s *CronJobStore) InsertHistory(jobID string) (int64, error) {
+	var count int
+	if err := s.db.sql.QueryRow(
+		`SELECT COUNT(*) FROM cron_job_history WHERE job_id=? AND status='running'`, jobID,
+	).Scan(&count); err != nil {
+		return 0, err
+	}
+	if count > 0 {
+		return 0, nil
+	}
 	res, err := s.db.sql.Exec(
 		`INSERT INTO cron_job_history(job_id, started_at, status) VALUES(?,unixepoch(),'running')`,
 		jobID,
@@ -161,6 +171,18 @@ func (s *CronJobStore) InsertHistory(jobID string) (int64, error) {
 		return 0, err
 	}
 	return res.LastInsertId()
+}
+
+// MarkStaleRunningHistory marks all "running" history rows as "error" with a
+// message indicating they were interrupted (e.g. app crash / restart).
+// Call this once on startup to clean up orphaned records.
+func (s *CronJobStore) MarkStaleRunningHistory() error {
+	_, err := s.db.sql.Exec(
+		`UPDATE cron_job_history
+		 SET finished_at=unixepoch(), status='error', error_text='interrupted: app restarted'
+		 WHERE status='running'`,
+	)
+	return err
 }
 
 // CompleteHistory finalises a history row.

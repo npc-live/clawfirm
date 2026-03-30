@@ -308,3 +308,9 @@ export const SyncMemory = (): Promise<void> =>
 
 export const GetMemoryDir = (): Promise<string> =>
   callGo<string>(PKG, STRUCT, "GetMemoryDir");
+
+export const ListWhipFiles = (): Promise<string[]> =>
+  callGo<string[]>(PKG, STRUCT, "ListWhipFiles");
+
+export const GetWhipFileContent = (path: string): Promise<string> =>
+  callGo<string>(PKG, STRUCT, "GetWhipFileContent", path);

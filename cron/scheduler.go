@@ -376,6 +376,11 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 	if err != nil {
 		log.Printf("cron: insert history for %s: %v", jobID, err)
 	}
+	if historyID == 0 {
+		// Another running record already exists in the DB — skip this execution.
+		log.Printf("cron: skipping job %s (%s) — running record already exists in DB", jobName, jobID)
+		return
+	}
 
 	ag, err := s.builder(agentName)
 	if err != nil || ag == nil {

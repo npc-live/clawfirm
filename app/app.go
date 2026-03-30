@@ -259,6 +259,10 @@ func (a *App) OnStartup(ctx context.Context) {
 
 	// Start cron scheduler if DB is available.
 	if a.db != nil {
+		// Clean up any "running" history rows left over from a previous crash/restart.
+		if err := a.db.CronJobs().MarkStaleRunningHistory(); err != nil {
+			log.Printf("app: cron stale cleanup: %v", err)
+		}
 		a.syncCronConfigToDB()
 		sched := picron.New(a.db.CronJobs(), a.buildAgentForCron)
 		if err := sched.Start(a.ctx); err != nil {
@@ -326,7 +330,7 @@ func (a *App) startGateway() error {
 		}
 		maxTokens := ac.MaxTokens
 		if maxTokens == 0 {
-			maxTokens = 4096
+			maxTokens = 16384
 		}
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
@@ -410,7 +414,38 @@ func (a *App) startGateway() error {
 			return a
 		})
 
-		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{})
+		var sessStore *store.SessionStore
+		if db != nil {
+			sessStore = db.Sessions()
+		}
+
+		// Build conversation summarizer if memory manager is available.
+		var summarizer gateway.ConversationSummarizer
+		if memMgr != nil {
+			sumModel := types.Model{ID: ac.Model, Provider: ac.Provider}
+			sumProv := prov
+			sumFn := memory.SummarizeFunc(func(ctx context.Context, msgs []types.Message) (string, error) {
+				return streamSummarize(ctx, sumProv, sumModel, msgs)
+			})
+			summarizer = memory.NewSummarizer(memMgr, sumFn, memory.SummarizerConfig{
+				FilenamePrefix: "conv-" + ac.Name,
+			})
+		}
+
+		// Parse reset policy from agent config.
+		resetMode := store.ResetMode(ac.ResetMode)
+		if resetMode == "" {
+			resetMode = store.ResetModeNever
+		}
+
+		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
+			AgentName:          ac.Name,
+			SessionStore:       sessStore,
+			Summarizer:         summarizer,
+			DefaultResetMode:   resetMode,
+			DefaultResetHour:   ac.ResetAtHour,
+			DefaultIdleMinutes: ac.IdleMinutes,
+		})
 		registry.Register(ac.Name, mgr)
 		log.Printf("app: agent %s  provider: %s  model: %s", ac.Name, ac.Provider, ac.Model)
 	}
@@ -919,6 +954,16 @@ func (a *App) GetToolExecutions(channelID, userID string) ([]ToolExecutionInfo, 
 	if err != nil {
 		return nil, err
 	}
+	if len(msgs) == 0 && channelID != "webchat" {
+		msgs, err = db.Messages().ListMessages(store.QueryParams{
+			ChannelID: "webchat",
+			UserID:    userID,
+			Limit:     200,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Build id → ToolExecutionInfo from AssistantMessage tool calls.
 	byID := make(map[string]*ToolExecutionInfo)
@@ -961,6 +1006,7 @@ func (a *App) GetToolExecutions(channelID, userID string) ([]ToolExecutionInfo, 
 }
 
 // GetHistory returns the last N messages for a channel+user.
+// If no messages are found under channelID, it falls back to the legacy "webchat" channel.
 func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) {
 	a.mu.RLock()
 	db := a.db
@@ -975,6 +1021,17 @@ func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) 
 	})
 	if err != nil {
 		return nil, err
+	}
+	// Fall back to legacy "webchat" channel if no messages found under the new key.
+	if len(msgs) == 0 && channelID != "webchat" {
+		msgs, err = db.Messages().ListMessages(store.QueryParams{
+			ChannelID: "webchat",
+			UserID:    userID,
+			Limit:     50,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	out := make([]map[string]string, 0, len(msgs))
 	for _, m := range msgs {
@@ -1018,6 +1075,7 @@ func (a *App) GetSessions() []SessionInfo {
 
 // GetChatSessions returns distinct session IDs (user_ids) that have messages
 // stored for a given agent, ordered by most recent activity.
+// It merges results from both "webchat/<agentName>" (new) and "webchat" (legacy).
 func (a *App) GetChatSessions(agentName string) ([]string, error) {
 	a.mu.RLock()
 	db := a.db
@@ -1025,7 +1083,130 @@ func (a *App) GetChatSessions(agentName string) ([]string, error) {
 	if db == nil {
 		return nil, nil
 	}
-	return db.Messages().ListUserIDs("webchat/" + agentName)
+	ids1, err := db.Messages().ListUserIDs("webchat/" + agentName)
+	if err != nil {
+		return nil, err
+	}
+	ids2, err := db.Messages().ListUserIDs("webchat")
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{}, len(ids1))
+	out := make([]string, 0, len(ids1)+len(ids2))
+	for _, id := range ids1 {
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	for _, id := range ids2 {
+		if _, ok := seen[id]; !ok {
+			out = append(out, id)
+		}
+	}
+	log.Printf("GetChatSessions(%s): webchat/%s=%d webchat=%d total=%d", agentName, agentName, len(ids1), len(ids2), len(out))
+	return out, nil
+}
+
+// SessionDetail is a rich session descriptor returned to the frontend.
+type SessionDetail struct {
+	SessionKey       string  `json:"sessionKey"`
+	SessionID        string  `json:"sessionId"`
+	AgentName        string  `json:"agentName"`
+	ChannelID        string  `json:"channelId"`
+	UserID           string  `json:"userId"`
+	Subject          string  `json:"subject"`
+	ChatType         string  `json:"chatType"`
+	InputTokens      int     `json:"inputTokens"`
+	OutputTokens     int     `json:"outputTokens"`
+	TotalTokens      int     `json:"totalTokens"`
+	EstimatedCostUSD float64 `json:"estimatedCostUsd"`
+	Model            string  `json:"model"`
+	ModelProvider    string  `json:"modelProvider"`
+	CreatedAt        int64   `json:"createdAt"` // epoch ms
+	UpdatedAt        int64   `json:"updatedAt"` // epoch ms
+	IsActive         bool    `json:"isActive"`
+}
+
+// ListSessions returns all persisted sessions for a given agent name.
+func (a *App) ListSessions(agentName string) ([]SessionDetail, error) {
+	a.mu.RLock()
+	db := a.db
+	registry := a.registry
+	a.mu.RUnlock()
+	if db == nil {
+		return nil, nil
+	}
+	entries, err := db.Sessions().ListByAgent(agentName)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build set of active session keys for IsActive flag.
+	activeKeys := make(map[string]struct{})
+	if registry != nil {
+		if mgr, ok := registry.Get(agentName); ok {
+			for _, s := range mgr.ActiveSessions() {
+				activeKeys[s.Key()] = struct{}{}
+			}
+		}
+	}
+
+	out := make([]SessionDetail, 0, len(entries))
+	for _, e := range entries {
+		_, active := activeKeys[e.SessionKey]
+		out = append(out, SessionDetail{
+			SessionKey:       e.SessionKey,
+			SessionID:        e.SessionID,
+			AgentName:        agentName,
+			ChannelID:        e.ChannelID,
+			UserID:           e.UserID,
+			Subject:          e.Subject,
+			ChatType:         e.ChatType,
+			InputTokens:      e.InputTokens,
+			OutputTokens:     e.OutputTokens,
+			TotalTokens:      e.TotalTokens,
+			EstimatedCostUSD: e.EstimatedCostUSD,
+			Model:            e.Model,
+			ModelProvider:    e.ModelProvider,
+			CreatedAt:        e.CreatedAt.UnixMilli(),
+			UpdatedAt:        e.UpdatedAt.UnixMilli(),
+			IsActive:         active,
+		})
+	}
+	return out, nil
+}
+
+// ResetSession clears the message history for the given session and marks it reset.
+func (a *App) ResetSession(agentName, sessionKey string) error {
+	a.mu.RLock()
+	db := a.db
+	registry := a.registry
+	a.mu.RUnlock()
+
+	// Evict the active session so the next message starts fresh.
+	if registry != nil {
+		if mgr, ok := registry.Get(agentName); ok {
+			mgr.RemoveByKey(sessionKey)
+		}
+	}
+
+	if db == nil {
+		return nil
+	}
+
+	// Look up channel/user for message deletion.
+	entry, err := db.Sessions().Get(sessionKey)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		return nil
+	}
+
+	storeChannelID := "webchat/" + agentName
+	if err := db.Messages().DeleteByChannelUser(storeChannelID, entry.UserID); err != nil {
+		return err
+	}
+	return db.Sessions().MarkReset(sessionKey)
 }
 
 // GetConfigRaw returns the raw YAML content of config.yml and its file path.
@@ -1687,6 +1868,47 @@ func (a *App) TriggerCronJob(jobID string) error {
 	return sched.TriggerNow(jobID)
 }
 
+// ─── WhipFlow file browsing ───────────────────────────────────────────────────
+
+// ListWhipFiles returns all .whip files in ~/.pi-go/workflows/.
+func (a *App) ListWhipFiles() ([]string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Join(home, ".pi-go", "workflows")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{}, nil
+		}
+		return nil, err
+	}
+	var files []string
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".whip" {
+			files = append(files, filepath.Join(dir, e.Name()))
+		}
+	}
+	return files, nil
+}
+
+// GetWhipFileContent returns the content of a .whip file.
+func (a *App) GetWhipFileContent(path string) (string, error) {
+	home, _ := os.UserHomeDir()
+	whipDir := filepath.Join(home, ".pi-go", "workflows")
+	// security: only allow files inside workflows dir
+	abs, err := filepath.Abs(path)
+	if err != nil || !strings.HasPrefix(abs, whipDir) {
+		return "", fmt.Errorf("access denied")
+	}
+	b, err := os.ReadFile(abs)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // extractText returns a plain-text preview of a message for history display.
 func extractText(m types.Message) string {
 	switch msg := m.(type) {
@@ -1704,4 +1926,34 @@ func extractText(m types.Message) string {
 		}
 	}
 	return ""
+}
+
+// streamSummarize sends a summarization prompt to the provider and collects the full response.
+func streamSummarize(ctx context.Context, prov provider.LLMProvider, model types.Model, msgs []types.Message) (string, error) {
+	prompt := memory.BuildSummarizePrompt(msgs)
+	req := provider.LLMRequest{
+		Model: model,
+		Messages: []types.Message{
+			&types.UserMessage{
+				Role: "user",
+				Content: []types.ContentBlock{
+					&types.TextContent{Type: types.ContentTypeText, Text: prompt},
+				},
+			},
+		},
+	}
+	ch, err := prov.Stream(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("streamSummarize: %w", err)
+	}
+	var sb strings.Builder
+	for ev := range ch {
+		if ev.Type == types.StreamEventTextDelta {
+			sb.WriteString(ev.Delta)
+		}
+		if ev.Error != nil {
+			return "", fmt.Errorf("streamSummarize: %s", ev.Error.ErrorMessage)
+		}
+	}
+	return sb.String(), nil
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ import (
 
 const (
 	defaultBaseURL   = "https://api.openai.com"
-	defaultMaxTokens = 4096
+	defaultMaxTokens = 16384
 )
 
 // Provider implements provider.LLMProvider for OpenAI's API.
@@ -212,10 +213,16 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 	var textStarted bool
 	var inputTokens, outputTokens int
 
+	log.Printf("[openai-stream] starting stream read (model=%s)", modelID)
+	var gotFinish bool
+
 	scanner := bufio.NewScanner(body)
+	// Increase scanner buffer for large responses (1MB)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
+			log.Printf("[openai-stream] ctx cancelled during scan")
 			return
 		default:
 		}
@@ -226,6 +233,7 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 		}
 		data := strings.TrimPrefix(line, "data: ")
 		if data == "[DONE]" {
+			log.Printf("[openai-stream] received [DONE]")
 			break
 		}
 		if data == "" {
@@ -234,6 +242,7 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 
 		var chunk openAIChunk
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			log.Printf("[openai-stream] unmarshal error: %v, data=%q", err, data[:min(len(data), 200)])
 			continue
 		}
 
@@ -277,6 +286,8 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 
 			// Finish
 			if choice.FinishReason != nil {
+				log.Printf("[openai-stream] finish_reason=%q", *choice.FinishReason)
+				gotFinish = true
 				stopReason := mapStopReason(*choice.FinishReason)
 				partial.StopReason = stopReason
 
@@ -316,6 +327,13 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		log.Printf("[openai-stream] scanner error: %v", err)
+	}
+	if !gotFinish {
+		log.Printf("[openai-stream] WARNING: stream ended without finish_reason (text=%d chars, tools=%d)", textBuf.Len(), len(toolAccums))
+	}
+
 	partial.Usage = types.Usage{
 		Input:  inputTokens,
 		Output: outputTokens,
@@ -323,6 +341,7 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 	}
 	partial.Timestamp = time.Now().UnixMilli()
 	finalMsg := *partial
+	log.Printf("[openai-stream] emitting Done — stopReason=%q, contentBlocks=%d", finalMsg.StopReason, len(finalMsg.Content))
 	emit(types.AssistantMessageEvent{
 		Type:    types.StreamEventDone,
 		Message: &finalMsg,
