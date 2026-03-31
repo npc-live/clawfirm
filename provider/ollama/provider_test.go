@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func testModel(baseURL string) types.Model {

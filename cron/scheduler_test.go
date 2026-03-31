@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/store"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/store"
 )
 
 func openTestDB(t *testing.T) *store.DB {

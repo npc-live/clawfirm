@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 

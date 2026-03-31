@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // Write creates or overwrites a file on disk.

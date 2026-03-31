@@ -4,9 +4,9 @@ import (
 	"context"
 	"sync"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // AgentOption configures an Agent at construction time.

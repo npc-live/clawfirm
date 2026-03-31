@@ -3,7 +3,7 @@ package validator
 import (
 	"testing"
 
-	"github.com/ai-gateway/pi-go/whipflow/parser"
+	"github.com/ai-gateway/clawfirm/whipflow/parser"
 )
 
 func TestValidateSimpleProgram(t *testing.T) {

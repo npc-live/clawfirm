@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/store"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/store"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func openTestDB(t *testing.T) *store.DB {

@@ -1,4 +1,4 @@
-// Package store provides SQLite-backed persistence for pi-go.
+// Package store provides SQLite-backed persistence for clawfirm.
 // Uses modernc.org/sqlite (pure Go, no CGO required).
 package store
 
@@ -23,7 +23,7 @@ type DB struct {
 }
 
 // Open opens (or creates) the SQLite database at path.
-// If path is empty it defaults to ~/.pi-go/data.db.
+// If path is empty it defaults to ~/.clawfirm/data.db.
 // Runs all pending migrations automatically.
 func Open(path string) (*DB, error) {
 	if path == "" {
@@ -31,7 +31,7 @@ func Open(path string) (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("store: home dir: %w", err)
 		}
-		path = filepath.Join(home, ".pi-go", "data.db")
+		path = filepath.Join(home, ".clawfirm", "data.db")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("store: mkdir: %w", err)

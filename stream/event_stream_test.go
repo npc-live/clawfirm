@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func TestEventStreamNext(t *testing.T) {

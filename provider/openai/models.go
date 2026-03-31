@@ -1,6 +1,6 @@
 package openai
 
-import "github.com/ai-gateway/pi-go/types"
+import "github.com/ai-gateway/clawfirm/types"
 
 // BuiltinModels returns the hard-coded list of OpenAI models.
 func BuiltinModels() []types.Model {

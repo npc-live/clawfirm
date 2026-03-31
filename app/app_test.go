@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/pi-go/app"
-	"github.com/ai-gateway/pi-go/config"
+	"github.com/ai-gateway/clawfirm/app"
+	"github.com/ai-gateway/clawfirm/config"
 )
 
 // ── helpers ───────────────────────────────────────────────────────────────────

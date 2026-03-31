@@ -11,11 +11,11 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/channel/webchat"
-	"github.com/ai-gateway/pi-go/gateway"
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/channel/webchat"
+	"github.com/ai-gateway/clawfirm/gateway"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // fakeProvider returns one delta + done for every stream call.

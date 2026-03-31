@@ -3,7 +3,7 @@ package message
 import (
 	"testing"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func TestFilterForLLMRemovesURLAudio(t *testing.T) {

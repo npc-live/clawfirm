@@ -38,11 +38,11 @@ type AuthStorage struct {
 }
 
 // NewAuthStorage creates an AuthStorage backed by the given file path.
-// If path is empty, defaults to ~/.pi-go/auth.json.
+// If path is empty, defaults to ~/.clawfirm/auth.json.
 func NewAuthStorage(path string) *AuthStorage {
 	if path == "" {
 		home, _ := os.UserHomeDir()
-		path = filepath.Join(home, ".pi-go", "auth.json")
+		path = filepath.Join(home, ".clawfirm", "auth.json")
 	}
 	return &AuthStorage{
 		path:        path,

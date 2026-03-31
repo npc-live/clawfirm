@@ -18,9 +18,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/pi-go/memory"
-	"github.com/ai-gateway/pi-go/store"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/memory"
+	"github.com/ai-gateway/clawfirm/store"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func TestE2E_FullFlow(t *testing.T) {

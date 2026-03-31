@@ -1,6 +1,6 @@
-// Package config loads and validates pi-go YAML configuration.
+// Package config loads and validates clawfirm YAML configuration.
 //
-// Default config path: ~/.pi-go/config.yml
+// Default config path: ~/.clawfirm/config.yml
 // Environment variable expansion: ${VAR} or $VAR in any string value.
 package config
 
@@ -54,7 +54,7 @@ type AgentConfig struct {
 	// SkillPaths lists skill directories or SKILL.md files to load for this agent.
 	// Absolute paths, ~/... paths, and paths relative to the config file directory
 	// are all supported. Each entry follows the Agent Skills spec (agentskills.io).
-	// Example: ["~/.pi-go/skills", "/projects/myapp/.agents/skills"]
+	// Example: ["~/.clawfirm/skills", "/projects/myapp/.agents/skills"]
 	SkillPaths []string `yaml:"skill_paths" json:"skill_paths"`
 
 	// WorkspaceDir is the root directory used for file operations and bootstrap
@@ -101,7 +101,7 @@ type WhipflowCliProvider struct {
 	RawPrompt    bool     `yaml:"raw_prompt"    json:"raw_prompt,omitempty"`
 }
 
-// WhipflowConfig holds WhipFlow-specific settings within the pi-go config.
+// WhipflowConfig holds WhipFlow-specific settings within the clawfirm config.
 type WhipflowConfig struct {
 	CliProviders    map[string]WhipflowCliProvider `yaml:"cli_providers"    json:"cli_providers,omitempty"`
 	DefaultProvider string                         `yaml:"default_provider" json:"default_provider,omitempty"`
@@ -128,7 +128,7 @@ type CronJobConfig struct {
 	Enabled   bool     `yaml:"enabled" json:"enabled"`
 }
 
-// Config is the top-level pi-go configuration structure.
+// Config is the top-level clawfirm configuration structure.
 type Config struct {
 	// Providers maps provider IDs to their connection settings.
 	Providers map[string]ProviderConfig `yaml:"providers" json:"providers"`
@@ -214,7 +214,7 @@ func ParseYAML(data []byte) (*Config, error) {
 }
 
 // Load reads and parses a YAML config file.
-// If path is empty it falls back to ~/.pi-go/config.yml.
+// If path is empty it falls back to ~/.clawfirm/config.yml.
 // Returns an empty Config (not an error) if the file does not exist.
 func Load(path string) (*Config, error) {
 	if path == "" {
@@ -222,7 +222,7 @@ func Load(path string) (*Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("config: home dir: %w", err)
 		}
-		path = filepath.Join(home, ".pi-go", "config.yml")
+		path = filepath.Join(home, ".clawfirm", "config.yml")
 	}
 
 	data, err := os.ReadFile(path)

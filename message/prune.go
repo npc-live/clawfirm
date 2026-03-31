@@ -1,7 +1,7 @@
 package message
 
 import (
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // PruneMessages trims the message history to fit within maxTokens.

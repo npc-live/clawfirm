@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 const fetchMaxBytes = 512 * 1024 // 512 KB

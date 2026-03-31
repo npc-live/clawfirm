@@ -1,6 +1,6 @@
 package ast
 
-import "github.com/ai-gateway/pi-go/whipflow/token"
+import "github.com/ai-gateway/clawfirm/whipflow/token"
 
 // Node is the interface that all AST nodes implement.
 type Node interface {

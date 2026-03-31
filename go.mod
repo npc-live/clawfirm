@@ -1,4 +1,4 @@
-module github.com/ai-gateway/pi-go
+module github.com/ai-gateway/clawfirm
 
 go 1.25.1
 
@@ -11,7 +11,9 @@ require (
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/wailsapp/wails/v2 v2.12.0
+	go.etcd.io/bbolt v1.4.3
 	go.mau.fi/whatsmeow v0.0.0-20260322133016-ce4daa5e5a86
+	golang.org/x/term v0.41.0
 	gonum.org/v1/gonum v0.13.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1

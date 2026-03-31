@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/provider/zenmux"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/zenmux"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // sseResponse builds a minimal OpenAI-compatible SSE response.

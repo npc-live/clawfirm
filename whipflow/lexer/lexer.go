@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 // Options configures lexer behavior.

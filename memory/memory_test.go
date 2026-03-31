@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/memory"
-	"github.com/ai-gateway/pi-go/store"
+	"github.com/ai-gateway/clawfirm/memory"
+	"github.com/ai-gateway/clawfirm/store"
 )
 
 // openTestDB opens an in-memory SQLite DB with migrations applied.

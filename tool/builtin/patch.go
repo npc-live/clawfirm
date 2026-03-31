@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // ApplyPatch applies a unified diff / multi-file patch to the filesystem.

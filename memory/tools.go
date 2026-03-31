@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // SearchTool returns an AgentTool that performs semantic memory search.

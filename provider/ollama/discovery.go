@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // ollamaTagsResponse is the response from the /api/tags endpoint.

@@ -3,7 +3,7 @@ package message
 import (
 	"encoding/json"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // FilterForLLM removes messages or content blocks that LLMs cannot process.

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 const (

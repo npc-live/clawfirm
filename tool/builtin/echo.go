@@ -3,8 +3,8 @@ package builtin
 import (
 	"context"
 
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // Echo is a built-in tool that returns its input text unchanged.

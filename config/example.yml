@@ -1,5 +1,5 @@
-# pi-go configuration
-# Default path: ~/.pi-go/config.yml
+# clawfirm configuration
+# Default path: ~/.clawfirm/config.yml
 # All values support ${ENV_VAR} expansion.
 
 providers:

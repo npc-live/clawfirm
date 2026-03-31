@@ -3,7 +3,7 @@ package agent
 import (
 	"sync"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // messageQueue is a thread-safe FIFO for pending messages.

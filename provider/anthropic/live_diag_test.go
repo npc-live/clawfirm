@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/provider/anthropic"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // TestLiveDiagDirect calls the Anthropic provider directly (bypassing the agent)

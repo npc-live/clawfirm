@@ -1,6 +1,6 @@
 package builtin
 
-import "github.com/ai-gateway/pi-go/tool"
+import "github.com/ai-gateway/clawfirm/tool"
 
 // CodingTools returns the standard set of file-system + shell tools:
 // Read, Write, Edit, Bash.

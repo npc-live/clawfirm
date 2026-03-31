@@ -3,7 +3,7 @@ package store_test
 import (
 	"testing"
 
-	"github.com/ai-gateway/pi-go/store"
+	"github.com/ai-gateway/clawfirm/store"
 )
 
 func TestCronJobCRUD(t *testing.T) {

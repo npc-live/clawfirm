@@ -7,11 +7,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ai-gateway/pi-go/config"
-	"github.com/ai-gateway/pi-go/whipflow/ast"
-	"github.com/ai-gateway/pi-go/whipflow/parser"
-	"github.com/ai-gateway/pi-go/whipflow/runtime"
-	"github.com/ai-gateway/pi-go/whipflow/validator"
+	"github.com/ai-gateway/clawfirm/config"
+	"github.com/ai-gateway/clawfirm/whipflow/ast"
+	"github.com/ai-gateway/clawfirm/whipflow/parser"
+	"github.com/ai-gateway/clawfirm/whipflow/runtime"
+	"github.com/ai-gateway/clawfirm/whipflow/validator"
 )
 
 // Re-export key types for convenient access.
@@ -72,9 +72,9 @@ func WithToolRegistry(tr *runtime.ToolRegistry) Option {
 	return func(c *executeConfig) { c.toolRegistry = tr }
 }
 
-// WithPiConfig sets the pi-go config, enabling WhipFlow to resolve
+// WithPiConfig sets the clawfirm config, enabling WhipFlow to resolve
 // native providers from the top-level agents and providers sections
-// in ~/.pi-go/config.yml.
+// in ~/.clawfirm/config.yml.
 func WithPiConfig(cfg *config.Config) Option {
 	return func(c *executeConfig) { c.piConfig = cfg }
 }
@@ -86,7 +86,7 @@ func WithSessionProgressCallback(cb func(SessionProgress)) Option {
 }
 
 // WithNativeProvider registers a named native provider for session execution.
-// This allows WhipFlow sessions to use pi-go's in-process agent system
+// This allows WhipFlow sessions to use clawfirm's in-process agent system
 // instead of spawning external CLI processes.
 func WithNativeProvider(name string, p runtime.Provider) Option {
 	return func(c *executeConfig) {
@@ -161,7 +161,7 @@ func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, er
 		interpOpts = append(interpOpts, runtime.WithFileName(cfg.fileName))
 	}
 
-	// Pi-go config for resolving providers from ~/.pi-go/config.yml.
+	// Clawfirm config for resolving providers from ~/.clawfirm/config.yml.
 	if cfg.piConfig != nil {
 		interpOpts = append(interpOpts, runtime.WithPiConfig(cfg.piConfig))
 	}

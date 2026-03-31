@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // EventStream wraps a channel of AssistantMessageEvent with helpers for consumption.

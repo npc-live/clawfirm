@@ -6,15 +6,15 @@ import (
 	"log"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/config"
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
-	"github.com/ai-gateway/pi-go/whipflow"
-	"github.com/ai-gateway/pi-go/whipflow/runtime"
+	"github.com/ai-gateway/clawfirm/config"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
+	"github.com/ai-gateway/clawfirm/whipflow"
+	"github.com/ai-gateway/clawfirm/whipflow/runtime"
 )
 
 // WhipflowRun is a tool that executes WhipFlow (.whip) workflows.
-// PiConfig is the loaded ~/.pi-go/config.yml; when set it allows WhipFlow
+// PiConfig is the loaded ~/.clawfirm/config.yml; when set it allows WhipFlow
 // sessions to resolve agents and providers defined there.
 type WhipflowRun struct {
 	PiConfig *config.Config

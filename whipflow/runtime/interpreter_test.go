@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/types"
-	"github.com/ai-gateway/pi-go/whipflow/ast"
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/types"
+	"github.com/ai-gateway/clawfirm/whipflow/ast"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 // mockLLMProvider is a test double that returns a fixed text response.

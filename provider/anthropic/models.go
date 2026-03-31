@@ -1,6 +1,6 @@
 package anthropic
 
-import "github.com/ai-gateway/pi-go/types"
+import "github.com/ai-gateway/clawfirm/types"
 
 // BuiltinModels returns the hard-coded list of Anthropic models.
 func BuiltinModels() []types.Model {

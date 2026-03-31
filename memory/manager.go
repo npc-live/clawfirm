@@ -22,7 +22,7 @@ import (
 // Config holds options for the Manager.
 type Config struct {
 	// MemoryDir is the directory containing Markdown memory files.
-	// Defaults to ~/.pi-go/memory/.
+	// Defaults to ~/.clawfirm/memory/.
 	MemoryDir string
 	// ChunkTokens is the target chunk size (default 400).
 	ChunkTokens int
@@ -41,7 +41,7 @@ func (c Config) memoryDir() string {
 		return c.MemoryDir
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".pi-go", "memory")
+	return filepath.Join(home, ".clawfirm", "memory")
 }
 
 func (c Config) hybridAlpha() float64 {

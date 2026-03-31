@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // AgentContext holds the mutable conversation state passed through the agent loop.

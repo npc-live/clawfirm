@@ -3,7 +3,7 @@ package provider
 import (
 	"context"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // ToolSchema describes a tool that can be invoked by the LLM.

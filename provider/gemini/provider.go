@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/stream"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/stream"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 const defaultBaseURL = "https://generativelanguage.googleapis.com"

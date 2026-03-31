@@ -15,21 +15,24 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/auth"
-	"github.com/ai-gateway/pi-go/channel/feishu"
-	"github.com/ai-gateway/pi-go/channel/webchat"
-	"github.com/ai-gateway/pi-go/channel/whatsapp"
-	"github.com/ai-gateway/pi-go/config"
-	picron "github.com/ai-gateway/pi-go/cron"
-	"github.com/ai-gateway/pi-go/gateway"
-	"github.com/ai-gateway/pi-go/internal/agentbuilder"
-	"github.com/ai-gateway/pi-go/memory"
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/skill"
-	"github.com/ai-gateway/pi-go/store"
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/auth"
+	"github.com/ai-gateway/clawfirm/channel/feishu"
+	"github.com/ai-gateway/clawfirm/channel/webchat"
+	"github.com/ai-gateway/clawfirm/channel/whatsapp"
+	"github.com/ai-gateway/clawfirm/config"
+	picron "github.com/ai-gateway/clawfirm/cron"
+	"github.com/ai-gateway/clawfirm/gateway"
+	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
+	"github.com/ai-gateway/clawfirm/memory"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/skill"
+	"github.com/ai-gateway/clawfirm/skillctl"
+	"github.com/ai-gateway/clawfirm/store"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/vault"
+	"github.com/ai-gateway/clawfirm/vault/keychain"
+	"github.com/ai-gateway/clawfirm/types"
 	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -76,6 +79,7 @@ type App struct {
 	feishuCancel   context.CancelFunc
 	cronScheduler  *picron.Scheduler
 	memoryMgr      *memory.Manager
+	vault          *vault.Vault
 }
 
 // New creates the App. Call wails.Run with a.OnStartup / a.OnShutdown.
@@ -127,15 +131,124 @@ func applySystemProxy() {
 	}
 }
 
-// initUserDirs creates ~/.pi-go and its subdirectories on first run,
+// migrateFromPiGo renames ~/.pi-go to ~/.clawfirm if the old directory exists
+// and the new one does not. A symlink is left behind for backward compatibility.
+func migrateFromPiGo() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	oldDir := filepath.Join(home, ".pi-go")
+	newDir := filepath.Join(home, ".clawfirm")
+
+	oldInfo, oldErr := os.Lstat(oldDir)
+	_, newErr := os.Lstat(newDir)
+
+	if oldErr != nil || newErr == nil {
+		return // old doesn't exist or new already exists
+	}
+	// Only migrate if old is a real directory (not already a symlink).
+	if oldInfo.Mode()&os.ModeSymlink != 0 {
+		return
+	}
+
+	if err := os.Rename(oldDir, newDir); err != nil {
+		log.Printf("app: migrate ~/.pi-go → ~/.clawfirm: %v", err)
+		return
+	}
+	// Leave a symlink for backward compatibility.
+	if err := os.Symlink(newDir, oldDir); err != nil {
+		log.Printf("app: create symlink ~/.pi-go → ~/.clawfirm: %v", err)
+	} else {
+		log.Printf("app: migrated ~/.pi-go → ~/.clawfirm (symlink created)")
+	}
+}
+
+// migrateVault copies entries from the old unencrypted SQLite vault table
+// into the new AES-256-GCM encrypted BBolt vault. Runs once — the old table
+// is dropped after a successful migration.
+func migrateVault(db *store.DB) {
+	sqlDB := db.SQL()
+
+	// Check if old vault table exists.
+	var name string
+	err := sqlDB.QueryRow(`SELECT name FROM sqlite_master WHERE type='table' AND name='vault'`).Scan(&name)
+	if err != nil {
+		return // table doesn't exist, nothing to migrate
+	}
+
+	// Read old entries.
+	rows, err := sqlDB.Query(`SELECT key, value FROM vault ORDER BY key`)
+	if err != nil {
+		log.Printf("app: vault migrate: read old entries: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	type kv struct{ k, v string }
+	var entries []kv
+	for rows.Next() {
+		var e kv
+		if err := rows.Scan(&e.k, &e.v); err != nil {
+			log.Printf("app: vault migrate: scan: %v", err)
+			return
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		log.Printf("app: vault migrate: rows: %v", err)
+		return
+	}
+	if len(entries) == 0 {
+		// Table exists but is empty — just drop it.
+		sqlDB.Exec(`DROP TABLE vault`)
+		return
+	}
+
+	// Ensure new encrypted vault is initialized.
+	dbPath := vault.DefaultDBPath()
+	kc := keychain.New()
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		if err := vault.Init(dbPath, kc); err != nil {
+			log.Printf("app: vault migrate: init: %v", err)
+			return
+		}
+		log.Printf("app: vault migrate: initialized new encrypted vault")
+	}
+
+	// Open, copy, close.
+	v, err := vault.Open(dbPath, kc)
+	if err != nil {
+		log.Printf("app: vault migrate: open: %v", err)
+		return
+	}
+	for _, e := range entries {
+		if err := v.Set(e.k, []byte(e.v)); err != nil {
+			log.Printf("app: vault migrate: set %q: %v", e.k, err)
+			v.Close()
+			return
+		}
+	}
+	v.Close()
+
+	// Drop old table.
+	if _, err := sqlDB.Exec(`DROP TABLE vault`); err != nil {
+		log.Printf("app: vault migrate: drop old table: %v", err)
+		return
+	}
+	log.Printf("app: vault migrate: migrated %d entries to encrypted vault", len(entries))
+}
+
+// initUserDirs creates ~/.clawfirm and its subdirectories on first run,
 // and writes a minimal default config.yml if one does not exist yet.
-// It also extracts bundled binaries (e.g. func) to ~/.pi-go/bin/.
+// It also extracts bundled binaries (e.g. func) to ~/.clawfirm/bin/.
 func initUserDirs() {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
-	base := filepath.Join(home, ".pi-go")
+	migrateFromPiGo()
+	base := filepath.Join(home, ".clawfirm")
 	dirs := []string{
 		base,
 		filepath.Join(base, "skills"),
@@ -162,8 +275,8 @@ func initUserDirs() {
 
 	cfgPath := filepath.Join(base, "config.yml")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
-		defaultCfg := `# pi-go configuration
-# Docs: https://github.com/ai-gateway/pi-go
+		defaultCfg := `# clawfirm configuration
+# Docs: https://github.com/ai-gateway/clawfirm
 providers:
     # anthropic:
     #     type: anthropic
@@ -186,7 +299,7 @@ agents:
         - memory_get
         - whipflow_run
       skill_paths:
-        - ~/.pi-go/skills/
+        - ~/.clawfirm/skills/
 
 default_agent: ""
 
@@ -237,6 +350,19 @@ func (a *App) OnStartup(ctx context.Context) {
 		log.Printf("app: store open: %v", err)
 	} else {
 		a.db = db
+	}
+
+	// Migrate old unencrypted vault → new encrypted vault, then open.
+	if a.db != nil {
+		migrateVault(a.db)
+	}
+	if _, err := os.Stat(vault.DefaultDBPath()); err == nil {
+		kc := keychain.New()
+		if v, err := vault.Open(vault.DefaultDBPath(), kc); err != nil {
+			log.Printf("app: vault open: %v", err)
+		} else {
+			a.vault = v
+		}
 	}
 
 	// Initialise memory manager before gateway so tools have a valid manager.
@@ -297,6 +423,9 @@ func (a *App) OnShutdown(_ context.Context) {
 	if a.registry != nil {
 		a.registry.Stop()
 	}
+	if a.vault != nil {
+		_ = a.vault.Close()
+	}
 	if a.db != nil {
 		_ = a.db.Close()
 	}
@@ -334,7 +463,7 @@ func (a *App) startGateway() error {
 		}
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
-		tools := buildTools(ac.Tools, memMgr, cfg, db)
+		tools := buildTools(ac.Tools, memMgr, cfg, a.vault)
 
 		// Load skills and build the skills prompt with size limits.
 		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
@@ -572,40 +701,58 @@ func (a *App) GetConfig() *config.Config {
 
 // ─── Vault ────────────────────────────────────────────────────────────────────
 
-// GetVault returns all vault entries (keys + values).
-func (a *App) GetVault() ([]store.VaultEntry, error) {
-	a.mu.RLock()
-	db := a.db
-	a.mu.RUnlock()
-	if db == nil {
-		return nil, nil
-	}
-	return db.Vault().List()
+// VaultEntry is returned by GetVault for the frontend.
+type VaultEntry struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
-// SetVaultEntry upserts a vault key-value pair.
+// GetVault returns all vault entries (keys + decrypted values).
+func (a *App) GetVault() ([]VaultEntry, error) {
+	a.mu.RLock()
+	v := a.vault
+	a.mu.RUnlock()
+	if v == nil {
+		return nil, nil
+	}
+	keys, err := v.List()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]VaultEntry, 0, len(keys))
+	for _, k := range keys {
+		val, err := v.Get(k)
+		if err != nil {
+			return nil, fmt.Errorf("vault get %q: %w", k, err)
+		}
+		out = append(out, VaultEntry{Key: k, Value: string(val)})
+	}
+	return out, nil
+}
+
+// SetVaultEntry encrypts and stores a vault key-value pair.
 func (a *App) SetVaultEntry(key, value string) error {
 	a.mu.RLock()
-	db := a.db
+	v := a.vault
 	a.mu.RUnlock()
-	if db == nil {
-		return fmt.Errorf("vault: store not ready")
+	if v == nil {
+		return fmt.Errorf("vault: not initialized — run 'clawfirm vault init' first")
 	}
-	return db.Vault().Set(key, value)
+	return v.Set(key, []byte(value))
 }
 
 // DeleteVaultEntry removes a vault entry by key.
 func (a *App) DeleteVaultEntry(key string) error {
 	a.mu.RLock()
-	db := a.db
+	v := a.vault
 	a.mu.RUnlock()
-	if db == nil {
-		return fmt.Errorf("vault: store not ready")
+	if v == nil {
+		return fmt.Errorf("vault: not initialized — run 'clawfirm vault init' first")
 	}
-	return db.Vault().Delete(key)
+	return v.Delete(key)
 }
 
-// ReadCanvasFile reads ~/.pi-go/canvas/{name}.html and returns its content.
+// ReadCanvasFile reads ~/.clawfirm/canvas/{name}.html and returns its content.
 // Returns empty string if the file does not exist yet.
 func (a *App) ReadCanvasFile(name string) (string, error) {
 	if name == "" || strings.ContainsAny(name, "/\\..") {
@@ -615,7 +762,7 @@ func (a *App) ReadCanvasFile(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(home, ".pi-go", "canvas", name+".html")
+	path := filepath.Join(home, ".clawfirm", "canvas", name+".html")
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", nil
@@ -626,7 +773,7 @@ func (a *App) ReadCanvasFile(name string) (string, error) {
 	return string(data), nil
 }
 
-// WriteCanvasFile writes content to ~/.pi-go/canvas/{name}.html.
+// WriteCanvasFile writes content to ~/.clawfirm/canvas/{name}.html.
 func (a *App) WriteCanvasFile(name, content string) error {
 	if name == "" || strings.ContainsAny(name, "/\\..") {
 		return fmt.Errorf("invalid canvas name: %q", name)
@@ -635,14 +782,14 @@ func (a *App) WriteCanvasFile(name, content string) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(home, ".pi-go", "canvas")
+	dir := filepath.Join(home, ".clawfirm", "canvas")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, name+".html"), []byte(content), 0o644)
 }
 
-// SaveConfig writes the config to ~/.pi-go/config.yml and restarts the gateway.
+// SaveConfig writes the config to ~/.clawfirm/config.yml and restarts the gateway.
 func (a *App) SaveConfig(cfg *config.Config) error {
 	if err := saveConfig(cfg); err != nil {
 		return err
@@ -1215,7 +1362,7 @@ func (a *App) GetConfigRaw() (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := filepath.Join(home, ".pi-go", "config.yml")
+	p := filepath.Join(home, ".clawfirm", "config.yml")
 	data, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
@@ -1241,13 +1388,13 @@ func (a *App) SaveConfigRaw(content string) error {
 // GetVersion returns the application version string.
 func (a *App) GetVersion() string { return Version }
 
-// OpenLogsFolder opens the ~/.pi-go directory in the system file manager.
+// OpenLogsFolder opens the ~/.clawfirm directory in the system file manager.
 func (a *App) OpenLogsFolder() error {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".clawfirm")
 	return openBrowser(dir)
 }
 
@@ -1346,7 +1493,7 @@ func (a *App) GetSkillContent(filePath string) (string, error) {
 	return string(data), nil
 }
 
-// GetAllSkills returns every skill across all agents plus the default ~/.pi-go/skills/ directory.
+// GetAllSkills returns every skill across all agents plus the default ~/.clawfirm/skills/ directory.
 func (a *App) GetAllSkills() []SkillInfo {
 	a.mu.RLock()
 	cfg := a.cfg
@@ -1371,7 +1518,7 @@ func (a *App) GetAllSkills() []SkillInfo {
 	}
 
 	// Always scan the default skill directory.
-	addFromPaths([]string{"~/.pi-go/skills/"})
+	addFromPaths([]string{"~/.clawfirm/skills/"})
 
 	// Then scan each agent's configured skill_paths.
 	for _, ac := range cfg.Agents {
@@ -1458,6 +1605,49 @@ func (a *App) RemoveSkillPath(agentName, path string) error {
 		return err
 	}
 	return a.restartGateway()
+}
+
+// RemoteSkillInfo is the frontend representation of a remote skill from the registry.
+type RemoteSkillInfo struct {
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Description string `json:"description"`
+	Author      string `json:"author"`
+	Downloads   int    `json:"downloads"`
+}
+
+// SearchRemoteSkills searches the skillctl remote registry.
+func (a *App) SearchRemoteSkills(query string) ([]RemoteSkillInfo, error) {
+	client := skillctl.NewClient()
+	result, err := client.Search(a.ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RemoteSkillInfo, len(result.Skills))
+	for i, s := range result.Skills {
+		out[i] = RemoteSkillInfo{
+			Name:        s.Name,
+			Version:     s.Version,
+			Description: s.Description,
+			Author:      s.Author,
+			Downloads:   s.Downloads,
+		}
+	}
+	return out, nil
+}
+
+// InstallRemoteSkill installs a skill from the remote registry and optionally syncs.
+func (a *App) InstallRemoteSkill(name string, sync bool) (string, error) {
+	client := skillctl.NewClient()
+	result, err := client.Install(a.ctx, skillctl.InstallOptions{
+		Name:  name,
+		Force: true,
+		Sync:  sync,
+	})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Installed %s@%s → %s", result.Name, result.Version, result.InstallDir), nil
 }
 
 // EmitChannelStatus sends a channel:status event to the frontend.
@@ -1554,7 +1744,7 @@ func (a *App) CreateMemoryFile(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".pi-go", "memory")
+	dir := filepath.Join(home, ".clawfirm", "memory")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
@@ -1604,7 +1794,7 @@ func (a *App) SyncMemory() error {
 // GetMemoryDir returns the path to the memory directory.
 func (a *App) GetMemoryDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".pi-go", "memory")
+	return filepath.Join(home, ".clawfirm", "memory")
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1614,7 +1804,7 @@ func saveConfig(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".clawfirm")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -1664,13 +1854,12 @@ func buildRuntimeInfo(ac config.AgentConfig) string {
 }
 
 // buildTools resolves a list of tool names to AgentTool instances.
-// db may be nil, in which case vault injection is skipped.
-func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, db *store.DB) []tool.AgentTool {
+// v may be nil, in which case vault injection is skipped.
+func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault) []tool.AgentTool {
 	var vaultEnv func() map[string]string
-	if db != nil {
-		v := db.Vault()
+	if v != nil {
 		vaultEnv = func() map[string]string {
-			m, _ := v.Map()
+			m, _ := v.Env()
 			return m
 		}
 	}
@@ -1706,7 +1895,7 @@ func (a *App) buildAgentForCron(agentName string) (*agent.Agent, error) {
 		maxTokens = 4096
 	}
 	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
-	tools := buildTools(ac.Tools, memMgr, cfg, a.db)
+	tools := buildTools(ac.Tools, memMgr, cfg, a.vault)
 
 	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
 	compacted := skill.CompactSkillPaths(skillResult.Skills)
@@ -1870,13 +2059,13 @@ func (a *App) TriggerCronJob(jobID string) error {
 
 // ─── WhipFlow file browsing ───────────────────────────────────────────────────
 
-// ListWhipFiles returns all .whip files in ~/.pi-go/workflows/.
+// ListWhipFiles returns all .whip files in ~/.clawfirm/workflows/.
 func (a *App) ListWhipFiles() ([]string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-	dir := filepath.Join(home, ".pi-go", "workflows")
+	dir := filepath.Join(home, ".clawfirm", "workflows")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -1896,7 +2085,7 @@ func (a *App) ListWhipFiles() ([]string, error) {
 // GetWhipFileContent returns the content of a .whip file.
 func (a *App) GetWhipFileContent(path string) (string, error) {
 	home, _ := os.UserHomeDir()
-	whipDir := filepath.Join(home, ".pi-go", "workflows")
+	whipDir := filepath.Join(home, ".clawfirm", "workflows")
 	// security: only allow files inside workflows dir
 	abs, err := filepath.Abs(path)
 	if err != nil || !strings.HasPrefix(abs, whipDir) {

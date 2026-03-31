@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ai-gateway/pi-go/auth/oauth"
+	"github.com/ai-gateway/clawfirm/auth/oauth"
 )
 
 // envKeyMap maps provider IDs to the environment variable holding the API key.
@@ -79,7 +79,7 @@ func (r *AuthResolver) ResolveAPIKey(ctx context.Context, provider string) (stri
 	}
 
 	// 4. Keychain
-	if key, err := KeychainGet("pi-go", provider); err == nil && key != "" {
+	if key, err := KeychainGet("clawfirm", provider); err == nil && key != "" {
 		return key, nil
 	}
 

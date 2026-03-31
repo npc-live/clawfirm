@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/pi-go/config"
-	"github.com/ai-gateway/pi-go/whipflow/ast"
-	"github.com/ai-gateway/pi-go/whipflow/parser"
+	"github.com/ai-gateway/clawfirm/config"
+	"github.com/ai-gateway/clawfirm/whipflow/ast"
+	"github.com/ai-gateway/clawfirm/whipflow/parser"
 )
 
 // ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ type Interpreter struct {
 	blocks       map[string]*ast.BlockDefinition
 	providerCache map[string]Provider
 
-	// pi-go config for resolving providers from ~/.pi-go/config.yml.
+	// clawfirm config for resolving providers from ~/.clawfirm/config.yml.
 	piConfig *config.Config
 
 	// Native provider registry (injected from outside, e.g. app integration).
@@ -104,7 +104,7 @@ func WithSessionProgressCallback(cb func(SessionProgress)) InterpreterOption {
 	return func(i *Interpreter) { i.onSessionProgress = cb }
 }
 
-// WithPiConfig sets the pi-go config for resolving providers from ~/.pi-go/config.yml.
+// WithPiConfig sets the clawfirm config for resolving providers from ~/.clawfirm/config.yml.
 func WithPiConfig(cfg *config.Config) InterpreterOption {
 	return func(i *Interpreter) { i.piConfig = cfg }
 }
@@ -174,17 +174,43 @@ func (interp *Interpreter) Execute(program *ast.Program) (*ExecutionResult, erro
 	}
 
 	// Execute each top-level statement.
+	// Wrap in a closure to recover ControlFlow panics (throw/return) that
+	// escape without a surrounding try-catch or block call.
 	var execErr error
-	for _, stmt := range program.Statements {
-		if interp.env.HasTimedOut() {
-			execErr = fmt.Errorf("execution timed out after %dms", interp.env.Config.TotalExecutionTimeout)
-			break
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if cf, ok := r.(ControlFlow); ok {
+					switch cf.Type {
+					case "throw":
+						if cf.Err != nil {
+							execErr = cf.Err
+						} else {
+							execErr = fmt.Errorf("%v", cf.Value)
+						}
+					case "return":
+						// Top-level return — not an error, just stop execution.
+					default:
+						// break/continue at top level is a programming error.
+						execErr = fmt.Errorf("unexpected %s outside loop", cf.Type)
+					}
+					return
+				}
+				panic(r) // re-panic for non-ControlFlow (real bugs)
+			}
+		}()
+
+		for _, stmt := range program.Statements {
+			if interp.env.HasTimedOut() {
+				execErr = fmt.Errorf("execution timed out after %dms", interp.env.Config.TotalExecutionTimeout)
+				return
+			}
+			if err := interp.executeStatement(stmt); err != nil {
+				execErr = err
+				return
+			}
 		}
-		if err := interp.executeStatement(stmt); err != nil {
-			execErr = err
-			break
-		}
-	}
+	}()
 
 	// Build the execution result.
 	ctx := interp.env.Context.CaptureContext()

@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/ai-gateway/pi-go/tool"
+	"github.com/ai-gateway/clawfirm/tool"
 )
 
 // mockToolWrapper is a simple AgentTool adapter used across agent tests.

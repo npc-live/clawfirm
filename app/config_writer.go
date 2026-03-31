@@ -3,7 +3,7 @@ package app
 import (
 	"os"
 
-	"github.com/ai-gateway/pi-go/config"
+	"github.com/ai-gateway/clawfirm/config"
 	"gopkg.in/yaml.v3"
 )
 

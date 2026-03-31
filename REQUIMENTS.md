@@ -210,7 +210,7 @@
 ### 数据存储（store/）
 
 - [ ] SQLite 初始化（`modernc.org/sqlite` 纯 Go，无 CGO）
-- [ ] 数据库路径：`~/.pi-go/data.db`
+- [ ] 数据库路径：`~/.clawfirm/data.db`
 - [ ] Migration 系统（嵌入 SQL，启动时自动执行）
 - [ ] `MessageStore`
   - [ ] 保存 / 查询消息记录（role / content / channel / user / timestamp）

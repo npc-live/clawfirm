@@ -1,4 +1,4 @@
-// quickstart — the simplest pi-go program.
+// quickstart — the simplest clawfirm program.
 //
 // Sends "1+1" to the LLM and prints the answer.
 //
@@ -10,7 +10,7 @@
 //	# Option B: native Anthropic key (sk-ant-...)
 //	ANTHROPIC_API_KEY=sk-ant-... go run ./examples/quickstart
 //
-//	# Option C: config file  ~/.pi-go/config.yml  (see config/example.yml)
+//	# Option C: config file  ~/.clawfirm/config.yml  (see config/example.yml)
 //	go run ./examples/quickstart
 package main
 
@@ -19,12 +19,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/config"
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/provider/anthropic"
-	"github.com/ai-gateway/pi-go/provider/zenmux"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/config"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/provider/zenmux"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func main() {

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/auth"
-	"github.com/ai-gateway/pi-go/provider/anthropic"
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/auth"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func main() {

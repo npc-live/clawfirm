@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // SummarizeFunc is called to summarize a list of messages into a string.

@@ -1,6 +1,6 @@
 package zenmux
 
-import "github.com/ai-gateway/pi-go/types"
+import "github.com/ai-gateway/clawfirm/types"
 
 // BuiltinModels returns the default ZenMux model list.
 // ZenMux aggregates models from multiple providers; slugs use the format

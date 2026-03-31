@@ -1,5 +1,5 @@
 // Package agentbuilder provides shared helpers for constructing LLM providers,
-// tool sets, and agents from pi-go config. It is the single source of truth
+// tool sets, and agents from clawfirm config. It is the single source of truth
 // used by cmd/gateway, cmd/pi, app, and the whipflow runtime.
 package agentbuilder
 
@@ -9,16 +9,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/config"
-	"github.com/ai-gateway/pi-go/memory"
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/provider/anthropic"
-	"github.com/ai-gateway/pi-go/provider/gemini"
-	"github.com/ai-gateway/pi-go/provider/ollama"
-	"github.com/ai-gateway/pi-go/provider/openai"
-	"github.com/ai-gateway/pi-go/provider/zenmux"
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/tool/builtin"
+	"github.com/ai-gateway/clawfirm/config"
+	"github.com/ai-gateway/clawfirm/memory"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/provider/gemini"
+	"github.com/ai-gateway/clawfirm/provider/ollama"
+	"github.com/ai-gateway/clawfirm/provider/openai"
+	"github.com/ai-gateway/clawfirm/provider/zenmux"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/tool/builtin"
 )
 
 // BuildProviders constructs one LLMProvider per entry in cfg.Providers.

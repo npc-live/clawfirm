@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/config"
-	llmprovider "github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/provider/anthropic"
-	"github.com/ai-gateway/pi-go/provider/gemini"
-	"github.com/ai-gateway/pi-go/provider/ollama"
-	"github.com/ai-gateway/pi-go/provider/openai"
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/config"
+	llmprovider "github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/provider/gemini"
+	"github.com/ai-gateway/clawfirm/provider/ollama"
+	"github.com/ai-gateway/clawfirm/provider/openai"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // Provider defines the interface for executing AI sessions.
@@ -113,7 +113,7 @@ var builtinPresets = map[string]CliConfig{
 //
 // Resolution order:
 //  1. nativeRegistry (injected programmatically, e.g. from app integration)
-//  2. pi-go agents in config.yml — matched by agent name, creates NativeProvider
+//  2. clawfirm agents in config.yml — matched by agent name, creates NativeProvider
 //  3. whipflow.cli_providers in config.yml
 //  4. Built-in CLI presets (claude-code, claude, opencode, aider, pi, fetch)
 //  5. "custom:bin args..." format
@@ -126,7 +126,7 @@ func ResolveProvider(name string, piCfg *config.Config, nativeRegistry map[strin
 	}
 
 	if piCfg != nil {
-		// 2. Check pi-go agents — each agent is a native provider.
+		// 2. Check clawfirm agents — each agent is a native provider.
 		if ac, ok := piCfg.Agent(name); ok {
 			return newNativeProviderFromAgent(ac, piCfg)
 		}
@@ -163,7 +163,7 @@ func ResolveProvider(name string, piCfg *config.Config, nativeRegistry map[strin
 	return nil, fmt.Errorf("unknown provider: %s", name)
 }
 
-// newNativeProviderFromAgent creates a NativeProvider from a pi-go AgentConfig +
+// newNativeProviderFromAgent creates a NativeProvider from a clawfirm AgentConfig +
 // the matching ProviderConfig in the top-level providers map.
 func newNativeProviderFromAgent(ac config.AgentConfig, piCfg *config.Config) (*NativeProvider, error) {
 	provID := ac.Provider
@@ -223,7 +223,7 @@ func (p *CliProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enable
 // NativeProvider — in-process execution via agent.Agent + provider.LLMProvider
 // ---------------------------------------------------------------------------
 
-// NativeProvider implements the Provider interface using pi-go's native
+// NativeProvider implements the Provider interface using clawfirm's native
 // agent.Agent and provider.LLMProvider, executing sessions in-process
 // instead of spawning external CLI processes.
 type NativeProvider struct {
@@ -279,7 +279,7 @@ func NewNativeProvider(name, modelID string, llmProv llmprovider.LLMProvider, op
 // ProviderName returns the display name.
 func (np *NativeProvider) ProviderName() string { return np.name }
 
-// ExecuteSession runs a session using pi-go's agent loop in-process.
+// ExecuteSession runs a session using clawfirm's agent loop in-process.
 func (np *NativeProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error) {
 	prompt := buildPrompt(spec, enableTools, allowedTools, skillPrompts, false)
 
@@ -368,10 +368,10 @@ func extractAgentOutput(messages []types.Message) string {
 }
 
 // ---------------------------------------------------------------------------
-// buildLLMProvider — creates LLMProvider from pi-go ProviderConfig
+// buildLLMProvider — creates LLMProvider from clawfirm ProviderConfig
 // ---------------------------------------------------------------------------
 
-// buildLLMProvider creates an LLMProvider from a pi-go ProviderConfig.
+// buildLLMProvider creates an LLMProvider from a clawfirm ProviderConfig.
 // Config values are already env-expanded by config.Load().
 func buildLLMProvider(pc config.ProviderConfig) (llmprovider.LLMProvider, error) {
 	apiKey := pc.APIKey
@@ -507,7 +507,7 @@ func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv fu
 	cmd := exec.CommandContext(ctx, binPath, args...)
 
 	// Strip CLAUDECODE so that nested claude invocations are not rejected
-	// when pi-go itself is running inside a Claude Code terminal session.
+	// when clawfirm itself is running inside a Claude Code terminal session.
 	// Also inject vault secrets as environment variables.
 	filtered := make([]string, 0, len(os.Environ()))
 	for _, kv := range os.Environ() {

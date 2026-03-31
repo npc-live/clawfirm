@@ -1,4 +1,4 @@
-// Package webchat implements a WebSocket-based chat channel for pi-go.
+// Package webchat implements a WebSocket-based chat channel for clawfirm.
 //
 // Protocol:
 //
@@ -22,8 +22,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"github.com/ai-gateway/pi-go/gateway"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/gateway"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 const channelID = "webchat"

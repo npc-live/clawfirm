@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // CompressorConfig controls when and how context compression is triggered.

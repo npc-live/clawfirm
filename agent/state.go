@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // AgentState is a read-only snapshot of the agent's current state.

@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/whipflow/ast"
-	"github.com/ai-gateway/pi-go/whipflow/lexer"
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/whipflow/ast"
+	"github.com/ai-gateway/clawfirm/whipflow/lexer"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 // ---------------------------------------------------------------------------

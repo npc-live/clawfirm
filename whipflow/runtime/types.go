@@ -3,7 +3,7 @@ package runtime
 import (
 	"context"
 
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 // RuntimeValue is the universal value type in WhipFlow (Go's any/interface{}).

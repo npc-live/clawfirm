@@ -3,7 +3,7 @@ package gateway
 import (
 	"time"
 
-	"github.com/ai-gateway/pi-go/store"
+	"github.com/ai-gateway/clawfirm/store"
 )
 
 // FreshnessConfig controls when a session is considered stale and should be reset.

@@ -28,8 +28,8 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 	"go.mau.fi/whatsmeow/util/keys"
 
-	"github.com/ai-gateway/pi-go/gateway"
-	piTypes "github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/gateway"
+	piTypes "github.com/ai-gateway/clawfirm/types"
 )
 
 const channelID = "whatsapp"
@@ -105,7 +105,7 @@ func (c *Channel) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(home, ".pi-go")
+	dir := filepath.Join(home, ".clawfirm")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}

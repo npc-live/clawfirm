@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // makeUserMsg creates a UserMessage with the given timestamp (ms).

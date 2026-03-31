@@ -13,9 +13,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/provider"
-	"github.com/ai-gateway/pi-go/provider/openai"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/openai"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 const (

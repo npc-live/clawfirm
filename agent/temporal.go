@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // TemporalInjector is a TransformContext middleware that prepends a

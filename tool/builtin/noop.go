@@ -3,7 +3,7 @@ package builtin
 import (
 	"context"
 
-	"github.com/ai-gateway/pi-go/tool"
+	"github.com/ai-gateway/clawfirm/tool"
 )
 
 // Noop is a built-in tool that does nothing and returns an empty result.

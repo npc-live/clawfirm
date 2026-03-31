@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/pi-go/tool"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 func makeRegistry(tools ...tool.AgentTool) *tool.Registry {

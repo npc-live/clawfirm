@@ -3,7 +3,7 @@ package testutil
 import (
 	"time"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // UserTextMessage creates a UserMessage containing a single text block.

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ai-gateway/pi-go/whipflow/ast"
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/whipflow/ast"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 // ValidationError represents a validation issue.

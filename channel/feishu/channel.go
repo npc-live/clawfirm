@@ -19,8 +19,8 @@ import (
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 	larkws "github.com/larksuite/oapi-sdk-go/v3/ws"
 
-	"github.com/ai-gateway/pi-go/gateway"
-	piTypes "github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/gateway"
+	piTypes "github.com/ai-gateway/clawfirm/types"
 )
 
 const channelID = "feishu"

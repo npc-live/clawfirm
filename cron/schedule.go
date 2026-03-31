@@ -1,4 +1,4 @@
-// Package cron provides a scheduled-job runner for pi-go agents.
+// Package cron provides a scheduled-job runner for clawfirm agents.
 package cron
 
 import (

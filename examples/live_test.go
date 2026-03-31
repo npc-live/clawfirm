@@ -8,9 +8,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/agent"
-	"github.com/ai-gateway/pi-go/provider/anthropic"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // TestLiveAnthropic tests the agent against the Anthropic API.

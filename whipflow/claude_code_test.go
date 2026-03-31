@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/whipflow"
+	"github.com/ai-gateway/clawfirm/whipflow"
 )
 
 func TestClaudeCodeProvider(t *testing.T) {

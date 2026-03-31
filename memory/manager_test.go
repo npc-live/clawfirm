@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/store"
+	"github.com/ai-gateway/clawfirm/store"
 )
 
 // ─── helpers ─────────────────────────────────────────────────────────────────

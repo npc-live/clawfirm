@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ai-gateway/pi-go/config"
+	"github.com/ai-gateway/clawfirm/config"
 )
 
 const sampleYAML = `

@@ -3,7 +3,7 @@ package tool
 import (
 	"context"
 
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // ToolUpdate carries an incremental update from a tool during execution.

@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/ai-gateway/pi-go/whipflow/ast"
+	"github.com/ai-gateway/clawfirm/whipflow/ast"
 )
 
 func TestParseSimpleSession(t *testing.T) {

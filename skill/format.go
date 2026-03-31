@@ -25,7 +25,7 @@ func FormatForPrompt(skills []Skill, skillDir string) string {
 		}
 	}
 	if skillDir == "" {
-		skillDir = "~/.pi-go/skills/"
+		skillDir = "~/.clawfirm/skills/"
 	}
 
 	var b strings.Builder

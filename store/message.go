@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ai-gateway/pi-go/message"
-	"github.com/ai-gateway/pi-go/types"
+	"github.com/ai-gateway/clawfirm/message"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // MessageRecord is a single raw message row from the database.

@@ -1,6 +1,6 @@
 BIN_DIR  := bin
 GO       := go
-CMDS     := func gateway wschat
+CMDS     := clawfirm func gateway wschat
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 .PHONY: all clean $(CMDS) desktop frontend app install
@@ -19,19 +19,19 @@ desktop:
 	cd cmd/desktop && wails build -o ../../$(BIN_DIR)/desktop
 
 # --- macOS .app bundle ---
-# Produces: bin/pi-go.app  (drag to /Applications to install)
+# Produces: bin/clawfirm.app  (drag to /Applications to install)
 # Embeds a darwin/universal `func` binary into app/assets/func before compiling.
 app: func-universal
 	cd cmd/desktop && wails build \
-		-ldflags "-X github.com/ai-gateway/pi-go/app.Version=$(VERSION)" \
+		-ldflags "-X github.com/ai-gateway/clawfirm/app.Version=$(VERSION)" \
 		-platform darwin/universal \
-		-o pi-go
+		-o clawfirm
 	@mkdir -p $(BIN_DIR)
-	@rm -rf $(BIN_DIR)/pi-go.app
-	@mv cmd/desktop/build/bin/pi-go.app $(BIN_DIR)/pi-go.app
+	@rm -rf $(BIN_DIR)/clawfirm.app
+	@mv cmd/desktop/build/bin/clawfirm.app $(BIN_DIR)/clawfirm.app
 	@echo ""
-	@echo "✓ Built: $(BIN_DIR)/pi-go.app  ($(VERSION))"
-	@echo "  Install: cp -r $(BIN_DIR)/pi-go.app /Applications/"
+	@echo "✓ Built: $(BIN_DIR)/clawfirm.app  ($(VERSION))"
+	@echo "  Install: cp -r $(BIN_DIR)/clawfirm.app /Applications/"
 
 # Build func as a darwin/universal binary and embed it into the app package.
 func-universal:
@@ -46,10 +46,10 @@ func-universal:
 
 # --- Quick install to /Applications ---
 install: app
-	@echo "Installing pi-go.app to /Applications…"
-	@rm -rf /Applications/pi-go.app
-	@cp -r $(BIN_DIR)/pi-go.app /Applications/pi-go.app
-	@echo "✓ Installed: /Applications/pi-go.app"
+	@echo "Installing clawfirm.app to /Applications…"
+	@rm -rf /Applications/clawfirm.app
+	@cp -r $(BIN_DIR)/clawfirm.app /Applications/clawfirm.app
+	@echo "✓ Installed: /Applications/clawfirm.app"
 
 # --- Helpers ---
 clean:

@@ -3,7 +3,7 @@ package lexer
 import (
 	"testing"
 
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 func TestTokenizeBasicKeywords(t *testing.T) {

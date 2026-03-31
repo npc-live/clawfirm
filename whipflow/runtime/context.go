@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/pi-go/whipflow/token"
+	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
 
 // variable stored in a scope.
