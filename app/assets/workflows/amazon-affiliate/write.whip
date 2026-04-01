@@ -1,0 +1,150 @@
+# whips/amazon-affiliate/write.whip
+# 功能：生成测评文章 —— 基于素材包写出完整的 SEO 优化测评文
+# 调用方：research.whip 完成后自动触发 / 手动指定关键词
+# 前置：data/research-[keyword].json 存在
+# 输出：data/articles.json 新增条目，docs/drafts/[keyword].md
+
+agent writer:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  顶级亚马逊测评文撰写专家。写出真实、有说服力、对用户有价值的内容。
+  核心原则：先帮用户做决策，再推荐产品。文章必须回答"这个产品值得买吗？"
+  语言自然流畅，避免 AI 味，用用户的真实语言描述痛点和解决方案。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "SEO 内容审核专家。检查文章质量、SEO 要素、联盟链接合规性，输出 APPROVED 或 NEEDS_REVISION。"
+
+# ── 读取素材 ──
+let research = session: writer
+  prompt: """
+  读取写作素材：
+  1. 读取 data/current-run.json 获取目标关键词
+  2. 读取 data/research-{keyword}.json
+  3. 读取 data/affiliate-config.json（获取 amazon_tag、写作风格）
+  4. 读取 docs/niche-strategy.md（获取文章模板和风格指南）
+
+  输出完整素材包。
+  """
+
+# ── 生成文章大纲 ──
+let outline = session: writer
+  prompt: """
+  基于素材生成文章大纲：
+
+  素材：{research}
+
+  根据 article_type 选择对应结构：
+
+  ▸ best_x 类（"Best [Product] in [Year]"）：
+    H1: Best [Products] in [Year]: [X] Options Reviewed
+    - 简介（100字，包含主关键词，说明谁适合读这篇文章）
+    - Quick Picks 表格（产品名、价格、适合人群、评分）
+    - 每个产品详评（H2: [Rank]. [Product Name] — Best for [use case]）
+      * 产品图 + 价格按钮
+      * 一句话总结
+      * 优点/缺点（bullet）
+      * 详细评测（200-300字）
+      * Who it's for
+    - Buying Guide（关键购买因素，H2）
+    - FAQ（5个常见问题）
+    - 结论
+
+  ▸ comparison 类（"X vs Y"）：
+    - 简介 + 一句话结论
+    - 快速对比表（核心规格）
+    - 详细对比（每个维度一个 H2）
+    - Who should buy X / Who should buy Y
+    - 结论
+
+  输出详细大纲（含每节预计字数）。
+  """
+
+# ── 生成完整文章 ──
+let article = session: writer
+  prompt: """
+  按大纲写出完整文章：
+
+  素材：{research}
+  大纲：{outline}
+  Amazon tracking tag：{research.amazon_tag}
+
+  写作要求：
+  - 总字数：{research.recommended_length} 字（英文单词数）
+  - 语气：informative but conversational，避免过度营销语言
+  - 每个产品推荐必须基于真实数据（评分、评论数、规格）
+  - 联盟链接格式：https://www.amazon.com/dp/{ASIN}?tag={amazon_tag}
+  - 文章开头放 disclosure："As an Amazon Associate, I earn from qualifying purchases."
+  - 主关键词在 H1、首段、至少2个 H2 中出现
+  - LSI 关键词自然分布
+  - 每个产品 H2 包含产品名（有助于长尾排名）
+
+  写入 docs/drafts/{keyword}.md（Markdown 格式，含 frontmatter）：
+  ---
+  title: "[文章标题]"
+  keyword: "[主关键词]"
+  date: "[今日日期]"
+  status: draft
+  word_count: N
+  ---
+
+  输出文章全文。
+  """
+
+# ── 质量审核 ──
+let review = session: validator
+  prompt: """
+  审核文章质量：
+  {article}
+
+  检查：
+  1. 主关键词是否在 H1、首段出现？
+  2. 文章是否真正解答了用户搜索意图？
+  3. 产品推荐是否有数据支撑（不是空洞夸赞）？
+  4. 联盟链接是否都包含 tracking tag？
+  5. Disclosure 是否在文章开头？
+  6. 是否有明显 AI 生成痕迹（重复表达、过于完美的段落结构）？
+  7. 字数是否达标？
+
+  输出 "ARTICLE_APPROVED" 或 "ARTICLE_NEEDS_REVISION: [具体问题]"
+  """
+
+loop until **review 包含 ARTICLE_APPROVED** (max: 2):
+  article = session: writer
+    prompt: "根据审核意见修改文章：{review}，更新 docs/drafts/{keyword}.md。"
+  review = session: validator
+    prompt: "重新审核：{article}，输出 ARTICLE_APPROVED 或 ARTICLE_NEEDS_REVISION。"
+
+# ── 完成 ──
+session: writer
+  prompt: """
+  write.whip 完成。
+
+  读取 data/articles.json（不存在则 []），追加：
+  {
+    "id": "[uuid]",
+    "keyword": "...",
+    "title": "...",
+    "draft_path": "docs/drafts/[keyword].md",
+    "word_count": N,
+    "products": [ASIN 列表],
+    "status": "draft",
+    "created_at": "[ISO]"
+  }
+  写回文件。
+
+  更新 data/affiliate-config.json 对应关键词 status 为 "written"。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"write","data":{
+    "keyword": "...",
+    "word_count": N,
+    "draft_path": "docs/drafts/[keyword].md",
+    "ready_to_publish": true
+  }}
+  """

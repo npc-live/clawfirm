@@ -1,0 +1,103 @@
+# whips/domains/scan.whip
+# 功能：扫描过期域名 —— 从过期列表中筛选高价值域名，输出值得抢注的候选
+# 调用方：scheduler.ts 每日定时
+# 前置：data/domain-config.json 存在
+# 输出：data/domain-watchlist.json 新增候选域名
+
+agent scanner:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  过期域名扫描专家。从海量过期域名中快速识别高价值标的，
+  优先筛选：有历史反链、含高价值关键词、发音好记、商标安全的域名。
+  每个推荐必须附估值依据和潜在买家描述。
+  """
+
+# ── 读取配置 ──
+let config = session: scanner
+  prompt: """
+  读取配置：
+  1. 读取 data/domain-config.json
+  2. 读取 data/portfolio.json，统计已持有域名数量和总成本
+  3. 计算可用预算 = budget_usd - 已投入资金
+
+  输出：{ niches, tlds, keyword_library, min_valuation_usd, max_reg_fee_usd, available_budget }
+  """
+
+# ── 抓取过期域名列表 ──
+let expired_domains = session: scanner
+  prompt: """
+  从过期域名数据源获取今日到期域名：
+
+  配置：{config}
+
+  数据源（依次尝试）：
+  1. ExpiredDomains.net：搜索各 tld 今日到期，筛选有 Majestic TF > 5 的
+  2. GoDaddy Auctions：搜索今日到期拍卖
+  3. NameJet / Snapnames：搜索预抢注列表
+
+  初筛条件（快速过滤，减少后续深度分析量）：
+  - 长度 <= 15 字符
+  - 只含字母和连字符（无数字，除非是特定场景如 web3）
+  - 不含连续重复字母（aaa, bbb）
+  - 后缀在目标 tlds 列表中
+  - 含 keyword_library 中的任意关键词（宽松匹配）
+
+  输出候选域名列表（预计 50-200 个）。
+  """
+
+# ── 深度评估 ──
+let evaluated = session: scanner
+  prompt: """
+  对候选域名进行深度评估：
+
+  候选列表：{expired_domains}
+  配置：{config}
+
+  对每个候选域名：
+
+  【历史价值评估】
+  - whois 查询注册历史（注册年龄越老越好）
+  - Wayback Machine 检查是否有实质内容历史
+  - Majestic / Ahrefs 检查反链数量和质量
+  - Google 搜索 site:domain.com 是否有收录记录
+
+  【关键词价值评估】
+  - 域名对应的搜索关键词月搜索量
+  - 行业 CPC（用 Google Keyword Planner 或 Semrush 数据估算）
+  - 估值公式：base = CPC × monthly_search × 0.1，age_bonus = years × 50
+
+  【商标安全检查】
+  - USPTO / CNIPA 搜索是否有活跃商标注册
+  - 避免与知名品牌相似的域名
+
+  【潜在买家分析】
+  - 谁会买这个域名？（创业公司、行业企业、域名投资人）
+  - 市场深度（同类域名过去12个月成交了几个）
+
+  过滤：estimated_value >= {config.min_valuation_usd}
+
+  读取 data/domain-watchlist.json（不存在则 []），追加通过评估的域名：
+  {
+    id: "[uuid]", ts: "[ISO]",
+    domain, tld, length,
+    age_years, backlinks,
+    keywords, monthly_search, cpc,
+    estimated_value_usd,
+    trademark_risk: "low"|"medium"|"high",
+    potential_buyers: [...],
+    drop_date, registrar_source,
+    status: "pending"
+  }
+  写回文件（去重）。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"scan","data":{
+    "domains_scanned": N,
+    "passed_filter": N,
+    "avg_estimated_value": X,
+    "top_domain": "...",
+    "top_value": X
+  }}
+  """

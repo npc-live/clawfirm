@@ -1,0 +1,158 @@
+# whips/daily-content.whip
+# 功能：每日内容创作 —— 生成今日各平台内容草稿并通过合规审核
+# 调用方：Tauri App "创作今日内容" 按钮 / scheduler.ts 每日定时
+# 前置：setup.whip 已完成（data/config.json 已配置，strategy 已生成）
+# 输出：data/content-drafts.json 中 status=approved 的今日草稿
+
+agent creator:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write", "edit"]
+  prompt: """
+  顶级自媒体内容创作者。精准匹配各平台爆款风格：
+  - 小红书：标题带 emoji + 痛点，正文分段，结尾强引导互动
+  - 微博：简洁有力，话题标签精准，制造转发欲望
+  - B站：标题数字化/悬念化，内容深度扎实
+  - Twitter：英文精炼，hashtag 到位，引发共鸣与转发
+  - Telegram：深度内容，社群感强，独家价值
+  内容必须真实有价值，拒绝空洞和虚假宣传。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "内容合规审核专家。严格检查价值性、吸引力、合规性、格式规范和账号定位一致性。"
+
+# ── 读取配置 ──
+let run_config = session: creator
+  prompt: """
+  读取当前运行配置：
+  1. 读取 data/current-run.json 获取 run_id
+  2. 读取 data/config.json 获取账号和风格配置
+  3. 读取 docs/content-strategy.md
+  4. 读取 docs/content-calendar.md（如果存在）
+
+  输出：{ run_id, niche, tone_style, target_audience, strategy_summary, today: "YYYY-MM-DD",
+          platforms: [非空账号的平台列表] }
+  """
+
+# ── 生成/更新今日内容日历 ──
+let today_calendar = session: creator
+  prompt: """
+  为今天生成内容日历条目：
+
+  配置：{run_config}
+
+  读取 data/content-drafts.json（不存在则视为 []）：
+  检查是否已有 calendar_day=today 且 run_id=run_id 的记录：
+  - 如果有记录（之前生成过）：直接输出现有计划
+  - 如果没有记录：根据 docs/content-strategy.md 的内容矩阵，为今天每个平台规划1条内容
+
+  为每个平台（从 run_config.platforms 列表）确定今日主题/方向/关键词。
+  在 data/content-drafts.json 中为每个平台追加条目：
+  { id: "[uuid]", run_id, calendar_day: today, platform, status: "pending", created_at: "[ISO]", updated_at: "[ISO]" }
+
+  输出今日内容计划（平台 → 主题映射）。
+  """
+
+# ── 批量创作今日内容 ──
+let content_drafts = session: creator
+  prompt: """
+  根据今日内容计划，为每个平台创作完整草稿：
+
+  配置：{run_config}
+  今日计划：{today_calendar}
+  内容策略：从 docs/content-strategy.md 读取
+
+  为每个平台生成符合规范的草稿：
+
+  ▸ 小红书（xhs）：
+    - 标题：50 字内，含 emoji + 痛点/好奇心钩子
+    - 正文：800-1000 字，分段，emoji 点缀，结尾3个引导互动的问题
+    - 标签：10 个（1 大流量词 + 5 垂直词 + 4 精准词）
+
+  ▸ 微博：
+    - 正文：140 字内，带话题，结尾引导转发/评论
+    - 话题标签：2-3 个
+
+  ▸ B站：
+    - 标题：含数字/痛点/悬念，50 字内
+    - 简介：200 字，关键词自然植入
+    - Tags：10 个
+
+  ▸ Twitter：
+    - 推文：280 字符内，英文，2-3 个 hashtag
+
+  ▸ Telegram：
+    - 深度内容：500-800 字，含独家观点，Markdown 格式
+
+  更新 data/content-drafts.json 中对应条目的 body、title、tags、status="draft"。
+  同时写入 docs/content-drafts.md（按日期分组，追加今日内容）。
+
+  输出所有草稿内容（供后续 validator 审核）。
+  """
+
+# ── 合规审核 ──
+let content_review = session: validator
+  prompt: """
+  对今日创作内容进行全面合规审核：
+
+  草稿：{content_drafts}
+  账号定位：{run_config}
+
+  逐条检查每个平台的草稿：
+  1. 内容是否有实际价值（不是空洞废话）？
+  2. 标题是否有足够吸引力？
+  3. 是否含敏感词、违规内容、夸大宣传、虚假信息？
+  4. 格式是否符合对应平台规范？
+  5. 是否与账号定位和风格一致？
+
+  更新 data/content-drafts.json 中对应条目：
+  - 通过：status="approved"
+  - 不通过：status="rejected", rejection_reason="[原因]"
+
+  输出：
+  "CONTENT_APPROVED: [通过的平台列表]"
+  "CONTENT_REJECTED: [被拒平台 + 原因 + 修改建议]"（如有）
+  """
+
+loop until **content_review 中无 CONTENT_REJECTED** (max: 3):
+  content_drafts = session: creator
+    prompt: """
+    修改以下被审核拒绝的内容：
+    {content_review}
+
+    针对每条拒绝理由重新创作，保持与已通过内容的整体风格一致。
+    更新 data/content-drafts.json（status="draft"）和 docs/content-drafts.md。
+    """
+  content_review = session: validator
+    prompt: """
+    重新审核修改后的被拒内容：
+    {content_drafts}
+
+    更新 data/content-drafts.json 状态。
+    输出 "CONTENT_APPROVED" 或 "CONTENT_REJECTED: [原因]"
+    """
+
+# ── 完成 ──
+session: validator
+  prompt: """
+  daily-content.whip 执行完成。
+
+  读取 data/content-drafts.json，筛选 run_id=[run_id] 且 calendar_day=today 的条目，
+  统计各平台状态。
+
+  输出 WorkflowEvent（JSON-line，供 Tauri 捕获）：
+  {"ts":"[ISO]","event":"stage_complete","runId":[id],"stage":"daily-content","data":{
+    "approved_count": N,
+    "platforms": [...],
+    "doc_path": "docs/content-drafts.md"
+  }}
+
+  如果仍有 rejected 草稿（超过 3 次修订），输出 approval_needed 事件：
+  {"ts":"[ISO]","event":"approval_needed","runId":[id],"stage":"daily-content","data":{
+    "message": "以下平台内容需人工审核",
+    "rejected_platforms": [...]
+  }}
+  """

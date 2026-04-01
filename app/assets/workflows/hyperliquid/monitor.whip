@@ -1,0 +1,117 @@
+# whips/hyperliquid/monitor.whip
+# 功能：持续监控循环 —— 每 60s 触发一次 scan + trade，管理持仓止损/止盈
+# 调用方：手动启动，长期运行
+# 前置：setup.whip 已完成
+# 输出：持续更新 data/hl-trades.json，每轮输出 WorkflowEvent
+
+agent watcher:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  持仓监控专家。实时检查未平仓仓位是否触及止损或止盈价格，
+  及时平仓锁定结果。决策必须基于实时价格，不做预测。
+  """
+
+agent orchestrator:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: """
+  工作流协调专家。按时间间隔触发扫描和交易循环，
+  记录每轮运行状态。发现异常时记录错误并继续下一轮。
+  """
+
+# ── 读取配置 ──
+let config = session: orchestrator
+  prompt: """
+  读取配置：
+  1. 读取 data/hl-config.json
+  2. 读取 data/hl-trades.json（不存在则 []），统计当前 open 状态的仓位
+
+  输出：{
+    poll_interval_seconds,
+    max_hold_minutes,
+    wallet_address,
+    open_trades: [{ id, coin, direction, entry_price, sl_price, tp_price, size_usd, ts }]
+  }
+  """
+
+# ── 检查持仓止损/止盈 ──
+let position_check = session: watcher
+  prompt: """
+  检查所有未平仓仓位是否需要平仓：
+
+  持仓列表：{config.open_trades}
+  钱包地址：{config.wallet_address}
+
+  1. 获取相关币种实时价格：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d '{"type":"allMids"}'
+
+  2. 对每个 open 仓位检查：
+     a. 止损触发：
+        - long: current_price <= sl_price
+        - short: current_price >= sl_price
+     b. 止盈触发：
+        - long: current_price >= tp_price
+        - short: current_price <= tp_price
+     c. 超时强平：
+        - (now - trade.ts) > {config.max_hold_minutes} 分钟
+
+  3. 对需要平仓的仓位输出：
+     CLOSE: { trade_id, coin, direction, reason: 'sl'|'tp'|'timeout', entry_price, current_price, pnl_pct }
+
+  4. 对仍在持有范围内的仓位输出：
+     HOLD: { trade_id, coin, current_price, unrealized_pnl_pct }
+
+  汇总输出所有平仓指令和持仓状态。
+  """
+
+# ── 执行平仓 ──
+let close_results = session: watcher
+  prompt: """
+  对需要平仓（CLOSE）的仓位执行市价平仓：
+
+  平仓列表：{position_check} 中所有 CLOSE 条目
+
+  对每个平仓：
+  1. 执行反向市价单（reduce_only=true）：
+     HL_PRIVATE_KEY=<私钥> HL_WALLET=<wallet_address> \
+     node scripts/hl-news-trader.js close-position \
+       --coin <coin> --direction <反向> --trade-id <id>
+
+  2. 更新 data/hl-trades.json：
+     找到对应 trade_id，更新：
+     { status: 'closed', closed_at: '[ISO]', close_price: X, pnl_usd: X, close_reason: 'sl'|'tp'|'timeout' }
+
+  每次平仓输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"position_closed","data":{"coin":"...","reason":"...","pnl_usd":X,"pnl_pct":X}}
+  """
+
+# ── 触发新一轮扫描 + 交易 ──
+session: orchestrator
+  prompt: """
+  等待 {config.poll_interval_seconds} 秒后，触发新一轮信号扫描和下单：
+
+  1. 运行 scan.whip（node 调用或直接执行）
+  2. 如果 scan.whip 发现有效信号，运行 trade.whip
+
+  记录本轮运行摘要：
+  读取 data/hl-trades.json，统计：
+  - open_positions: 当前持仓数
+  - today_pnl_usd: 今日已实现 PnL
+  - unrealized_pnl_usd: 浮动盈亏
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"monitor_round","data":{
+    "round": N,
+    "positions_closed": N,
+    "positions_open": N,
+    "today_pnl_usd": X,
+    "next_scan_in": "{poll_interval_seconds}s"
+  }}
+
+  然后循环回到 position_check 步骤（持续运行直到手动停止）。
+  """

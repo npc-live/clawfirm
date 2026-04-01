@@ -8,7 +8,7 @@ import (
 func TestBuildSystemPrompt_None(t *testing.T) {
 	p := SystemPromptParams{PromptMode: PromptModeNone}
 	out := BuildSystemPrompt(p)
-	if out != "You are a personal assistant running inside OpenClaw." {
+	if out != "You are a personal assistant running inside clawfirm." {
 		t.Errorf("none mode should return only intro, got %q", out)
 	}
 }
@@ -22,11 +22,11 @@ func TestBuildSystemPrompt_Full_Sections(t *testing.T) {
 	out := BuildSystemPrompt(p)
 
 	sections := []string{
-		"You are a personal assistant running inside OpenClaw.",
+		"You are a personal assistant running inside clawfirm.",
 		"## Tooling",
 		"## Tool Call Style",
 		"## Safety",
-		"## OpenClaw CLI Quick Reference",
+		"## clawfirm CLI Quick Reference",
 		"## Workspace",
 		"Your working directory is: /workspace",
 		"## Runtime",

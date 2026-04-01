@@ -61,15 +61,20 @@ type anthropicMessage struct {
 }
 
 type anthropicTool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"input_schema"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	InputSchema  map[string]any `json:"input_schema"`
+	CacheControl *cacheControl  `json:"cache_control,omitempty"`
+}
+
+type cacheControl struct {
+	Type string `json:"type"` // "ephemeral"
 }
 
 type anthropicRequest struct {
 	Model     string             `json:"model"`
 	MaxTokens int                `json:"max_tokens"`
-	System    string             `json:"system,omitempty"`
+	System    any                `json:"system,omitempty"` // string or []map[string]any (structured with cache_control)
 	Messages  []anthropicMessage `json:"messages"`
 	Tools     []anthropicTool    `json:"tools,omitempty"`
 	Stream    bool               `json:"stream"`
@@ -116,8 +121,10 @@ type messageDeltaEvent struct {
 type messageStartEvent struct {
 	Message struct {
 		Usage struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	} `json:"message"`
 }
@@ -145,6 +152,11 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 		})
 	}
 
+	// Mark the last tool with cache_control so the entire tools array is cached.
+	if len(tools) > 0 {
+		tools[len(tools)-1].CacheControl = &cacheControl{Type: "ephemeral"}
+	}
+
 	maxTokens := defaultMaxTokens
 	if req.Options.MaxTokens != nil {
 		maxTokens = *req.Options.MaxTokens
@@ -152,10 +164,25 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 		maxTokens = req.Model.MaxTokens
 	}
 
+	// System prompt: use structured block with cache_control for prompt caching.
+	var system any
+	if req.SystemPrompt != "" {
+		system = []map[string]any{
+			{
+				"type":          "text",
+				"text":          req.SystemPrompt,
+				"cache_control": map[string]string{"type": "ephemeral"},
+			},
+		}
+	}
+
+	// Inject message cache breakpoints for conversation history caching.
+	injectMessageCacheBreakpoints(msgs)
+
 	body := anthropicRequest{
 		Model:     req.Model.ID,
 		MaxTokens: maxTokens,
-		System:    req.SystemPrompt,
+		System:    system,
 		Messages:  msgs,
 		Tools:     tools,
 		Stream:    true,
@@ -204,7 +231,12 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("anthropic: HTTP %d: %s", resp.StatusCode, string(body))
+		return nil, &provider.APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(body),
+			Provider:   "anthropic",
+			RetryAfter: provider.ParseRetryAfter(resp),
+		}
 	}
 
 	ch := make(chan types.AssistantMessageEvent, 32)
@@ -240,7 +272,7 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 	// Track content block types by index
 	blockTypes := map[int]string{}
 
-	var inputTokens, outputTokens int
+	var inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int
 
 	emit := func(ev types.AssistantMessageEvent) {
 		select {
@@ -264,6 +296,8 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 			if err := json.Unmarshal([]byte(sseEv.Data), &ms); err == nil {
 				inputTokens = ms.Message.Usage.InputTokens
 				outputTokens = ms.Message.Usage.OutputTokens
+				cacheReadTokens = ms.Message.Usage.CacheReadInputTokens
+				cacheWriteTokens = ms.Message.Usage.CacheCreationInputTokens
 			}
 
 		case "content_block_start":
@@ -389,9 +423,11 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 		case "message_stop":
 			log.Printf("[anthropic-stream] event: message_stop — emitting Done (content=%d blocks)", len(partial.Content))
 			partial.Usage = types.Usage{
-				Input:  inputTokens,
-				Output: outputTokens,
-				Total:  inputTokens + outputTokens,
+				Input:      inputTokens,
+				Output:     outputTokens,
+				CacheRead:  cacheReadTokens,
+				CacheWrite: cacheWriteTokens,
+				Total:      inputTokens + outputTokens,
 			}
 			partial.Timestamp = time.Now().UnixMilli()
 			finalMsg := *partial
@@ -561,9 +597,18 @@ func convertContentBlocks(blocks []types.ContentBlock) ([]map[string]any, error)
 				"input": block.Arguments,
 			}
 		case *types.ThinkingContent:
-			item = map[string]any{
-				"type":     "thinking",
-				"thinking": block.Thinking,
+			if block.ThinkingSignature != "" {
+				// Keep the signature for validation but omit the thinking text
+				// to save tokens. Anthropic requires the signature to be present
+				// in history but the full thinking text is not needed.
+				item = map[string]any{
+					"type":      "thinking",
+					"thinking":  "",
+					"signature": block.ThinkingSignature,
+				}
+			} else {
+				// No signature — skip entirely (e.g. non-Anthropic thinking blocks).
+				continue
 			}
 		default:
 			continue
@@ -571,4 +616,44 @@ func convertContentBlocks(blocks []types.ContentBlock) ([]map[string]any, error)
 		out = append(out, item)
 	}
 	return out, nil
+}
+
+// injectMessageCacheBreakpoints adds cache_control to the second-to-last user
+// message so that the entire prefix up to that point is cached by Anthropic.
+// This means on the next turn, only the final user message + new tool results
+// are "new" tokens — everything before is a cache hit.
+func injectMessageCacheBreakpoints(msgs []anthropicMessage) {
+	var userIndices []int
+	for i, m := range msgs {
+		if m.Role == "user" {
+			userIndices = append(userIndices, i)
+		}
+	}
+	if len(userIndices) < 2 {
+		return // too short to benefit from caching
+	}
+	targetIdx := userIndices[len(userIndices)-2]
+	addCacheControlToLastBlock(&msgs[targetIdx])
+}
+
+// addCacheControlToLastBlock stamps cache_control on the last content block of
+// an anthropicMessage. The Content field is `any` — it may be a string (simple
+// user message) or []map[string]any (structured content blocks).
+func addCacheControlToLastBlock(msg *anthropicMessage) {
+	cc := map[string]string{"type": "ephemeral"}
+	switch content := msg.Content.(type) {
+	case []map[string]any:
+		if len(content) > 0 {
+			content[len(content)-1]["cache_control"] = cc
+		}
+	case string:
+		// Convert from plain string to structured block so we can attach cache_control.
+		msg.Content = []map[string]any{
+			{
+				"type":          "text",
+				"text":          content,
+				"cache_control": cc,
+			},
+		}
+	}
 }

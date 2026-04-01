@@ -1,0 +1,163 @@
+# whips/hyperliquid/trade.whip
+# 功能：读取信号，通过风控检查，向 Hyperliquid 提交永续合约订单
+# 调用方：scan.whip 完成后自动触发 / 手动触发
+# 前置：scan.whip 已完成（data/hl-signals.json 存在且非空）
+# 输出：data/hl-trades.json 新增成交记录
+
+agent risk-manager:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  交易风控专家。在任何下单前执行严格的风险检查。
+  发现任何风控违规立即中止，输出明确的拒绝原因。
+  宁可错过机会，不可超出风控边界。
+  """
+
+agent trader:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  Hyperliquid 订单执行专家。通过 scripts/hl-news-trader.js 执行下单。
+  每笔订单执行后立即写入日志，异常时输出完整错误信息。
+  """
+
+# ── 读取信号和账户状态 ──
+let context = session: risk-manager
+  prompt: """
+  读取当前状态：
+  1. 读取 data/hl-signals.json
+     - 如果不存在或 signals 为空：输出 "NO_SIGNALS: 请先运行 scan.whip"
+     - 检查 ts 时间戳，超过 10 分钟的信号视为过期
+
+  2. 调用 HL API 获取当前账户状态：
+     curl -s -X POST https://api.hyperliquid.xyz/info \
+       -H "Content-Type: application/json" \
+       -d "{\"type\":\"clearinghouseState\",\"user\":\"$(cat data/hl-config.json | grep wallet_address | cut -d'\"' -f4)\"}"
+
+     提取：
+     - marginSummary.accountValue（账户净值）
+     - marginSummary.totalMarginUsed（已用保证金）
+     - assetPositions（当前持仓列表）
+
+  3. 读取 data/hl-config.json 获取风控参数
+  4. 读取 data/hl-trades.json（不存在则 []），统计今日已执行交易 PnL
+
+  输出：{
+    signals: [...],
+    account_value: X,
+    margin_used: X,
+    open_positions: [...],
+    open_positions_count: N,
+    today_pnl: X,
+    config: { max_position_usd, max_open_trades, max_total_exposure_usd, ... }
+  }
+  """
+
+if **context 包含 NO_SIGNALS**:
+  throw "没有可交易信号，请先运行 scan.whip"
+
+# ── 风控检查 ──
+let risk_check = session: risk-manager
+  prompt: """
+  对每个信号执行风控检查：
+
+  上下文：{context}
+
+  对每个 signal 检查：
+  1. 持仓数量：open_positions_count + 1 <= config.max_open_trades
+  2. 单仓上限：calcPositionSize(signal.score, account_value) <= config.max_position_usd
+  3. 总敞口：margin_used + 新仓位保证金 <= config.max_total_exposure_usd
+  4. 日亏损熔断：today_pnl < -(account_value * 0.05)（亏损超 5% 停止全部交易）
+  5. 信号新鲜度：decay_fast=true 的信号，published_at 距今 > 120s → 标记 SKIP
+  6. 重复仓位：open_positions 中已有相同 coin + direction → REJECTED
+
+  仓位大小计算（Half-Kelly）：
+  - p = 0.45 + (score / 100) * 0.25
+  - b = config.take_profit_pct / config.stop_loss_pct
+  - kelly = (p * b - (1 - p)) / b
+  - size_usd = min(config.max_position_usd, max(10, account_value * kelly * 0.5))
+
+  杠杆计算：
+  - score >= 85 → max_leverage
+  - score >= 70 → 4x
+  - 否则 → default_leverage
+
+  对每个信号标记：
+  - APPROVED: { size_usd, leverage, limit_px }
+  - REJECTED: [具体原因]
+  - SKIP: [过期/重复]
+
+  输出 "RISK_PASSED: N个信号通过" 或 "RISK_BLOCKED: [所有信号均未通过原因]"
+  """
+
+if **risk_check 包含 RISK_BLOCKED**:
+  throw "全部信号未通过风控：{risk_check}"
+
+# ── 执行下单 ──
+let trade_results = session: trader
+  prompt: """
+  对风控通过（APPROVED）的信号依次执行下单：
+
+  信号列表：{context.signals}（只处理 APPROVED 的条目）
+  风控报告：{risk_check}
+  配置：{context.config}
+
+  对每笔订单执行以下步骤：
+
+  1. 读取私钥（优先 openvault，回退环境变量）：
+     openvault get clawfirm/hl-private-key 2>/dev/null || echo $HL_PRIVATE_KEY
+
+  2. 运行下单脚本（纸交易模式下 HL_PAPER=true）：
+     HL_PRIVATE_KEY=<私钥> HL_WALLET=<wallet_address> \
+     node -e "
+       // 读取风控计算出的参数
+       const coin     = '<coin>';
+       const isBuy    = <direction === 'long'>;
+       const sz       = <size_usd / price>;
+       const limitPx  = <price * (1 + (isBuy ? 0.002 : -0.002))>;
+       const leverage = <leverage>;
+       // 调用 hl-news-trader.js 的 hlPlaceOrder
+       import('./scripts/hl-news-trader.js').then(m => m.hlPlaceOrder({...}));
+     "
+
+  3. 无论成功失败，追加到 data/hl-trades.json：
+     读取现有文件（不存在则 []），追加：
+     {
+       id: '[timestamp-coin]',
+       ts: '[ISO]',
+       coin, direction, score, category,
+       size_usd, leverage,
+       entry_price: limitPx,
+       sl_price: limitPx * (isBuy ? 0.96 : 1.04),
+       tp_price: limitPx * (isBuy ? 1.08 : 0.92),
+       status: 'open' | 'failed',
+       order_id: '[HL返回]',
+       reason: signal.reason,
+       headline: signal.headline,
+       error: '[如有]'
+     }
+     写回 data/hl-trades.json
+
+  每笔订单输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"order_submitted","data":{"coin":"...","direction":"...","score":X,"size_usd":X,"leverage":X}}
+  失败时：
+  {"ts":"[ISO]","event":"order_failed","data":{"coin":"...","error":"..."}}
+  """
+
+# ── 完成汇总 ──
+session: risk-manager
+  prompt: """
+  trade.whip 执行完成。读取 data/hl-trades.json 统计本次结果。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"trade","data":{
+    "signals_evaluated": N,
+    "orders_approved": N,
+    "orders_submitted": N,
+    "orders_failed": N,
+    "total_size_usd": X,
+    "positions_open": N
+  }}
+  """

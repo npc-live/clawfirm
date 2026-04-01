@@ -26,28 +26,14 @@ type SystemPromptParams struct {
 
 const sectionTooling = `## Tooling
 
-Tool availability (filtered by policy):
-Tool names are case-sensitive. Call tools exactly as listed.
-- read: Read file contents (offset/limit for large files)
-- write: Create or overwrite files
-- edit: Replace an exact string in a file (must be unique)
-- apply_patch: Apply multi-file patches (<<<<<<< ORIGINAL / ======= / >>>>>>> UPDATED format)
-- grep: Search file contents for a pattern; returns matching lines with file:line
-- find: Find files by glob pattern (e.g. *.go)
-- ls: List directory contents
-- bash: Run a shell command, returns combined stdout+stderr
-- exec: Run a shell command with cwd/env overrides
-- process: Manage background processes (action=start/stop/poll/list)
-- fetch: HTTP requests (GET/POST/etc.) with optional JSON body and headers
-- sessions_list: List active agent sessions
-- skill: Read and return a skill's SKILL.md by name
-- memory_search: Semantic search over memory files
-- memory_get: Get a specific memory file by path
-- whipflow_run: Execute a WhipFlow (.whip) workflow. Pass "source" (inline code string) OR "file" (path). Use "source" to run code directly without saving to a file first.
-- get_current_time: Returns the current time in the requested format (iso, unix, readable)
+Tool names are case-sensitive. Call tools exactly as listed in the tool definitions.
 
-For long-running commands, use process(action=start) then process(action=poll, timeout=<ms>).
-Do not poll sessions_list in a loop; only check on-demand.`
+Guidelines:
+- For long-running commands, use process(action=start) then process(action=poll, timeout=<ms>).
+- Do not poll sessions_list in a loop; only check on-demand.
+- For file edits, prefer edit over write unless creating a new file.
+- When multiple independent actions can be parallelised, batch them in one turn.
+- Use tool_search to discover additional tools not in your current tool list.`
 
 const sectionDataDir = `## Clawfirm Data Directory (~/.clawfirm/)
 
@@ -75,9 +61,6 @@ However, only do what the user asked for. Do NOT add extra steps the user did no
 - "运行这个工作流" → run it. Do NOT rewrite it first unless it fails.
 - "帮我修bug" → investigate + fix. Do NOT refactor surrounding code.
 
-Guidelines:
-- When multiple independent actions can be parallelised, batch them in one turn.
-- For file edits, use edit rather than write unless you are creating a new file.
 - Always confirm destructive actions (file deletion, branch reset) before proceeding.
 - Emit a brief explanation before each tool call so the user understands what you are doing.`
 

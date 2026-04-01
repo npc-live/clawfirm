@@ -1,0 +1,102 @@
+# whips/domains/snipe.whip
+# 功能：抢注执行 —— 对 watchlist 中即将到期的域名发起抢注或拍卖出价
+# 调用方：scan.whip 后 / drop_date 前1天自动触发
+# 前置：data/domain-watchlist.json 有 status=pending 且 drop_date 临近的域名
+# 输出：data/portfolio.json 新增，domain-watchlist.json 状态更新
+
+agent sniper:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  域名抢注专家。在域名到期释放的精准时间窗口内发起注册请求。
+  对于拍卖域名，制定理性出价策略：最高出价不超过估值的 40%，保留足够利润空间。
+  """
+
+# ── 读取待抢注列表 ──
+let targets = session: sniper
+  prompt: """
+  读取今日待抢注域名：
+  1. 读取 data/domain-watchlist.json
+     筛选：status=pending 且 drop_date <= 明天
+  2. 读取 data/domain-config.json
+  3. 计算可用预算
+
+  按 estimated_value / max_bid_usd 的比值排序（ROI 优先）。
+
+  如果无今日目标，输出 "NO_TARGETS: 今日无到期域名"
+  输出：{ targets: [...], available_budget, config }
+  """
+
+if **targets 包含 NO_TARGETS**:
+  throw "今日无到期域名，明日再运行"
+
+# ── 最终确认 ──
+let final_check = session: sniper
+  prompt: """
+  对每个待抢注域名做最终确认：
+
+  目标列表：{targets}
+
+  1. 重新检查 whois，确认域名确实将在今日/明日到期
+  2. 确认没有 redemption period（赎回期内原注册人可取回）
+  3. 如果是拍卖：确认当前最高出价和剩余时间
+  4. 确认 trademark_risk 不是 "high"
+
+  对每个域名标记：
+  - SNIPE：直接抢注（域名释放后立即注册）
+  - BID: [金额]：参与拍卖，设置最高出价
+  - SKIP: [原因]：跳过
+
+  计算本次操作总预算是否在 available_budget 内。
+  输出确认结果。
+  """
+
+# ── 执行抢注/出价 ──
+let snipe_results = session: sniper
+  prompt: """
+  执行抢注和拍卖出价：
+
+  确认结果：{final_check}
+  配置：{targets.config}
+
+  ▸ 直接抢注（SNIPE）：
+    使用注册商 API 在域名释放时立即注册：
+    curl -X POST "https://api.godaddy.com/v1/domains/purchase" \
+      -H "Authorization: sso-key {config.registrar_api_key}" \
+      -d '{"domain": "[domain]", "consent": {...}}'
+
+    或使用专业抢注服务（SnapNames/NameJet backorder）
+
+  ▸ 拍卖出价（BID）：
+    在对应拍卖平台设置代理出价（自动出价到上限）
+    - GoDaddy Auctions：通过 API 或 social-cli 操作
+    - NameJet：通过 API 设置 backorder
+
+  每次操作记录结果：
+
+  读取 data/domain-watchlist.json，更新对应条目：
+  - 抢注成功：status="registered", registered_at, reg_cost_usd
+  - 出价中：status="bidding", current_bid, max_bid
+  - 失败：status="failed", error
+
+  成功注册时，读取 data/portfolio.json（不存在则 []），追加：
+  {
+    id: "[uuid]", domain, tld,
+    reg_cost_usd, estimated_value_usd,
+    registrar, expiry_date,
+    status: "registered",  # registered → listed → sold
+    acquired_at: "[ISO]",
+    keywords: [...], potential_buyers: [...]
+  }
+  写回文件。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"snipe","data":{
+    "attempted": N,
+    "registered": N,
+    "bidding": N,
+    "failed": N,
+    "total_spent_usd": X
+  }}
+  """

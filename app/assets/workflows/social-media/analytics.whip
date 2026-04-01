@@ -1,0 +1,110 @@
+# whips/analytics.whip
+# 功能：数据采集 + 爆款分析 —— 收集各平台近7天数据，提取可执行洞察
+# 调用方：Tauri App "分析数据" 按钮 / scheduler.ts 每日定时
+# 前置：账号已配置（data/config.json 存在）
+# 输出：data/analytics.json, data/viral-content.json, docs/performance-report.md, docs/weekly-insights.md
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  自媒体数据分析专家。从各平台数据中提取可执行洞察：
+  识别爆款规律、分析粉丝增长趋势、找出最佳发布时机。
+  所有结论必须有数据支撑，每条洞察附具体行动建议。
+  分析过程中持续通过 stdout 输出 WorkflowEvent 进度事件。
+  """
+
+# ── 读取配置 ──
+let run_config = session: analyst
+  prompt: """
+  读取运行配置：
+  1. 读取 data/current-run.json 获取 run_id
+  2. 读取 data/config.json
+  3. 读取 data/analytics.json（不存在则 []），计算当前是第几周：
+     筛选 run_id 相同的记录，取最大 week_number + 1，没有记录则为 1
+
+  输出：{ run_id, accounts, current_week, growth_goal }
+  """
+
+# ── 采集各平台数据 ──
+let performance_data = session: analyst
+  prompt: """
+  收集各平台近7天运营数据（只处理配置中非空的平台）：
+
+  配置：{run_config}
+
+  对每个已配置平台使用对应 skill 采集数据：
+
+  小红书（如果 xhs_account 非空）：
+    social-cli xhs → 获取近7天数据
+    指标：阅读量、点赞、收藏、评论数、粉丝总数和变化、搜索词来源
+    输出 WorkflowEvent progress：{"platform":"xhs","status":"collecting"}
+
+  微博（如果 weibo_account 非空）：
+    social-cli weibo → 获取近7天数据
+    指标：转发、评论、点赞、粉丝变化、话题热度
+
+  B站（如果 bilibili_account 非空）：
+    social-cli bilibili → 获取近7天数据
+    指标：播放量、弹幕、硬币、收藏、粉丝变化
+
+  Twitter（如果 twitter_account 非空）：
+    social-cli x → 获取近7天数据
+    指标：展示量、互动率、转发、关注者变化
+
+  读取 data/analytics.json（不存在则 []），追加每个平台的快照：
+  { run_id, week_number, platform, followers, new_followers, total_views,
+    total_likes, total_comments, total_shares, engagement_rate,
+    snapshot_date: "[YYYY-MM-DD]", raw_json: {...} }
+  写回 data/analytics.json。
+
+  写入 docs/performance-report.md：
+  | 平台 | 粉丝总数 | 新增粉丝 | 总曝光 | 总互动 | 互动率 | 环比变化 |
+
+  输出结构化性能数据摘要。
+  """
+
+# ── 爆款分析 ──
+let insights = session: analyst
+  prompt: """
+  深度分析运营数据，提取可执行洞察：
+
+  性能数据：{performance_data}
+
+  读取 data/content-drafts.json 和 data/publish-log.json，
+  关联找出已发布内容及其曝光数据，按 views 降序排列。
+
+  分析维度：
+
+  【爆款规律提取】
+  - 找出 views > 均值 * 3 的内容（算法推荐信号）
+  - 对比 TOP 3 vs FLOP 3：标题结构、发布时间、标签差异
+  - 读取 data/viral-content.json（不存在则 []），追加爆款条目：
+    { draft_id, platform, post_url, views, likes, viral_score, pattern_tags }
+    写回 data/viral-content.json
+
+  【算法信号识别】
+  - 哪些内容被推荐了？它们的共同特征？
+  - 如何系统性地复制这种特征？
+
+  【粉丝行为分析】
+  - 什么类型内容最容易精准涨粉？
+  - 评论区高频词（反映粉丝真实需求）
+
+  【下周策略建议】
+  - 应重点复制的内容类型（附具体理由）
+  - 应减少的内容类型
+  - 可提前布局的热点
+
+  将所有洞察写入 docs/weekly-insights.md
+  格式：每条洞察 = 数据发现 + 原因分析 + 具体行动建议
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","runId":[id],"stage":"analytics","data":{
+    "viral_count": N,
+    "top_platform": "[最佳平台]",
+    "insights_count": N,
+    "docs": ["docs/performance-report.md","docs/weekly-insights.md"]
+  }}
+  """

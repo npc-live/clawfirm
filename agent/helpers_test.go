@@ -19,3 +19,5 @@ func (m *mockToolWrapper) Schema() map[string]any    { return map[string]any{} }
 func (m *mockToolWrapper) Execute(ctx context.Context, id string, params map[string]any, _ func(tool.ToolUpdate)) (tool.ToolResult, error) {
 	return m.fn(ctx, id, params)
 }
+func (m *mockToolWrapper) ConcurrencySafe() bool { return true }
+func (m *mockToolWrapper) ShouldDefer() bool     { return false }

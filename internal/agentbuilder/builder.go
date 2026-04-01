@@ -319,6 +319,9 @@ func DefaultModelForProvider(providerID string) string {
 // BuildTools resolves tool names to AgentTool instances.
 // memMgr may be nil — in that case memory_search/memory_get are unavailable.
 // vaultEnv may be nil — in that case the vault is not injected into exec/bash/process.
+//
+// The returned slice always includes a tool_search meta-tool as the last element
+// (unless names is empty). tool_search lets the LLM discover deferred tools.
 func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string) []tool.AgentTool {
 	if len(names) == 0 {
 		return nil
@@ -338,7 +341,8 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		"exec":    &builtin.Exec{VaultEnv: vaultEnv},
 		"process": &builtin.Process{VaultEnv: vaultEnv},
 		// Network
-		"fetch": &builtin.Fetch{},
+		"fetch":      &builtin.Fetch{},
+		"web_search": &builtin.WebSearch{APIKey: os.Getenv("BRAVE_SEARCH_API_KEY")},
 		// Workflows
 		"whipflow_run": &builtin.WhipflowRun{PiConfig: cfg, VaultEnv: vaultEnv},
 		// Memory
@@ -348,9 +352,12 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		"sessions_list":    &builtin.SessionsList{},
 		"skill":            &builtin.Skill{},
 		"get_current_time": &builtin.GetCurrentTime{},
+		// Interactive / delegation
+		"ask_user":  &builtin.AskUser{},
+		"sub_agent": &builtin.SubAgent{},
 	}
 
-	out := make([]tool.AgentTool, 0, len(names))
+	out := make([]tool.AgentTool, 0, len(names)+1)
 	for _, n := range names {
 		if t, ok := available[n]; ok {
 			out = append(out, t)
@@ -358,6 +365,20 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 			log.Printf("agentbuilder: unknown tool %q (ignored)", n)
 		}
 	}
+
+	// Append tool_search meta-tool with catalog of all resolved tools.
+	allToolInfos := make([]builtin.ToolInfo, 0, len(out))
+	for _, t := range out {
+		allToolInfos = append(allToolInfos, builtin.ToolInfo{
+			Name:        t.Name(),
+			Description: t.Description(),
+		})
+	}
+	out = append(out, &builtin.ToolSearch{
+		AllTools:       allToolInfos,
+		ActivatedTools: make(map[string]bool),
+	})
+
 	return out
 }
 

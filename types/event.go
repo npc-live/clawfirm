@@ -16,6 +16,13 @@ const (
 	EventToolExecutionEnd    AgentEventType = "tool_execution_end"
 )
 
+// CumulativeUsage tracks aggregate token usage across all turns in an agent loop.
+type CumulativeUsage struct {
+	TotalInput  int `json:"totalInput"`
+	TotalOutput int `json:"totalOutput"`
+	TurnCount   int `json:"turnCount"`
+}
+
 // AgentEvent carries information about a single step in the agent lifecycle.
 // A struct with a Type field is used instead of an interface to keep event handling simple.
 type AgentEvent struct {
@@ -23,6 +30,9 @@ type AgentEvent struct {
 
 	// agent_end: accumulated messages for the full run
 	Messages []Message `json:"messages,omitempty"`
+
+	// turn_end / agent_end: cumulative token usage across all turns
+	CumulativeUsage *CumulativeUsage `json:"cumulativeUsage,omitempty"`
 
 	// turn_end: final assistant message and any tool results for the turn
 	Message     Message             `json:"message,omitempty"`

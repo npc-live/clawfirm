@@ -30,15 +30,25 @@ type AgentTool interface {
 	Schema() map[string]any
 	// Execute runs the tool and may emit incremental updates via onUpdate.
 	Execute(ctx context.Context, id string, params map[string]any, onUpdate func(ToolUpdate)) (ToolResult, error)
+	// ConcurrencySafe reports whether this tool can be run concurrently with
+	// other safe tools. Read-only tools return true; tools that write files,
+	// run commands, or have side effects return false.
+	ConcurrencySafe() bool
+	// ShouldDefer reports whether this tool's schema should be excluded from
+	// LLM requests until explicitly activated via tool_search. Deferred tools
+	// save tokens on every turn but remain executable if the LLM calls them.
+	ShouldDefer() bool
 }
 
 // BaseToolImpl is a convenience struct for implementing AgentTool via function fields.
 type BaseToolImpl struct {
-	ToolName        string
-	ToolDescription string
-	ToolLabel       string
-	ToolSchema      map[string]any
-	ExecuteFn       func(ctx context.Context, id string, params map[string]any, onUpdate func(ToolUpdate)) (ToolResult, error)
+	ToolName            string
+	ToolDescription     string
+	ToolLabel           string
+	ToolSchema          map[string]any
+	IsConcurrencySafe   bool
+	IsDeferred          bool
+	ExecuteFn           func(ctx context.Context, id string, params map[string]any, onUpdate func(ToolUpdate)) (ToolResult, error)
 }
 
 // Name returns the tool's name.
@@ -60,3 +70,9 @@ func (b *BaseToolImpl) Execute(ctx context.Context, id string, params map[string
 	}
 	return ToolResult{}, nil
 }
+
+// ConcurrencySafe returns whether this tool is safe for concurrent execution.
+func (b *BaseToolImpl) ConcurrencySafe() bool { return b.IsConcurrencySafe }
+
+// ShouldDefer returns whether this tool's schema should be deferred.
+func (b *BaseToolImpl) ShouldDefer() bool { return b.IsDeferred }

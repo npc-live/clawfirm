@@ -91,6 +91,34 @@ func (c *ContextCompressor) TransformContext(ctx context.Context, msgs []types.M
 	return compressed, nil
 }
 
+// ForceCompress bypasses the token-threshold check and unconditionally compresses
+// the message history. Use this as a reactive fallback when the LLM returns a
+// "prompt too long" error (RetryDecisionNeedCompact).
+func (c *ContextCompressor) ForceCompress(ctx context.Context, msgs []types.Message) ([]types.Message, error) {
+	if len(msgs) == 0 {
+		return msgs, nil
+	}
+
+	keepN := c.cfg.keepLastN()
+	if keepN >= len(msgs) {
+		return msgs, nil
+	}
+
+	head := msgs[:len(msgs)-keepN]
+	tail := msgs[len(msgs)-keepN:]
+
+	summary, err := c.summarizeFn(ctx, head)
+	if err != nil {
+		return msgs, fmt.Errorf("compressor: force compress: %w", err)
+	}
+
+	summaryMsg := buildSummaryMessage(summary)
+	compressed := make([]types.Message, 0, 1+len(tail))
+	compressed = append(compressed, summaryMsg)
+	compressed = append(compressed, tail...)
+	return compressed, nil
+}
+
 // buildSummaryMessage wraps a summary string in a UserMessage with a clear label.
 func buildSummaryMessage(summary string) *types.UserMessage {
 	text := fmt.Sprintf("[Context Summary — %s]\n\n%s",

@@ -1,0 +1,136 @@
+# whips/saas/landing.whip
+# 功能：生成落地页文案 —— Hero / Features / Pricing / FAQ / CTA 全套英文 copy
+# 调用方：setup.whip 完成后 / 手动触发
+# 前置：data/saas-config.json 存在，docs/saas-strategy.md 存在
+# 输出：docs/landing-copy.md（可直接复制到落地页）
+
+agent copywriter:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  顶级 SaaS 落地页文案专家。深谙 Jobs-to-be-Done 框架。
+  文案原则：以用户痛点开头，用结果（outcome）代替功能（feature）描述，
+  社会证明贯穿全文，CTA 按钮文字具体有力（不用 "Get Started"，用 "Start saving 2 hours/day"）。
+  避免空洞形容词（powerful / amazing / cutting-edge）。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: "落地页转化率审核专家。检查文案是否清晰传达价值主张、是否有转化阻力，输出 APPROVED 或 NEEDS_REVISION。"
+
+# ── 读取配置 ──
+let config = session: copywriter
+  prompt: """
+  读取配置：
+  1. 读取 data/saas-config.json
+  2. 读取 docs/saas-strategy.md（提取：产品定位、USP、目标用户画像）
+  3. 读取 docs/competitor-analysis.md（提取：用户痛点关键词、差异化角度）
+
+  输出完整上下文供后续生成使用。
+  """
+
+# ── 生成落地页文案 ──
+let copy = session: copywriter
+  prompt: """
+  为 {config.product_name} 生成完整英文落地页文案：
+
+  配置：{config}
+
+  按以下结构生成，每节都要有多个备选版本（A/B 测试用）：
+
+  ## HERO SECTION
+  Headline（主标题，< 10 词，聚焦 outcome）：
+    版本 A: ...
+    版本 B: ...
+  Subheadline（副标题，1-2 句，解释 how / for whom）：
+    版本 A: ...
+    版本 B: ...
+  CTA Button（具体动词 + 价值，不超过 5 词）：
+    版本 A: ...
+    版本 B: ...
+  Social Proof 数字（"Join X+ teams / X users / X tasks automated"）：
+    ...
+
+  ## PROBLEM SECTION（痛点共鸣）
+  H2: ...（用问句引出痛点）
+  3 个痛点描述（每条 1 句，用用户自己的语言）：
+  - ...
+  - ...
+  - ...
+
+  ## SOLUTION / FEATURES SECTION
+  H2: How {product_name} works
+  3-4 个核心功能（每个用 outcome 描述，不是 feature 列表）：
+  功能 1:
+    Icon label: ...
+    Headline: ...（结果导向，如 "Cut review time in half"）
+    Description: ...（2 句，具体说明怎么做到）
+  功能 2: ...
+  功能 3: ...
+
+  ## SOCIAL PROOF（证明）
+  Testimonial 模板（3 条，包含职位/公司规模）：
+  - "[具体结果描述]" — [First Name], [Title] at [Company type]
+  - ...
+  - ...
+  Logos bar 文字: "Trusted by teams at [类型描述]"
+
+  ## PRICING SECTION
+  根据 {config.pricing_model} 和 {config.monthly_price_usd} 生成：
+  - Free tier（如有）：功能限制描述
+  - Pro tier：功能列表（8-10 条），价格，CTA
+  - Team/Enterprise tier（如适用）：差异点
+
+  Pricing anchor 文字（让 Pro 显得划算的对比）：
+  "That's less than [具体类比，如 a daily coffee]"
+
+  ## FAQ SECTION（5 个最常见阻力问题）
+  Q: ...
+  A: ...（消除疑虑，言简意赅）
+
+  ## FOOTER CTA
+  H2: ...（重申最大价值，带紧迫感）
+  CTA: ...
+
+  写入 docs/landing-copy.md。
+  """
+
+let copy_check = session: validator
+  prompt: """
+  审核落地页文案转化效果：{copy}
+
+  检查：
+  1. Hero headline 是否在 5 秒内让目标用户明白"这是给我的"？
+  2. 是否有清晰的 CTA 且不超过 1 个主要 CTA？
+  3. 是否回答了"为什么是你而不是竞品"？
+  4. Features 描述是否用 outcome 语言（而非技术术语）？
+  5. Pricing 是否有锚定价格策略？
+  6. FAQ 是否覆盖了最大的购买阻力？
+  7. 是否有 "AI 味" 套话（需要改掉）？
+
+  输出 "COPY_APPROVED" 或 "COPY_NEEDS_REVISION: [具体问题]"
+  """
+
+loop until **copy_check 包含 COPY_APPROVED** (max: 2):
+  copy = session: copywriter
+    prompt: "根据审核意见修改文案：{copy_check}，更新 docs/landing-copy.md。"
+  copy_check = session: validator
+    prompt: "重新审核：{copy}，输出 COPY_APPROVED 或 COPY_NEEDS_REVISION。"
+
+# ── 完成 ──
+session: copywriter
+  prompt: """
+  landing.whip 完成。
+
+  追加 data/stage-log.json：{ stage: "landing-copy", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"landing","data":{
+    "file": "docs/landing-copy.md",
+    "sections": ["hero","problem","features","social-proof","pricing","faq","footer-cta"],
+    "ab_variants": true
+  }}
+  """

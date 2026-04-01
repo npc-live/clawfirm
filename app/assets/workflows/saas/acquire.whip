@@ -1,0 +1,221 @@
+# whips/saas/acquire.whip
+# 功能：多渠道用户获取 —— Reddit 发帖 / HN 提交 / Cold Email 序列 / SEO 文章
+# 调用方：手动触发（选择当日任务渠道）
+# 前置：data/saas-config.json，docs/saas-strategy.md
+# 输出：data/saas-posts.json，data/saas-leads.json，docs/content/
+
+agent content-writer:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  海外 SaaS 增长黑客。精通 Reddit / HN / Cold Email / SEO 内容。
+  核心原则：先提供价值，再推产品。帖子/文章要像真实用户写的，不是广告。
+  Reddit 帖子要融入社区文化，Cold Email 要简短直接，SEO 文章要真正有帮助。
+  """
+
+agent outreach:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  B2B SaaS 销售拓展专家。擅长精准找到 ICP，写出高回复率的 cold email。
+  邮件原则：主题行引发好奇，正文 3 句话，结尾一个简单问题。
+  绝不发群发模板，每封都有个性化元素。
+  """
+
+agent validator:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read"]
+  prompt: "内容合规审核。检查是否违反平台规则，是否有明显推广痕迹，输出 APPROVED 或 REJECTED: [原因]。"
+
+# ── 读取配置 ──
+let config = session: content-writer
+  prompt: """
+  读取运行配置：
+  1. 读取 data/saas-config.json
+  2. 读取 docs/saas-strategy.md（提取：target_persona、冷启动渠道建议、关键词列表）
+  3. 读取 data/current-run.json，获取本次执行的 channel 参数
+     （channel 可以是：reddit / hn / cold-email / seo-article / all）
+
+  输出：{
+    product_name, product_desc, product_url,
+    target_persona, pricing_model, monthly_price_usd,
+    channel: "...",
+    top_keywords: [...]
+  }
+  """
+
+# ── Reddit 任务 ──
+let reddit_posts = session: content-writer
+  prompt: """
+  如果 {config.channel} 包含 "reddit" 或 "all"，执行以下任务：
+
+  产品：{config.product_name} — {config.product_desc}
+  目标用户：{config.target_persona}
+
+  生成 3 条 Reddit 帖子（不同 subreddit，不同角度）：
+
+  帖子 1 — 教程/干货型（软推）：
+    Subreddit: [最相关的 subreddit，如 r/productivity / r/SideProject / r/webdev]
+    规则检查: 该 subreddit 是否允许 Show & Tell / Self-promo？（基于常识判断）
+    标题: [How I + 具体成果，不提产品名]
+    正文: [300-500 字，真实案例/教程，最后一段自然提到工具]
+    产品提及方式: "I built [product] to solve this" 或 "There's a tool called [X] that..."
+
+  帖子 2 — Show HN / Show Reddit 型（直接展示产品）：
+    Subreddit: r/SideProject 或 r/startups
+    标题: "Show r/SideProject: [product_name] — [一句话描述，聚焦解决的问题]"
+    正文: [介绍背景（为什么做）、核心功能、免费/付费说明、求反馈]
+    结尾问题: [引导评论的一个具体问题]
+
+  帖子 3 — 问答/参与型（零推广）：
+    Subreddit: [目标用户最活跃的社区]
+    方式: 回答相关问题，在签名或最后提一下产品
+    找到的相关问题类型: [描述搜索思路]
+    回答框架: [先给完整有价值的回答，最后一句提工具]
+
+  写入 docs/content/reddit-posts.md。
+  输出所有帖子内容。
+  """
+
+let reddit_check = session: validator
+  prompt: """
+  审核 Reddit 帖子合规性：{reddit_posts}
+
+  检查每条帖子：
+  1. 是否像真实用户而非营销号写的？
+  2. 是否符合对应 subreddit 的推广规则？
+  3. 产品提及是否自然（不像广告）？
+  4. 标题是否有 clickbait 或夸大表达？
+
+  对每条帖子输出 APPROVED 或 REJECTED: [原因]
+  """
+
+# ── Hacker News 任务 ──
+let hn_post = session: content-writer
+  prompt: """
+  如果 {config.channel} 包含 "hn" 或 "all"，生成 HN 发布内容：
+
+  产品：{config.product_name} — {config.product_desc}
+
+  生成 Show HN 提交：
+  标题备选（3 个，符合 HN 简洁风格）：
+    A: "Show HN: [product_name] – [解决的具体问题，技术导向]"
+    B: "Show HN: [product_name] – [用途，强调开源/独立开发者背景]"
+    C: "Show HN: [product_name] – [数字化结果，如 'cut X from Y to Z']"
+
+  正文（发布时的第一条评论，最关键）：
+  - 开篇：为什么做这个（真实动机，1-2 句）
+  - 技术栈简介（HN 用户爱这个，2-3 句）
+  - 核心功能（3 条，技术+业务价值并重）
+  - 定价和开源情况（HN 对免费/开源友好）
+  - 求反馈的具体问题（1 个，引导有价值的讨论）
+  - 结尾：感谢 HN 社区
+
+  最佳发布时间提醒：周一/周二 8-9am ET（美东时间）
+
+  写入 docs/content/hn-submission.md。
+  """
+
+# ── Cold Email 任务 ──
+let cold_emails = session: outreach
+  prompt: """
+  如果 {config.channel} 包含 "cold-email" 或 "all"，生成冷邮件序列：
+
+  产品：{config.product_name}
+  目标用户：{config.target_persona}
+  产品价格：${config.monthly_price_usd}/mo
+
+  生成 3 封序列邮件（间隔 3 天）：
+
+  邮件 1 — 首次触达：
+  主题行备选：
+    A: [个性化痛点 + 数字，如 "Reducing [X] time for [Company] teams"]
+    B: [直接提问，如 "Quick question about your [workflow]"]
+  正文（不超过 80 词）：
+    - 第 1 句：个性化（提到他们公司/职位/最近动态）
+    - 第 2 句：我们解决的问题 + 结果
+    - 第 3 句：一个简单的是/否问题（不要求回复长文）
+  签名：[名字] from [product_name]（不放长签名）
+
+  邮件 2 — 跟进（未回复）：
+  主题行: "Re: [邮件1主题]"（同线程）
+  正文（不超过 40 词）：简单跟进 + 补充一个社会证明或数字
+
+  邮件 3 — 最终跟进：
+  主题行: "Closing the loop"
+  正文（不超过 30 词）：礼貌说这是最后一封，保留未来联系可能
+
+  找到目标邮箱的工具建议：
+  - Apollo.io（免费额度每月50条）
+  - Hunter.io（查域名对应邮件格式）
+  - LinkedIn Sales Navigator（找职位再猜格式）
+
+  写入 docs/content/cold-email-sequence.md。
+  追加 data/saas-leads.json 模板条目（status: "draft"）。
+  """
+
+# ── SEO 文章任务 ──
+let seo_article = session: content-writer
+  prompt: """
+  如果 {config.channel} 包含 "seo-article" 或 "all"，生成 SEO 文章：
+
+  产品：{config.product_name} — {config.product_desc}
+  目标关键词：{config.top_keywords}
+
+  选择优先级最高的关键词，生成完整 SEO 文章：
+
+  1. 文章类型判断（基于关键词）：
+     - "best X" / "top X" → 对比测评型
+     - "how to X" → 教程型
+     - "X alternative" / "X vs Y" → 竞品对比型（最高转化率）
+
+  2. 生成完整文章（1500-2500 词英文）：
+     - Title tag（< 60 字符，包含关键词）
+     - Meta description（< 160 字符，含关键词 + CTA）
+     - H1（与 title 略有差异）
+     - 文章结构（H2/H3 层级清晰）
+     - 自然植入产品（作为解决方案之一，非硬广）
+     - Internal link 占位（[LINK: /pricing] 格式）
+     - CTA（文末引导免费试用）
+
+  3. 文章结尾的 CTA box：
+     "Try [product_name] free — [具体价值主张，如 'No credit card required']"
+     Button text: [具体动作，如 'Start your free trial']
+     URL: {config.product_url}
+
+  写入 docs/content/seo-article-[keyword].md。
+  """
+
+# ── 记录发布任务 ──
+session: content-writer
+  prompt: """
+  将本次生成的所有内容记录到任务队列：
+
+  读取 data/saas-posts.json（不存在则 []），追加：
+
+  对每个生成的内容：
+  {
+    "id": "[uuid]",
+    "type": "reddit" / "hn" / "cold-email" / "seo-article",
+    "title": "...",
+    "file": "docs/content/[文件名]",
+    "status": "draft",
+    "scheduled_at": null,
+    "published_at": null,
+    "channel_url": null,
+    "created_at": "[ISO]"
+  }
+  写回 data/saas-posts.json。
+
+  追加 data/stage-log.json：{ stage: "acquire-content", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"acquire","data":{
+    "channel": "{config.channel}",
+    "content_files": [...],
+    "pending_publish": N
+  }}
+  """
