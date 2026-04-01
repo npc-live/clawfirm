@@ -1,0 +1,106 @@
+# whips/gaokao/run-all.whip
+# 高考志愿填报全流程编排器
+# 职责：问 4 个问题 → 写配置 → 顺序执行所有阶段
+#
+# 用法: whipflow run whips/gaokao/run-all.whip
+#
+# 输出文件（全部在 docs/）：
+#   gaokao-strategy.md       总体策略
+#   school-research.md       院校调研报告
+#   major-research.md        专业就业分析
+#   city-research.md         城市生活成本对比
+#   match-analysis.md        冲稳保候选列表
+#   final-plan.md            最终志愿方案（含打印速查表）
+#   gaokao-final-report.md   综合报告（家长可读版）
+
+agent guide:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "向导。收集用户输入，写入配置文件，格式简洁准确。"
+
+# ─────────────────────────────────────
+# Step 0: 收集 4 个核心问题
+# ─────────────────────────────────────
+
+ask province: "你在哪个省份参加高考？"
+
+ask score: "预估或实际高考分数是多少？（只填数字）"
+
+ask gender: "性别？（男 / 女）"
+
+ask family: "家庭经济情况怎么样？（随便说，比如：普通工薪 / 农村家庭比较困难 / 父母做生意比较宽裕）"
+
+# ─────────────────────────────────────
+# Step 1: 可选补充（跳过也没关系）
+# ─────────────────────────────────────
+
+ask extra: """
+还有什么想补充的吗？（直接回车跳过也行）
+比如：想学什么专业、不想去哪些城市、有没有特别的职业目标
+"""
+
+# ─────────────────────────────────────
+# Step 2: 写入配置文件
+# ─────────────────────────────────────
+
+session: guide
+  prompt: """
+  将用户输入写入 data/current-run.json：
+
+  province: {province}
+  score: {score}
+  gender: {gender}
+  family: {family}
+  extra: {extra}（如果为空则忽略）
+
+  写入格式：
+  {
+    "province": "{province}",
+    "score": {score},
+    "gender": "{gender}",
+    "family": "{family}",
+    "extra": "{extra}"
+  }
+
+  写入 data/current-run.json。
+  确认写入成功后输出：CONFIG_READY
+  """
+
+# ─────────────────────────────────────
+# Step 3: 顺序执行所有阶段
+# ─────────────────────────────────────
+
+run "whips/gaokao/setup.whip"
+
+run "whips/gaokao/research.whip"
+
+run "whips/gaokao/match.whip"
+
+run "whips/gaokao/plan.whip"
+
+run "whips/gaokao/report.whip"
+
+# ─────────────────────────────────────
+# Step 4: 完成提示
+# ─────────────────────────────────────
+
+session: guide
+  prompt: """
+  所有阶段执行完毕，输出完成摘要：
+
+  读取 data/gaokao-plan.json，提取 total_volunteers 和 guaranteed_outcome。
+  读取 data/gaokao-profile.json，提取 estimated_rank。
+
+  输出：
+  ✅ 志愿填报方案已生成完毕！
+
+  📊 基本情况：{province} {score}分 {gender}生，省内位次约第 N 名
+
+  📁 生成文件：
+    docs/gaokao-final-report.md   ← 综合报告（推荐先看这个）
+    docs/final-plan.md            ← 志愿清单 + 打印速查表
+    docs/match-analysis.md        ← 冲稳保候选详细评分
+
+  ⚠️  提醒：以上为 AI 推断结果，建议结合省考试院官方数据和招生老师咨询后最终确认。
+  """

@@ -2,7 +2,9 @@ package anthropic
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -226,5 +228,254 @@ func TestAnthropicModels(t *testing.T) {
 		if m.Provider != "anthropic" {
 			t.Errorf("model %q: Provider = %q, want anthropic", m.ID, m.Provider)
 		}
+	}
+}
+
+func TestConvertContentBlocks_ThinkingCleanup(t *testing.T) {
+	t.Run("thinking with signature keeps signature only", func(t *testing.T) {
+		blocks := []types.ContentBlock{
+			&types.TextContent{Type: "text", Text: "hello"},
+			&types.ThinkingContent{
+				Type:              "thinking",
+				Thinking:          "long chain of thought... 5000 tokens worth",
+				ThinkingSignature: "sig_abc123",
+			},
+		}
+		out, err := convertContentBlocks(blocks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(out) != 2 {
+			t.Fatalf("expected 2 blocks, got %d", len(out))
+		}
+		thinkBlock := out[1]
+		if thinkBlock["type"] != "thinking" {
+			t.Errorf("expected type=thinking, got %v", thinkBlock["type"])
+		}
+		if thinkBlock["thinking"] != "" {
+			t.Errorf("thinking text should be empty, got %v", thinkBlock["thinking"])
+		}
+		if thinkBlock["signature"] != "sig_abc123" {
+			t.Errorf("signature should be preserved, got %v", thinkBlock["signature"])
+		}
+	})
+
+	t.Run("thinking without signature is skipped", func(t *testing.T) {
+		blocks := []types.ContentBlock{
+			&types.TextContent{Type: "text", Text: "hello"},
+			&types.ThinkingContent{
+				Type:     "thinking",
+				Thinking: "some thinking without signature",
+			},
+		}
+		out, err := convertContentBlocks(blocks)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(out) != 1 {
+			t.Fatalf("expected 1 block (thinking skipped), got %d", len(out))
+		}
+		if out[0]["type"] != "text" {
+			t.Errorf("remaining block should be text, got %v", out[0]["type"])
+		}
+	})
+}
+
+func TestInjectMessageCacheBreakpoints(t *testing.T) {
+	t.Run("no breakpoint for single user message", func(t *testing.T) {
+		msgs := []anthropicMessage{
+			{Role: "user", Content: "hello"},
+		}
+		injectMessageCacheBreakpoints(msgs)
+		// Should not modify — only 1 user message, need at least 2.
+		if _, ok := msgs[0].Content.(string); !ok {
+			t.Error("single user message should remain a string (no breakpoint)")
+		}
+	})
+
+	t.Run("breakpoint on second-to-last user message (string content)", func(t *testing.T) {
+		msgs := []anthropicMessage{
+			{Role: "user", Content: "first user msg"},
+			{Role: "assistant", Content: []map[string]any{{"type": "text", "text": "reply"}}},
+			{Role: "user", Content: "second user msg"},
+		}
+		injectMessageCacheBreakpoints(msgs)
+
+		// msgs[0] (first user) should be converted to structured with cache_control.
+		blocks, ok := msgs[0].Content.([]map[string]any)
+		if !ok {
+			t.Fatalf("expected first user msg converted to []map, got %T", msgs[0].Content)
+		}
+		if len(blocks) != 1 {
+			t.Fatalf("expected 1 block, got %d", len(blocks))
+		}
+		if blocks[0]["cache_control"] == nil {
+			t.Error("expected cache_control on first user message")
+		}
+		if blocks[0]["text"] != "first user msg" {
+			t.Errorf("text should be preserved, got %v", blocks[0]["text"])
+		}
+
+		// msgs[2] (last user) should NOT have cache_control.
+		if s, ok := msgs[2].Content.(string); ok {
+			_ = s // still a string, no cache_control
+		} else if blocks, ok := msgs[2].Content.([]map[string]any); ok {
+			for _, b := range blocks {
+				if b["cache_control"] != nil {
+					t.Error("last user message should NOT have cache_control")
+				}
+			}
+		}
+	})
+
+	t.Run("breakpoint on structured content", func(t *testing.T) {
+		msgs := []anthropicMessage{
+			{Role: "user", Content: []map[string]any{
+				{"type": "text", "text": "block1"},
+				{"type": "text", "text": "block2"},
+			}},
+			{Role: "assistant", Content: []map[string]any{{"type": "text", "text": "reply"}}},
+			{Role: "user", Content: "latest"},
+		}
+		injectMessageCacheBreakpoints(msgs)
+
+		blocks := msgs[0].Content.([]map[string]any)
+		// cache_control should be on the LAST block of the target message.
+		if blocks[0]["cache_control"] != nil {
+			t.Error("first block should not have cache_control")
+		}
+		if blocks[1]["cache_control"] == nil {
+			t.Error("last block of target message should have cache_control")
+		}
+	})
+}
+
+func TestCacheTokenParsing(t *testing.T) {
+	ssePayload := `event: message_start
+data: {"type":"message_start","message":{"usage":{"input_tokens":100,"output_tokens":0,"cache_creation_input_tokens":500,"cache_read_input_tokens":2000}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"cached!"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":5}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, ssePayload)
+	}))
+	defer srv.Close()
+
+	p := NewWithBaseURL("test-key", srv.URL)
+	ch, err := p.Stream(context.Background(), makeRequest(testModel()))
+	if err != nil {
+		t.Fatalf("Stream error: %v", err)
+	}
+
+	var doneMsg *types.AssistantMessage
+	for ev := range ch {
+		if ev.Type == types.StreamEventDone {
+			doneMsg = ev.Message
+		}
+	}
+
+	if doneMsg == nil {
+		t.Fatal("expected done message")
+	}
+	if doneMsg.Usage.CacheRead != 2000 {
+		t.Errorf("CacheRead: got %d want 2000", doneMsg.Usage.CacheRead)
+	}
+	if doneMsg.Usage.CacheWrite != 500 {
+		t.Errorf("CacheWrite: got %d want 500", doneMsg.Usage.CacheWrite)
+	}
+	if doneMsg.Usage.Input != 100 {
+		t.Errorf("Input: got %d want 100", doneMsg.Usage.Input)
+	}
+}
+
+func TestRequestIncludesCacheControl(t *testing.T) {
+	var capturedBody []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, buildTextSSE("ok"))
+	}))
+	defer srv.Close()
+
+	p := NewWithBaseURL("test-key", srv.URL)
+	req := provider.LLMRequest{
+		Model:        testModel(),
+		SystemPrompt: "Be helpful.",
+		Messages: []types.Message{
+			&types.UserMessage{Role: "user", Content: []types.ContentBlock{
+				&types.TextContent{Type: "text", Text: "msg1"},
+			}},
+		},
+		Tools: []provider.ToolSchema{
+			{Name: "read", Description: "Read a file", Parameters: map[string]any{"type": "object"}},
+			{Name: "write", Description: "Write a file", Parameters: map[string]any{"type": "object"}},
+		},
+	}
+
+	ch, err := p.Stream(context.Background(), req)
+	if err != nil {
+		t.Fatalf("Stream: %v", err)
+	}
+	for range ch {
+	}
+
+	// Parse the captured request body.
+	var body map[string]any
+	if err := json.Unmarshal(capturedBody, &body); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+
+	// System should be a structured array with cache_control.
+	systemArr, ok := body["system"].([]any)
+	if !ok {
+		t.Fatalf("system should be []any, got %T: %v", body["system"], body["system"])
+	}
+	if len(systemArr) != 1 {
+		t.Fatalf("expected 1 system block, got %d", len(systemArr))
+	}
+	sysBlock, ok := systemArr[0].(map[string]any)
+	if !ok {
+		t.Fatalf("system block should be map, got %T", systemArr[0])
+	}
+	if sysBlock["cache_control"] == nil {
+		t.Error("system block should have cache_control")
+	}
+	if sysBlock["text"] != "Be helpful." {
+		t.Errorf("system text: got %v", sysBlock["text"])
+	}
+
+	// Last tool should have cache_control.
+	toolsArr, ok := body["tools"].([]any)
+	if !ok || len(toolsArr) != 2 {
+		t.Fatalf("expected 2 tools, got %v", body["tools"])
+	}
+	lastTool, ok := toolsArr[1].(map[string]any)
+	if !ok {
+		t.Fatalf("last tool should be map, got %T", toolsArr[1])
+	}
+	if lastTool["cache_control"] == nil {
+		t.Error("last tool should have cache_control")
+	}
+	// First tool should NOT have cache_control.
+	firstTool := toolsArr[0].(map[string]any)
+	if firstTool["cache_control"] != nil {
+		t.Error("first tool should NOT have cache_control")
 	}
 }

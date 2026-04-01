@@ -5,7 +5,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"os"
@@ -273,6 +275,9 @@ func initUserDirs() {
 		}
 	}
 
+	extractBuiltinAssets(embeddedSkills, "assets/skills", filepath.Join(base, "skills"))
+	extractBuiltinAssets(embeddedWorkflows, "assets/workflows", filepath.Join(base, "workflows"))
+
 	cfgPath := filepath.Join(base, "config.yml")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
 		defaultCfg := `# clawfirm configuration
@@ -321,6 +326,37 @@ cron_jobs: []
 			log.Printf("app: created default config at %s", cfgPath)
 		}
 	}
+}
+
+// extractBuiltinAssets walks an embedded FS and extracts files to destDir.
+// Existing files are never overwritten.
+func extractBuiltinAssets(src embed.FS, prefix, destDir string) {
+	fs.WalkDir(src, prefix, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(prefix, path)
+		target := filepath.Join(destDir, rel)
+
+		if _, statErr := os.Stat(target); statErr == nil {
+			return nil // already exists, skip
+		}
+
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			log.Printf("app: mkdir %s: %v", filepath.Dir(target), err)
+			return nil
+		}
+
+		data, err := src.ReadFile(path)
+		if err != nil {
+			log.Printf("app: read embedded %s: %v", path, err)
+			return nil
+		}
+		if err := os.WriteFile(target, data, 0o644); err != nil {
+			log.Printf("app: write %s: %v", target, err)
+		}
+		return nil
+	})
 }
 
 // OnStartup is called by Wails once the frontend webview is ready.

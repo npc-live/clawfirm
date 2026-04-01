@@ -59,6 +59,8 @@ func toolCallDoneEvents(toolName string, args map[string]any) []types.AssistantM
 		Arguments: args,
 	}
 	return []types.AssistantMessageEvent{
+		// Emit ToolCallEnd so the streaming executor can pick it up.
+		{Type: types.StreamEventToolCallEnd, ToolCall: tc},
 		{Type: types.StreamEventDone, Message: &types.AssistantMessage{
 			Role:       "assistant",
 			Content:    []types.ContentBlock{tc},
@@ -399,6 +401,304 @@ func msgRoles(msgs []types.Message) []string {
 		roles[i] = m.MessageRole()
 	}
 	return roles
+}
+
+func TestLoopReactiveCompaction(t *testing.T) {
+	// First call returns a "prompt too long" error; after compaction,
+	// second call succeeds with a normal text response.
+	callCount := 0
+	prov := &promptTooLongProvider{
+		failCount:   1,
+		successEvts: textDoneEvents("compacted ok"),
+		callCount:   &callCount,
+	}
+
+	// Build a compressor that just returns a fixed summary.
+	compressor := NewContextCompressor(
+		func(_ context.Context, msgs []types.Message) (string, error) {
+			return fmt.Sprintf("summary of %d messages", len(msgs)), nil
+		},
+		CompressorConfig{ContextWindow: 100000, KeepLastN: 2},
+	)
+
+	// Seed initial messages so there's something to compress.
+	agentCtx := AgentContext{
+		SystemPrompt: "be helpful",
+		Messages: []types.Message{
+			&types.UserMessage{Role: "user", Content: []types.ContentBlock{
+				&types.TextContent{Type: types.ContentTypeText, Text: "first message"},
+			}},
+			&types.AssistantMessage{Role: "assistant", Content: []types.ContentBlock{
+				&types.TextContent{Type: types.ContentTypeText, Text: "first response"},
+			}, StopReason: types.StopReasonStop},
+			&types.UserMessage{Role: "user", Content: []types.ContentBlock{
+				&types.TextContent{Type: types.ContentTypeText, Text: "second message"},
+			}},
+			&types.AssistantMessage{Role: "assistant", Content: []types.ContentBlock{
+				&types.TextContent{Type: types.ContentTypeText, Text: "second response"},
+			}, StopReason: types.StopReasonStop},
+		},
+	}
+
+	config := baseConfig()
+	config.Compressor = compressor
+	config.RetryConfig = RetryConfig{MaxRetries: 1, BaseDelay: time.Millisecond}
+
+	msgs, err := AgentLoop(
+		context.Background(),
+		prov,
+		[]types.Message{&types.UserMessage{Role: "user", Content: []types.ContentBlock{
+			&types.TextContent{Type: types.ContentTypeText, Text: "trigger compaction"},
+		}}},
+		agentCtx,
+		config,
+		noopEmitFn,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Should have succeeded after compaction.
+	if callCount < 2 {
+		t.Errorf("expected at least 2 provider calls (1 fail + 1 success), got %d", callCount)
+	}
+
+	// Last message should be the successful assistant response.
+	lastMsg, ok := msgs[len(msgs)-1].(*types.AssistantMessage)
+	if !ok {
+		t.Fatalf("last message is not *AssistantMessage, got %T", msgs[len(msgs)-1])
+	}
+	if len(lastMsg.Content) == 0 {
+		t.Fatal("expected content in assistant message")
+	}
+	if tc, ok := lastMsg.Content[0].(*types.TextContent); !ok || tc.Text != "compacted ok" {
+		t.Errorf("text: got %v want 'compacted ok'", lastMsg.Content[0])
+	}
+
+	// Verify compaction happened — first message should be a summary.
+	if len(msgs) < 2 {
+		t.Fatal("expected at least 2 messages")
+	}
+	firstMsg, ok := msgs[0].(*types.UserMessage)
+	if !ok {
+		t.Fatalf("first message after compaction should be UserMessage, got %T", msgs[0])
+	}
+	if len(firstMsg.Content) > 0 {
+		if tc, ok := firstMsg.Content[0].(*types.TextContent); ok {
+			if !contains(tc.Text, "Context Summary") {
+				t.Errorf("expected compacted summary message, got %q", tc.Text)
+			}
+		}
+	}
+}
+
+// promptTooLongProvider returns a 400 "prompt too long" error for the first
+// failCount calls, then returns successEvts.
+type promptTooLongProvider struct {
+	failCount   int
+	successEvts []types.AssistantMessageEvent
+	callCount   *int
+}
+
+func (p *promptTooLongProvider) ID() string            { return "prompt-too-long" }
+func (p *promptTooLongProvider) Models() []types.Model { return nil }
+func (p *promptTooLongProvider) Stream(_ context.Context, _ provider.LLMRequest) (<-chan types.AssistantMessageEvent, error) {
+	*p.callCount++
+	if *p.callCount <= p.failCount {
+		return nil, &provider.APIError{
+			StatusCode: 400,
+			Body:       `{"error": {"message": "prompt is too long: 200000 tokens > 100000 maximum"}}`,
+			Provider:   "test",
+		}
+	}
+	ch := make(chan types.AssistantMessageEvent, len(p.successEvts))
+	for _, ev := range p.successEvts {
+		ch <- ev
+	}
+	close(ch)
+	return ch, nil
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsStr(s, substr))
+}
+
+func containsStr(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
+
+// textDoneEventsWithUsage creates a text response with explicit token usage.
+func textDoneEventsWithUsage(text string, inputTokens, outputTokens int) []types.AssistantMessageEvent {
+	return []types.AssistantMessageEvent{
+		{Type: types.StreamEventDone, Message: &types.AssistantMessage{
+			Role:       "assistant",
+			Content:    []types.ContentBlock{&types.TextContent{Type: types.ContentTypeText, Text: text}},
+			StopReason: types.StopReasonStop,
+			Timestamp:  time.Now().UnixMilli(),
+			Usage:      types.Usage{Input: inputTokens, Output: outputTokens},
+		}},
+	}
+}
+
+func TestLoopCumulativeUsage(t *testing.T) {
+	// Two turns: tool call → text response, each with known usage.
+	prov := &fakeLLMProvider{
+		id: "fake",
+		responses: [][]types.AssistantMessageEvent{
+			// Turn 1: tool call with usage 100/50
+			{
+				{Type: types.StreamEventToolCallEnd, ToolCall: &types.ToolCall{
+					Type: types.ContentTypeToolCall, ID: "c1", Name: "echo", Arguments: map[string]any{"text": "x"},
+				}},
+				{Type: types.StreamEventDone, Message: &types.AssistantMessage{
+					Role:       "assistant",
+					Content:    []types.ContentBlock{&types.ToolCall{Type: types.ContentTypeToolCall, ID: "c1", Name: "echo", Arguments: map[string]any{"text": "x"}}},
+					StopReason: types.StopReasonToolUse,
+					Timestamp:  time.Now().UnixMilli(),
+					Usage:      types.Usage{Input: 100, Output: 50},
+				}},
+			},
+			// Turn 2: text response with usage 200/80
+			textDoneEventsWithUsage("done", 200, 80),
+		},
+	}
+
+	echoTool := &mockToolWrapper{
+		name: "echo",
+		fn: func(ctx context.Context, id string, params map[string]any) (tool.ToolResult, error) {
+			return tool.ToolResult{
+				Content: []types.ContentBlock{&types.TextContent{Type: types.ContentTypeText, Text: "ok"}},
+			}, nil
+		},
+	}
+
+	var turnEndEvents []types.AgentEvent
+	var agentEndEvent types.AgentEvent
+	emit := func(ev types.AgentEvent) {
+		if ev.Type == types.EventTurnEnd {
+			turnEndEvents = append(turnEndEvents, ev)
+		}
+		if ev.Type == types.EventAgentEnd {
+			agentEndEvent = ev
+		}
+	}
+
+	agentCtx := AgentContext{Tools: []tool.AgentTool{echoTool}}
+	_, err := AgentLoop(
+		context.Background(), prov,
+		[]types.Message{&types.UserMessage{Role: "user"}},
+		agentCtx, baseConfig(), emit,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify turn 1 cumulative usage.
+	if len(turnEndEvents) < 2 {
+		t.Fatalf("expected 2 turn_end events, got %d", len(turnEndEvents))
+	}
+	cu1 := turnEndEvents[0].CumulativeUsage
+	if cu1 == nil {
+		t.Fatal("turn 1: CumulativeUsage is nil")
+	}
+	if cu1.TotalInput != 100 || cu1.TotalOutput != 50 || cu1.TurnCount != 1 {
+		t.Errorf("turn 1 cumulative: got in=%d out=%d turns=%d, want in=100 out=50 turns=1",
+			cu1.TotalInput, cu1.TotalOutput, cu1.TurnCount)
+	}
+
+	// Verify turn 2 cumulative usage (accumulated).
+	cu2 := turnEndEvents[1].CumulativeUsage
+	if cu2 == nil {
+		t.Fatal("turn 2: CumulativeUsage is nil")
+	}
+	if cu2.TotalInput != 300 || cu2.TotalOutput != 130 || cu2.TurnCount != 2 {
+		t.Errorf("turn 2 cumulative: got in=%d out=%d turns=%d, want in=300 out=130 turns=2",
+			cu2.TotalInput, cu2.TotalOutput, cu2.TurnCount)
+	}
+
+	// Verify agent_end has same cumulative usage.
+	cuEnd := agentEndEvent.CumulativeUsage
+	if cuEnd == nil {
+		t.Fatal("agent_end: CumulativeUsage is nil")
+	}
+	if cuEnd.TotalInput != 300 || cuEnd.TotalOutput != 130 {
+		t.Errorf("agent_end cumulative: got in=%d out=%d, want in=300 out=130",
+			cuEnd.TotalInput, cuEnd.TotalOutput)
+	}
+}
+
+func TestLoopTokenBudget(t *testing.T) {
+	// Provider returns 3 tool-call turns, each using 500 input + 200 output tokens.
+	// Budget is 1000 tokens — should stop after turn 1 or 2 (700 after turn 1, 1400 after turn 2).
+	prov := &fakeLLMProvider{
+		id: "fake",
+		responses: [][]types.AssistantMessageEvent{
+			// Turn 1: tool call, 500+200=700 tokens
+			{
+				{Type: types.StreamEventToolCallEnd, ToolCall: &types.ToolCall{
+					Type: types.ContentTypeToolCall, ID: "c1", Name: "echo", Arguments: map[string]any{"text": "1"},
+				}},
+				{Type: types.StreamEventDone, Message: &types.AssistantMessage{
+					Role:       "assistant",
+					Content:    []types.ContentBlock{&types.ToolCall{Type: types.ContentTypeToolCall, ID: "c1", Name: "echo", Arguments: map[string]any{"text": "1"}}},
+					StopReason: types.StopReasonToolUse,
+					Timestamp:  time.Now().UnixMilli(),
+					Usage:      types.Usage{Input: 500, Output: 200},
+				}},
+			},
+			// Turn 2: tool call, another 500+200=700 tokens (cumulative 1400)
+			{
+				{Type: types.StreamEventToolCallEnd, ToolCall: &types.ToolCall{
+					Type: types.ContentTypeToolCall, ID: "c2", Name: "echo", Arguments: map[string]any{"text": "2"},
+				}},
+				{Type: types.StreamEventDone, Message: &types.AssistantMessage{
+					Role:       "assistant",
+					Content:    []types.ContentBlock{&types.ToolCall{Type: types.ContentTypeToolCall, ID: "c2", Name: "echo", Arguments: map[string]any{"text": "2"}}},
+					StopReason: types.StopReasonToolUse,
+					Timestamp:  time.Now().UnixMilli(),
+					Usage:      types.Usage{Input: 500, Output: 200},
+				}},
+			},
+			// Turn 3: should never be reached
+			textDoneEventsWithUsage("unreachable", 500, 200),
+		},
+	}
+
+	echoTool := &mockToolWrapper{
+		name: "echo",
+		fn: func(ctx context.Context, id string, params map[string]any) (tool.ToolResult, error) {
+			return tool.ToolResult{
+				Content: []types.ContentBlock{&types.TextContent{Type: types.ContentTypeText, Text: "ok"}},
+			}, nil
+		},
+	}
+
+	config := baseConfig()
+	config.TokenBudget = 1000 // Stop when total >= 1000
+
+	agentCtx := AgentContext{Tools: []tool.AgentTool{echoTool}}
+	_, err := AgentLoop(
+		context.Background(), prov,
+		[]types.Message{&types.UserMessage{Role: "user"}},
+		agentCtx, config, noopEmitFn,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Provider should have been called at most 2 times (budget exceeded after turn 2).
+	// Turn 1: 700 < 1000 → continue. Turn 2: 1400 >= 1000 → break.
+	if prov.callIdx > 2 {
+		t.Errorf("expected at most 2 LLM calls (budget), got %d", prov.callIdx)
+	}
+	if prov.callIdx < 2 {
+		t.Errorf("expected at least 2 LLM calls before budget exceeded, got %d", prov.callIdx)
+	}
 }
 
 // Avoid unused import error

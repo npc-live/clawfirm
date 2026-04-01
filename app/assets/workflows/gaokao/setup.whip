@@ -1,0 +1,214 @@
+# whips/gaokao/setup.whip
+# 功能：高考志愿填报初始化 —— 4 个核心字段启动，AI 自动推断并引导补全
+# 前置：data/current-run.json 只需填写 province / score / gender / family
+# 输出：data/gaokao-profile.json（完整个人画像），docs/gaokao-strategy.md（总体策略）
+
+agent counselor:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  资深高考志愿填报顾问，从业 20 年。深度了解全国高校录取规则、各省批次线政策、
+  专业就业趋势。核心理念：志愿填报是人生规划，不是押注游戏。
+  用户只提供了最基本的信息，你需要基于这些信息做出合理推断，
+  并在关键决策点上提出有温度、有依据的建议。
+  """
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  高考数据分析专家。精通各省位次换算、院校历年录取线分析、专业冷热趋势研判。
+  所有结论基于数据推理，明确区分"确定信息"和"基于规律的推断"。
+  """
+
+# ── 读取 4 个核心字段 ──
+let input = session: counselor
+  prompt: """
+  读取 data/current-run.json，只需以下 4 个核心字段：
+
+  - province:  所在省份（如 "广东" / "河南" / "浙江"）
+  - score:     高考预估或实际总分（数字）
+  - gender:    性别（"男" / "女"）
+  - family:    家庭经济情况（"有钱" / "普通" / "困难"）
+               或自然语言描述，如 "父母做生意，比较宽裕" / "农村家庭，经济一般"
+
+  如果文件不存在，输出 "INPUT_MISSING"。
+  其余字段如果有则读取，没有也没关系——系统会自动推断。
+  """
+
+if **input 包含 INPUT_MISSING**:
+  throw "请先创建 data/current-run.json，只需填写 province / score / gender / family 这 4 个字段"
+
+# ── 阶段 0：省份 + 分数深度解读 ──
+let score_analysis = session: analyst
+  prompt: """
+  深度解读 {input.province} 的 {input.score} 分（{input.gender}生）：
+
+  1. **位次估算**
+     基于 {input.province} 近三年该分段的录取规律，估算位次区间。
+     说明估算方式和误差范围（如 "约 2 万 ± 3000 名"）。
+
+  2. **能上什么学校**（用大白话）
+     - 冲一冲：最好情况能上什么层次（985 / 强 211 / 普通 211 / 双一流 / 本科一批）
+     - 正常录取：最有把握的档次
+     - 稳稳兜底：保底能上什么
+
+  3. **{input.province} 填报特殊规则**
+     - 平行志愿还是顺序志愿？
+     - 批次设置（有无提前批、专项计划？）
+     - 近三年是否有大小年现象？
+     - 本省生源竞争烈度（高考大省 / 中等 / 相对宽松）
+
+  4. **性别因素**
+     {input.gender}生在该分数段有哪些专业优势或限制需要特别关注？
+     （如：部分军事/公安/特殊专业有性别名额限制）
+
+  输出结构化分析。
+  """
+
+# ── 阶段 1：家庭经济解读 + 地域策略推断 ──
+let family_strategy = session: counselor
+  prompt: """
+  根据家庭情况和省份，推断填报策略：
+
+  学生信息：
+  - 省份：{input.province}
+  - 分数：{input.score}（{input.gender}）
+  - 家庭：{input.family}
+
+  **1. 家庭经济解读**
+  将 {input.family} 映射为：
+  - 年收入估算区间
+  - 4 年可支出学费+生活费上限（估算）
+  - 是否需要重点考虑奖学金/助学金
+  - 毕业后是否有还贷压力
+
+  **2. 地域策略推断**（基于省份 + 家庭经济）
+
+  情况 A（家庭宽裕）：
+  → 可以考虑北上广深等高消费城市的顶尖院校
+  → 建议城市选择：以发展机会为主，生活成本为辅
+
+  情况 B（家庭普通）：
+  → 需要平衡城市机会和生活成本
+  → 建议优先考虑新一线城市（成都/武汉/西安/南京等）
+  → 或本省省会 + 一所一线城市的 211
+
+  情况 C（家庭困难）：
+  → 奖学金政策是硬指标
+  → 推荐优先本省重点高校或奖学金充足的外省院校
+  → 避免高消费城市（北京/上海生活费每月至少 2500+）
+
+  根据 {input.family} 判断属于哪种情况，给出城市策略建议。
+
+  **3. 需要用户确认的关键问题**（列出 3-5 个最重要的问题）
+  这些问题将影响后续的院校筛选，但用户不填也可以基于推断继续。
+  格式：
+  Q1: [问题] → 如果不知道，默认假设：[合理默认值]
+  Q2: [问题] → 默认假设：[合理默认值]
+  ...
+  """
+
+# ── 阶段 2：基于推断生成完整画像 ──
+let full_profile = session: counselor
+  prompt: """
+  基于已知信息和合理推断，生成完整的学生画像：
+
+  已知：{input}
+  分数解读：{score_analysis}
+  家庭策略：{family_strategy}
+
+  对未填写的字段，做出明确的推断假设（标注"推断"）：
+
+  - subject_type:    如果未填，根据省份和分数段给出"最可能的"判断，或同时分析两种情况
+  - city_prefer:     基于家庭经济推断的建议城市列表
+  - interest_areas:  未填则标注"待用户补充，暂按综合类处理"
+  - career_goal:     未填则标注"未定，将给出通用性最强的方案"
+  - work_life_balance: 根据性别和其他线索推断
+
+  输出完整画像 JSON：
+  {
+    "province": "...",
+    "score": N,
+    "gender": "...",
+    "subject_type": "...(推断)" 或 "...(用户填写)",
+    "estimated_rank": N,
+    "rank_range": "[X-Y]",
+    "family_level": "宽裕/普通/困难",
+    "family_annual_budget_4y": "约X万元（4年总预算估算）",
+    "scholarship_priority": true/false,
+    "city_strategy": "一线优先/新一线优先/省内优先",
+    "recommended_cities": [...],
+    "interest_areas": [...] 或 "待补充",
+    "career_goal": "..." 或 "未定",
+    "core_tags": ["标签1", "标签2", "标签3"],
+    "key_assumptions": ["推断1", "推断2"],
+    "priority_order": "城市 > 专业 > 学校 （推断）"
+  }
+  """
+
+# ── 阶段 3：生成总体策略 ──
+let strategy = session: counselor
+  prompt: """
+  生成志愿填报总体策略，写入 docs/gaokao-strategy.md：
+
+  画像：{full_profile}
+  分数解读：{score_analysis}
+  家庭策略：{family_strategy}
+
+  ## {input.province} {input.score}分 {input.gender}生 志愿填报策略
+
+  ### 一、你的基本定位
+  [用 2-3 句大白话描述：这个分数在省内处于什么位置，最有机会上什么类型的学校]
+
+  ### 二、冲稳保配置建议
+  - 冲刺（X 个志愿）：目标层次，建议分差区间
+  - 稳妥（X 个志愿）：目标层次，建议分差区间
+  - 保底（X 个志愿）：目标层次，建议分差区间
+  - 是否建议勾选服从专业调剂：[建议 + 理由]
+
+  ### 三、城市选择建议
+  基于家庭经济（{full_profile.family_level}）：
+  - 首选城市：[列表 + 理由]
+  - 次选城市：[列表 + 理由]
+  - 建议回避：[如有 + 理由]
+
+  ### 四、专业方向建议
+  [如果用户有填写兴趣则按兴趣，否则给出性价比最高的通用推荐]
+  - 推荐方向 1：[专业名] — 理由
+  - 推荐方向 2：[专业名] — 理由
+  - 性价比较高的冷门方向（如有）：[专业名] — 理由
+
+  ### 五、{input.gender}生特别提示
+  [针对性别的专业选择、校园环境、就业方向等具体建议]
+
+  ### 六、下一步
+  运行 `research.whip` 查询具体院校数据和专业就业分析
+  """
+
+# ── 写入配置文件 ──
+session: analyst
+  prompt: """
+  持久化所有数据：
+
+  写入 data/gaokao-profile.json：{full_profile}（追加 strategy_file 字段）
+
+  初始化空文件（如不存在）：
+  - data/gaokao-candidates.json → []
+  - data/gaokao-matches.json    → []
+  - data/gaokao-plan.json       → {}
+
+  追加 data/stage-log.json：{ stage: "setup", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"setup","data":{
+    "student": "{input.province} {input.score}分 {input.gender}生",
+    "family_level": "{full_profile.family_level}",
+    "estimated_rank": N,
+    "core_tags": [...],
+    "key_assumptions": [...],
+    "next_step": "运行 research.whip 查询院校数据"
+  }}
+  """

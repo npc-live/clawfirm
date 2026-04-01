@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
+	"sync"
 	"time"
 
 	"github.com/ai-gateway/clawfirm/provider"
@@ -36,6 +39,49 @@ type AgentLoopConfig struct {
 	GetFollowUpMessages func() ([]types.Message, error)
 	// Options are extra streaming/model options.
 	Options types.StreamOptions
+
+	// RetryConfig controls retry behavior for transient LLM errors (429, 529, etc.).
+	// Zero value uses defaults (10 retries, 500ms base delay).
+	RetryConfig RetryConfig
+
+	// Compressor is used for reactive compaction when the LLM returns a
+	// "prompt too long" error (NeedCompact). If nil, such errors are fatal.
+	Compressor *ContextCompressor
+
+	// TokenBudget caps total tokens (input + output) across all turns.
+	// When exceeded the loop exits gracefully. 0 = unlimited.
+	TokenBudget int
+}
+
+// RetryConfig controls exponential backoff for LLM stream retries.
+type RetryConfig struct {
+	// MaxRetries is the maximum number of retry attempts. Default: 10.
+	MaxRetries int
+	// BaseDelay is the initial delay before the first retry. Default: 500ms.
+	BaseDelay time.Duration
+	// MaxDelay caps the backoff delay. Default: 60s.
+	MaxDelay time.Duration
+}
+
+func (r RetryConfig) maxRetries() int {
+	if r.MaxRetries <= 0 {
+		return 10
+	}
+	return r.MaxRetries
+}
+
+func (r RetryConfig) baseDelay() time.Duration {
+	if r.BaseDelay <= 0 {
+		return 500 * time.Millisecond
+	}
+	return r.BaseDelay
+}
+
+func (r RetryConfig) maxDelay() time.Duration {
+	if r.MaxDelay <= 0 {
+		return 60 * time.Second
+	}
+	return r.MaxDelay
 }
 
 // AgentLoopContinue is identical to AgentLoop but does not prepend any new
@@ -73,15 +119,11 @@ func AgentLoop(
 		reg.Register(t)
 	}
 
-	// Build tool schemas for the LLM
-	toolSchemas := make([]provider.ToolSchema, 0, len(agentCtx.Tools))
-	for _, t := range agentCtx.Tools {
-		toolSchemas = append(toolSchemas, provider.ToolSchema{
-			Name:        t.Name(),
-			Description: t.Description(),
-			Parameters:  t.Schema(),
-		})
-	}
+	// Track which deferred tools have been activated via tool_search.
+	activatedTools := make(map[string]bool)
+
+	// Cumulative token usage across all turns.
+	cumUsage := &types.CumulativeUsage{}
 
 	turn := 0
 	for {
@@ -99,6 +141,19 @@ func AgentLoop(
 			break
 		}
 
+		// Build tool schemas — only include non-deferred + activated tools.
+		toolSchemas := make([]provider.ToolSchema, 0, len(agentCtx.Tools))
+		for _, t := range agentCtx.Tools {
+			if t.ShouldDefer() && !activatedTools[t.Name()] {
+				continue
+			}
+			toolSchemas = append(toolSchemas, provider.ToolSchema{
+				Name:        t.Name(),
+				Description: t.Description(),
+				Parameters:  t.Schema(),
+			})
+		}
+
 		// Optionally transform context (e.g., prune)
 		msgs := agentCtx.Messages
 		if config.TransformContext != nil {
@@ -108,6 +163,9 @@ func AgentLoop(
 			}
 			msgs = transformed
 		}
+
+		// Microcompact: clear old tool result content to reduce prompt size.
+		msgs = MicrocompactMessages(msgs, 3)
 
 		// Optionally convert messages for LLM format
 		if config.ConvertToLLM != nil {
@@ -138,15 +196,37 @@ func AgentLoop(
 
 		emit(types.AgentEvent{Type: types.EventTurnStart})
 
-		// Call provider
+		// Call provider with retry for transient errors
 		log.Printf("[agent-loop] turn %d: calling LLM (model=%s, tools=%d, msgs=%d)", turn, config.Model.ID, len(toolSchemas), len(msgs))
-		eventCh, err := prov.Stream(ctx, req)
-		if err != nil {
-			log.Printf("[agent-loop] turn %d: stream error: %v", turn, err)
-			return agentCtx.Messages, fmt.Errorf("agent loop: stream: %w", err)
+		var eventCh <-chan types.AssistantMessageEvent
+		streamErr := retryStream(ctx, config.RetryConfig, emit, turn, func() error {
+			var err error
+			eventCh, err = prov.Stream(ctx, req)
+			return err
+		})
+		if streamErr != nil {
+			decision := provider.ClassifyError(streamErr)
+			if decision == provider.RetryDecisionNeedCompact && config.Compressor != nil {
+				log.Printf("[agent-loop] turn %d: prompt too long, attempting force compaction", turn)
+				prevLen := len(agentCtx.Messages)
+				compressed, compErr := config.Compressor.ForceCompress(ctx, agentCtx.Messages)
+				if compErr != nil {
+					log.Printf("[agent-loop] turn %d: force compaction failed: %v", turn, compErr)
+					return agentCtx.Messages, fmt.Errorf("agent loop: stream: %w (compaction also failed: %v)", streamErr, compErr)
+				}
+				agentCtx.Messages = compressed
+				log.Printf("[agent-loop] turn %d: compacted %d → %d msgs, retrying turn", turn, prevLen, len(compressed))
+				turn-- // retry the same turn number
+				continue
+			}
+			log.Printf("[agent-loop] turn %d: stream error (after retries): %v", turn, streamErr)
+			return agentCtx.Messages, fmt.Errorf("agent loop: stream: %w", streamErr)
 		}
 
-		// Consume stream events
+		// Consume stream events with eager tool execution.
+		// Safe tools start as soon as their ToolCallEnd event arrives (while the
+		// stream is still in progress). Unsafe tools are queued and executed
+		// sequentially after the stream finishes.
 		assistantMsg := &types.AssistantMessage{
 			Role:     "assistant",
 			Provider: prov.ID(),
@@ -156,6 +236,33 @@ func AgentLoop(
 			Type:         types.EventMessageStart,
 			AssistantMsg: assistantMsg,
 		})
+
+		// Streaming tool execution state.
+		type indexedResult struct {
+			index  int
+			result types.ToolResultMessage
+			err    error
+		}
+		var (
+			toolCallIndex int
+			safeWg        sync.WaitGroup
+			safeSem       = make(chan struct{}, smartConcurrencyLimit)
+			resultCh      = make(chan indexedResult, 16)
+			unsafeQueue   []struct {
+				index int
+				call  types.ToolCall
+			}
+		)
+
+		// Collector goroutine — gathers results from eager + deferred executions.
+		var allResults []indexedResult
+		collectorDone := make(chan struct{})
+		go func() {
+			for ir := range resultCh {
+				allResults = append(allResults, ir)
+			}
+			close(collectorDone)
+		}()
 
 		for streamEv := range eventCh {
 			if ctx.Err() != nil {
@@ -168,7 +275,6 @@ func AgentLoop(
 				StreamEvent:  &streamEv,
 			})
 
-			// Merge delta into partial message
 			switch streamEv.Type {
 			case types.StreamEventDone:
 				if streamEv.Message != nil {
@@ -178,8 +284,46 @@ func AgentLoop(
 				if streamEv.Error != nil {
 					assistantMsg = streamEv.Error
 				}
+			case types.StreamEventToolCallEnd:
+				// A tool call completed in the stream — start executing eagerly.
+				if streamEv.ToolCall != nil {
+					tc := *streamEv.ToolCall
+					idx := toolCallIndex
+					toolCallIndex++
+
+					if isToolSafe(tc.Name, reg) {
+						// Safe tool: execute immediately in background.
+						safeWg.Add(1)
+						go func() {
+							defer safeWg.Done()
+							safeSem <- struct{}{}
+							defer func() { <-safeSem }()
+							r, err := executeOne(ctx, tc, reg, assistantMsg,
+								config.BeforeToolCall, config.AfterToolCall, emit)
+							resultCh <- indexedResult{idx, r, err}
+						}()
+					} else {
+						// Unsafe tool: queue for sequential execution after stream ends.
+						unsafeQueue = append(unsafeQueue, struct {
+							index int
+							call  types.ToolCall
+						}{idx, tc})
+					}
+				}
 			}
 		}
+
+		// Stream finished. Wait for all in-flight safe tools.
+		safeWg.Wait()
+
+		// Execute queued unsafe tools sequentially.
+		for _, uq := range unsafeQueue {
+			r, err := executeOne(ctx, uq.call, reg, assistantMsg,
+				config.BeforeToolCall, config.AfterToolCall, emit)
+			resultCh <- indexedResult{uq.index, r, err}
+		}
+		close(resultCh)
+		<-collectorDone
 
 		// Ensure timestamp is set
 		if assistantMsg.Timestamp == 0 {
@@ -189,12 +333,11 @@ func AgentLoop(
 		// Log what the LLM returned
 		contentTypes := make([]string, 0, len(assistantMsg.Content))
 		for _, b := range assistantMsg.Content {
-			switch b.(type) {
+			switch cb := b.(type) {
 			case *types.TextContent:
 				contentTypes = append(contentTypes, "text")
 			case *types.ToolCall:
-				tc := b.(*types.ToolCall)
-				contentTypes = append(contentTypes, "tool_call:"+tc.Name)
+				contentTypes = append(contentTypes, "tool_call:"+cb.Name)
 			default:
 				contentTypes = append(contentTypes, fmt.Sprintf("%T", b))
 			}
@@ -210,28 +353,26 @@ func AgentLoop(
 		// Append assistant message to history
 		agentCtx.Messages = append(agentCtx.Messages, assistantMsg)
 
-		// Handle tool calls if stop reason is toolUse
+		// Assemble tool results in original order.
 		var toolResults []types.ToolResultMessage
-		if assistantMsg.StopReason == types.StopReasonToolUse {
-			log.Printf("[agent-loop] turn %d: executing tool calls...", turn)
-			// Collect tool calls from assistant message content
-			var toolCalls []types.ToolCall
-			for _, block := range assistantMsg.Content {
-				if tc, ok := block.(*types.ToolCall); ok {
-					toolCalls = append(toolCalls, *tc)
+		if toolCallIndex > 0 {
+			toolResults = make([]types.ToolResultMessage, toolCallIndex)
+			for _, ir := range allResults {
+				if ir.err != nil {
+					return agentCtx.Messages, fmt.Errorf("agent loop: tool execution: %w", ir.err)
 				}
+				toolResults[ir.index] = ir.result
 			}
 
-			var execErr error
-			if config.ToolExecution == types.ToolExecutionParallel {
-				toolResults, execErr = ExecuteParallel(ctx, toolCalls, reg, assistantMsg,
-					config.BeforeToolCall, config.AfterToolCall, emit)
-			} else {
-				toolResults, execErr = ExecuteSequential(ctx, toolCalls, reg, assistantMsg,
-					config.BeforeToolCall, config.AfterToolCall, emit)
-			}
-			if execErr != nil {
-				return agentCtx.Messages, fmt.Errorf("agent loop: tool execution: %w", execErr)
+			// Collect tool_search activations before appending to history.
+			for _, tr := range toolResults {
+				if tr.ToolName == "tool_search" {
+					if names, ok := tr.Details.([]string); ok {
+						for _, n := range names {
+							activatedTools[n] = true
+						}
+					}
+				}
 			}
 
 			// Append tool results to history
@@ -240,11 +381,27 @@ func AgentLoop(
 			}
 		}
 
+		// Update cumulative usage.
+		cumUsage.TotalInput += assistantMsg.Usage.Input
+		cumUsage.TotalOutput += assistantMsg.Usage.Output
+		cumUsage.TurnCount++
+
+		cumSnapshot := *cumUsage // snapshot so each event is independent
 		emit(types.AgentEvent{
-			Type:        types.EventTurnEnd,
-			Message:     assistantMsg,
-			ToolResults: toolResults,
+			Type:            types.EventTurnEnd,
+			Message:         assistantMsg,
+			ToolResults:     toolResults,
+			CumulativeUsage: &cumSnapshot,
 		})
+
+		// Check token budget.
+		if config.TokenBudget > 0 {
+			total := cumUsage.TotalInput + cumUsage.TotalOutput
+			if total >= config.TokenBudget {
+				log.Printf("[agent-loop] turn %d: token budget exceeded (%d >= %d), stopping", turn, total, config.TokenBudget)
+				break
+			}
+		}
 
 		// Inject steering messages if available
 		if config.GetSteeringMessages != nil {
@@ -288,12 +445,76 @@ func AgentLoop(
 		log.Printf("[agent-loop] turn %d: toolUse — continuing loop", turn)
 	}
 
-	log.Printf("[agent-loop] === agent done after %d turns, total %d msgs ===", turn, len(agentCtx.Messages))
+	log.Printf("[agent-loop] === agent done after %d turns, total %d msgs, tokens=in:%d/out:%d ===",
+		turn, len(agentCtx.Messages), cumUsage.TotalInput, cumUsage.TotalOutput)
 
 	emit(types.AgentEvent{
-		Type:     types.EventAgentEnd,
-		Messages: agentCtx.Messages,
+		Type:            types.EventAgentEnd,
+		Messages:        agentCtx.Messages,
+		CumulativeUsage: cumUsage,
 	})
 
 	return agentCtx.Messages, nil
+}
+
+// retryStream wraps a prov.Stream() call with exponential backoff for transient errors.
+// It only retries errors classified as RetryDecisionRetry; all other errors are returned immediately.
+func retryStream(
+	ctx context.Context,
+	cfg RetryConfig,
+	emit func(types.AgentEvent),
+	turn int,
+	fn func() error,
+) error {
+	maxRetries := cfg.maxRetries()
+	baseDelay := cfg.baseDelay()
+	maxDelay := cfg.maxDelay()
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		lastErr = fn()
+		if lastErr == nil {
+			return nil
+		}
+
+		decision := provider.ClassifyError(lastErr)
+		if decision != provider.RetryDecisionRetry {
+			// Non-retryable (permanent error or needs compaction) — return immediately.
+			return lastErr
+		}
+
+		if attempt >= maxRetries {
+			break
+		}
+
+		// Compute delay: exponential backoff with jitter.
+		delay := time.Duration(float64(baseDelay) * math.Pow(2, float64(attempt)))
+		if delay > maxDelay {
+			delay = maxDelay
+		}
+		// Add jitter: multiply by random factor in [0.5, 1.5).
+		jitter := 0.5 + rand.Float64()
+		delay = time.Duration(float64(delay) * jitter)
+
+		// Respect Retry-After header if available.
+		if apiErr, ok := provider.IsAPIError(lastErr); ok && apiErr.RetryAfter > 0 {
+			if apiErr.RetryAfter > delay {
+				delay = apiErr.RetryAfter
+			}
+		}
+
+		log.Printf("[agent-loop] turn %d: retryable error (attempt %d/%d), retrying in %v: %v",
+			turn, attempt+1, maxRetries, delay, lastErr)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(delay):
+		}
+	}
+	return lastErr
 }

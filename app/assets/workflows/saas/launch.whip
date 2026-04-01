@@ -1,0 +1,149 @@
+# whips/saas/launch.whip
+# 功能：Product Hunt 发布全流程 —— 发布前准备核查、发布当天小时级执行、后续跟进
+# 调用方：手动触发（发布前 24 小时 / 发布当天）
+# 前置：data/saas-config.json，docs/landing-copy.md（已有 Tagline/Description）
+# 输出：data/saas-posts.json 更新，docs/ph-launch-kit.md
+
+agent launcher:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  Product Hunt 发布专家。深度了解 PH 算法规则：前2小时 upvote 速度最关键，
+  Hunter 选择影响曝光，评论质量影响排名。
+  发布当天是全年最重要的一天，每个细节都必须到位。
+  """
+
+agent scheduler:
+  provider: "claude-code"
+  model: haiku
+  tools: ["bash", "read", "write"]
+  prompt: "发布任务调度专家。维护小时级任务清单，追踪每项任务完成状态。"
+
+# ── 读取配置 ──
+let config = session: launcher
+  prompt: """
+  读取配置：
+  1. 读取 data/saas-config.json
+  2. 读取 docs/landing-copy.md（提取 Hero headline / subheadline 用于 PH tagline）
+  3. 读取 data/current-run.json，获取 launch_mode 参数
+     - "checklist"：生成发布前核查清单
+     - "launch-day"：生成当天小时级执行计划
+     - "assets"：生成 PH 所有文案素材
+
+  输出配置信息。
+  """
+
+# ── 发布素材生成 ──
+let ph_assets = session: launcher
+  prompt: """
+  为 {config.product_name} 生成 Product Hunt 发布完整素材包：
+
+  配置：{config}
+  落地页文案参考：{config.landing_copy_hero}
+
+  ## 1. 基础信息
+  Product Name: {config.product_name}
+  Tagline（< 60 字符，不用句号，强调结果而非功能）：
+    备选 A: ...
+    备选 B: ...
+    备选 C: ...
+
+  ## 2. Description（PH 产品页正文，250-300 字）
+  结构：
+  - 开篇：一个痛点场景（1-2 句，引发共鸣）
+  - 我们的解决方案（2-3 句，聚焦核心价值）
+  - 主要功能（3 条 bullet，用 emoji + outcome 格式）
+    🔹 ...
+    🔹 ...
+    🔹 ...
+  - 适合谁用（1 句）
+  - 免费试用/定价说明（1 句）
+  - Maker comment 预告（"Happy to answer any questions below!"）
+
+  ## 3. Maker Comment（发布后第一条评论，最重要）
+  结构：
+  - Hi PH! （1 句亲切开场，说背景故事 —— 为什么做这个）
+  - 我们解决的核心问题（2-3 句，具体数字）
+  - 今天发布特别优惠（PH 专属折扣码或免费升级，有效期 24-48h）
+  - 邀请提问（一个引导性问题）
+  - 感谢 Hunter（如有）
+
+  ## 4. First Comment 回复模板
+  针对常见反馈类型准备回复模板：
+  - 正面评价回复（表达感谢 + 引导试用）
+  - 功能请求回复（表示已记录 + 路线图说明）
+  - Bug/问题回复（快速承认 + 解决时间）
+  - 与竞品对比问题（中立、真实、突出差异）
+
+  ## 5. 社群预热消息
+  发布当天需要在以下渠道通知：
+  Twitter/X 发帖草稿（3 条，不同时间发）：
+    T-0（发布时）: "We're live on @ProductHunt today! [链接] ..."
+    T+4h: "Thank you for all the support! [数据/感谢] ..."
+    T+12h: "Halfway through launch day... [里程碑/特别感谢]"
+  LinkedIn 发帖草稿（1 条，更正式）：
+    ...
+  Slack/Discord 社群通知模板：
+    ...
+
+  写入 docs/ph-launch-kit.md。
+  """
+
+# ── 发布前核查清单 ──
+let checklist = session: scheduler
+  prompt: """
+  生成 Product Hunt 发布前完整核查清单（发布前 7 天开始）：
+
+  配置：{config}
+  发布资源：{ph_assets}
+
+  ## D-7（发布前 7 天）
+  - [ ] 确认 Hunter（找有 500+ follower 的 PH 活跃用户 hunt 你）
+  - [ ] 准备产品截图（最少 5 张，第一张最关键：展示核心功能）
+  - [ ] 录制 Demo Video（< 2 分钟，无需解说，纯产品操作）
+  - [ ] 设置 PH 专属折扣（coupon code：PH + 年份，如 PH2026）
+  - [ ] 检查落地页加载速度（< 3 秒）
+
+  ## D-3（发布前 3 天）
+  - [ ] 在 PH 个人页面发帖预热："Launching on PH in 3 days..."
+  - [ ] 给邮件列表发送预告邮件
+  - [ ] 在相关 Twitter/LinkedIn 社群预告
+
+  ## D-1（发布前 1 天）
+  - [ ] 00:01 PST = 最佳发布时刻（太平洋时间凌晨1点）
+  - [ ] 确认 Maker Comment 初稿已写好
+  - [ ] 通知团队/朋友准备发布当天支持
+  - [ ] 确认服务器可以承受流量峰值
+  - [ ] 关闭所有可能影响发布的维护窗口
+
+  ## 发布当天小时级计划
+  00:01 PST — 提交发布，立即发 Maker Comment
+  00:05 — 发 Twitter 公告
+  00:10 — 通知所有预热名单（邮件/Slack/Discord）
+  01:00 — 检查评论，全部回复
+  02:00 — 发第二条 Twitter（带当前排名截图）
+  04:00 — 检查是否进入首页 Top 5，调整推广力度
+  08:00 — 发 LinkedIn 帖子（面向职业用户）
+  12:00 — 发"halfway" Twitter 更新
+  18:00 — 最后冲刺通知
+  23:00 — 感谢帖子
+
+  写入 docs/ph-launch-kit.md（追加到已有内容后）。
+  追加 data/saas-posts.json 中 type=producthunt 的条目。
+  """
+
+# ── 完成 ──
+session: launcher
+  prompt: """
+  launch.whip 完成。
+
+  追加 data/stage-log.json：{ stage: "launch-kit", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"launch","data":{
+    "kit_file": "docs/ph-launch-kit.md",
+    "assets_ready": ["tagline","description","maker-comment","social-posts","checklist"],
+    "next_step": "Review docs/ph-launch-kit.md and schedule launch date"
+  }}
+  """

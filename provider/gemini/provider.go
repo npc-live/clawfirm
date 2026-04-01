@@ -185,7 +185,12 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 	if resp.StatusCode >= 400 {
 		b, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("gemini: HTTP %d: %s", resp.StatusCode, string(b))
+		return nil, &provider.APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(b),
+			Provider:   "gemini",
+			RetryAfter: provider.ParseRetryAfter(resp),
+		}
 	}
 
 	ch := make(chan types.AssistantMessageEvent, 32)

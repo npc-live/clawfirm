@@ -1,6 +1,9 @@
 package app
 
-import _ "embed"
+import (
+	"embed"
+	_ "embed"
+)
 
 // embeddedFunc holds the bundled `func` binary.
 // In production builds (make app), the Makefile replaces app/assets/func
@@ -9,3 +12,9 @@ import _ "embed"
 //
 //go:embed assets/func
 var embeddedFunc []byte
+
+//go:embed assets/skills
+var embeddedSkills embed.FS
+
+//go:embed assets/workflows
+var embeddedWorkflows embed.FS

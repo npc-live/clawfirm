@@ -1,0 +1,135 @@
+# whips/polymarket/report.whip
+# 功能：每日交易报告 —— 汇总当日交易数据，分析策略表现，生成可读报告
+# 调用方：scheduler.ts 每日 23:00 定时
+# 前置：当日有交易记录（data/trades.json）
+# 输出：data/reports.json，docs/report-YYYY-MM-DD.md
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  量化交易绩效分析专家。从交易数据中提取策略改进信号，
+  所有结论必须有数据支撑，区分运气与边际。
+  识别系统性偏差，给出可操作的参数调整建议。
+  """
+
+# ── 读取今日数据 ──
+let today_data = session: analyst
+  prompt: """
+  读取今日交易数据：
+
+  1. 读取 data/trades.json，筛选今日（ts 日期 = today）的记录
+  2. 读取 data/positions.json
+  3. 读取 data/forecasts.json（今日预报数据）
+  4. 读取 data/risk-status.json（今日风控状态）
+  5. 读取 data/reports.json（不存在则 []），确认是否已生成过今日报告
+
+  今日日期：运行时获取 date '+%Y-%m-%d'
+
+  输出：{
+    date,
+    trades: [...],    # 今日所有交易
+    settled: [...],   # 今日已结算
+    open: [...],      # 今日仍开放
+    risk_events: [...] # 今日风控事件
+  }
+  """
+
+# ── 计算绩效指标 ──
+let metrics = session: analyst
+  prompt: """
+  计算今日交易绩效：
+
+  今日数据：{today_data}
+
+  计算：
+
+  【基础指标】
+  - 总交易次数、成交次数、失败次数
+  - 已结算笔数、胜率（win_count / settled_count）
+  - 今日已实现 PnL（USDC）
+  - 今日浮动 PnL（USDC）
+  - 总 PnL = 已实现 + 浮动
+
+  【边际质量】
+  - 平均 edge（所有交易的 p_model - p_market 均值）
+  - edge 预测准确率：结算为赢的交易中，p_model > 0.5 的比例
+  - 实际胜率 vs 预期胜率（基于 p_model 的期望值）
+
+  【城市分布】
+  - 各城市交易次数和 PnL
+
+  【Kelly 执行情况】
+  - 平均实际下注比例 vs Kelly 建议比例
+  - 最大单笔下注金额
+
+  读取 data/reports.json（不存在则 []），追加今日报告数据：
+  { date, metrics: {...}, generated_at: "[ISO]" }
+  写回 data/reports.json。
+
+  输出结构化绩效摘要。
+  """
+
+# ── 策略分析 ──
+let strategy_insights = session: analyst
+  prompt: """
+  基于今日数据分析策略表现：
+
+  绩效指标：{metrics}
+  今日数据：{today_data}
+
+  分析维度：
+
+  【预报质量】
+  - 今日预报 ensemble_spread 与 edge 的相关性
+  - 哪些城市的模型概率最准确？
+  - 市场定价是否在更新（stale forecast 假设是否成立）？
+
+  【信号质量】
+  - edge 30-40% 的跳过是否合理（这些机会实际结果如何）？
+  - 夏季上海 min_edge=12% 过滤是否过于保守？
+  - 哪个 edge 区间的胜率最高？
+
+  【执行质量】
+  - 订单成交率（提交 vs 实际成交）
+  - 成交价格是否符合预期（滑点分析）
+
+  【改进建议】
+  - 参数调整建议（附数据依据）
+  - 下周需要关注的城市或市场
+  - 是否有系统性偏差需要修正
+
+  写入 docs/report-{date}.md：
+
+  # Polymarket 天气策略日报 — {date}
+
+  ## 今日概览
+  | 指标 | 数值 |
+  | 交易次数 | N |
+  | 已结算 | N |
+  | 胜率 | X% |
+  | 今日 PnL | +/- X USDC |
+  | 平均 edge | X% |
+
+  ## 交易明细
+  [按城市列出每笔交易：城市、区间、edge、下注、结果、PnL]
+
+  ## 策略信号
+  [3条可操作的分析结论，每条格式：数据发现 → 原因 → 建议]
+
+  ## 风控事件
+  [今日熔断/预警记录，无则"无异常"]
+
+  ## 明日重点
+  [基于今日预报数据，明日最值得关注的城市和区间]
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"report","data":{
+    "date": "[date]",
+    "pnl_today": X,
+    "win_rate": X,
+    "trades_count": N,
+    "report_file": "docs/report-[date].md"
+  }}
+  """

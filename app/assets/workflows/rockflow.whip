@@ -1,0 +1,800 @@
+# workflows/rockflow.whip
+# 功能：多品种多市场（港股 + 美股）多空策略
+#       基于 MACD 趋势判断 + ATR 波动率过滤，行情来自 Yahoo Finance
+#       通过 Rockflow 模拟交易网关（rockalpha）执行真实开平仓
+# 市场：
+#   港股 HK：00100.HK 00700.HK 00981.HK 02513.HK 06869.HK 09888.HK 09988.HK
+#   美股 US：ARM ASML BABA BIDU CRWV IREN MU NBIS NVDA PLTR TSLA TSM
+# 信号逻辑：
+#   MACD(12,26,9) histogram > 0 → 多头；< 0 → 空头
+#   ATR(5) > ATR(10) → 波动率上升，信号有效
+# 时间：HK 市场 09:30–16:00 HKT，US 市场 09:30–16:00 ET
+# API：Rockflow HTTP 网关 https://paper-mcp.rockflow.tech/bot/api/http_gateway/v1
+#       鉴权：X-API-Key: $ROCKFLOW_API_KEY
+
+agent market-analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  多市场量化分析专家。负责从 Yahoo Finance 拉取港股和美股行情，
+  使用 func CLI（~/projects/pi-go/bin/func）计算 MACD 和 ATR 技术指标，
+  判断趋势方向和波动率状态。严格遵守各市场交易时间。
+  """
+
+agent trader:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  Rockflow 模拟盘交易执行专家。
+  Base URL: https://paper-mcp.rockflow.tech/bot/api/http_gateway/v1
+  API Key 从环境变量 $ROCKFLOW_API_KEY 读取。
+  下单前必须：核验标的在赛场 tickers 内 → 查可交易数量 → 执行风控 → 下单。
+  每笔操作结果立即写日志，异常时输出完整错误。
+  """
+
+agent reporter:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: "量化交易看板专家。读取行情CSV、指标数据和持仓信息，生成含K线图表的完整HTML看板。"
+
+# ── 阶段 0：时间与市场状态检查 ──
+let market_status = session: market-analyst
+  prompt: """
+  检查当前时间和各市场交易状态：
+
+  1. 获取当前 UTC 时间：date -u +"%Y-%m-%dT%H:%M:%SZ"
+
+  2. 港股（HKT = UTC+8）交易时段：09:30–12:00 和 13:00–16:00，周一至周五
+     计算当前 HKT，判断是否开市，输出 HK_OPEN 或 HK_CLOSED
+
+  3. 美股（ET：夏令时 UTC-4 / 标准时 UTC-5）交易时段：09:30–16:00，周一至周五
+     3月第二个周日→11月第一个周日为夏令时，其余为标准时
+     计算当前 ET，判断是否开市，输出 US_OPEN 或 US_CLOSED
+
+  输出：
+  {
+    utc_now: "...",
+    hk: { status: "OPEN"/"CLOSED", local_time: "HH:MM HKT", session: "morning"/"afternoon"/"closed" },
+    us: { status: "OPEN"/"CLOSED", local_time: "HH:MM ET", tz_offset: -4/-5 },
+    any_market_open: true/false
+  }
+  """
+
+let markets_closed = **market_status 中 any_market_open == false**
+
+if markets_closed:
+  # 所有市场已收市，跳过行情和交易，直接检查是否需要生成报告
+  let report_path = "~/.pi-go/canvas/rockflow.html"
+  let report_exists = session: reporter
+    prompt: """
+    检查报告文件是否存在：
+    test -f ~/.pi-go/canvas/rockflow.html && echo "EXISTS" || echo "NOT_FOUND"
+    输出 EXISTS 或 NOT_FOUND
+    """
+  if **report_exists 包含 EXISTS**:
+    throw "当前所有市场均已收市（HK: {market_status.hk.local_time}，US: {market_status.us.local_time}），且报告已存在，无需重新生成"
+
+# ── 阶段 1：查询赛场 + 持仓 + 资产 ──
+let arena_state = session: trader
+  prompt: """
+  通过 Rockflow 网关查询赛场状态、当前持仓和账户资产：
+
+  GATEWAY="https://paper-mcp.rockflow.tech/bot/api/http_gateway/v1"
+  KEY="$ROCKFLOW_API_KEY"
+
+  1. 查询赛场详情（获取可交易标的 tickers 和当前排名）：
+     curl -sS "$GATEWAY/arena/detail" -H "X-API-Key: $KEY"
+     提取：tickers（string[]）、participants 中本账户的 rank 和 currentEarningYieldRate
+
+  2. 查询当前持仓：
+     curl -sS "$GATEWAY/positions" -H "X-API-Key: $KEY"
+     提取每条持仓：symbol, market, side(BUY/SELL), quantity, costPrice, currentPrice, unrealizedPnl
+
+  3. 查询账户资产：
+     curl -sS "$GATEWAY/assets" -H "X-API-Key: $KEY"
+     提取：totalAsset（总资产）、cashBalance（可用现金）、unrealizedPnl
+
+  输出：
+  {
+    tickers: [...],          # 赛场可交易标的全集
+    rank: N,                 # 当前排名（-1 表示已淘汰）
+    yield_rate: X,           # 当前收益率
+    positions: [...],        # 现有持仓列表
+    positions_hk: N,         # HK 持仓数
+    positions_us: N,         # US 持仓数
+    total_asset: X,
+    cash_balance: X
+  }
+  """
+
+if **arena_state 中 rank == -1**:
+  throw "账户已被淘汰，无法继续参赛"
+
+# ── 阶段 2：拉取行情并导出 CSV ──
+let raw_data = session: market-analyst
+  prompt: """
+  从 Yahoo Finance 拉取开市股票的日线行情（近 60 根 K 线），每只导出一个 CSV。
+
+  市场状态：{market_status}
+  赛场可交易标的：{arena_state.tickers}（只处理在此列表内的标的）
+
+  待扫描列表（取交集）：
+  - 港股（HK_OPEN 时）：00100.HK 00700.HK 00981.HK 02513.HK 06869.HK 09888.HK 09988.HK
+  - 美股（US_OPEN 时）：ARM ASML BABA BIDU CRWV IREN MU NBIS NVDA PLTR TSLA TSM
+
+  python3 - <<'PYEOF'
+  import yfinance as yf, json, os
+
+  market_status = {market_status}
+  arena_tickers = set({arena_state.tickers})
+
+  candidates = []
+  if market_status['hk']['status'] == 'OPEN':
+      candidates += ['00100.HK','00700.HK','00981.HK','02513.HK','06869.HK','09888.HK','09988.HK']
+  if market_status['us']['status'] == 'OPEN':
+      candidates += ['ARM','ASML','BABA','BIDU','CRWV','IREN','MU','NBIS','NVDA','PLTR','TSLA','TSM']
+
+  symbols = [s for s in candidates if s in arena_tickers]
+
+  os.makedirs('data/csv', exist_ok=True)
+  meta, errors = {}, []
+  for sym in symbols:
+      try:
+          hist = yf.Ticker(sym).history(period='3mo', interval='1d').tail(60)
+          if len(hist) < 30:
+              errors.append(f"{sym}:数据不足{len(hist)}根"); continue
+          safe = sym.replace('.', '_')
+          csv_path = f'data/csv/{safe}.csv'
+          hist[['Open','High','Low','Close','Volume']].rename(
+              columns={'Open':'open','High':'high','Low':'low','Close':'close','Volume':'volume'}
+          ).to_csv(csv_path, index_label='date')
+          meta[sym] = {
+              'csv': csv_path,
+              'market': 'HK' if sym.endswith('.HK') else 'US',
+              'latest_price': float(hist['Close'].iloc[-1]),
+              'latest_date':  str(hist.index[-1].date())
+          }
+      except Exception as e:
+          errors.append(f"{sym}:{e}")
+
+  with open('data/rockflow-meta.json', 'w') as f:
+      json.dump(meta, f, indent=2)
+  print(f"FETCH_OK: {len(meta)} 只就绪，跳过(不在tickers内或错误): {errors}")
+  PYEOF
+
+  检查 FETCH_OK，输出拉取摘要。
+  """
+
+let no_market_data = **raw_data 包含 FETCH_OK 且就绪数量为 0 或 markets_closed == true**
+
+# ── 阶段 3：用 func 计算 MACD + ATR 指标 ──
+let indicators = session: market-analyst
+  prompt: """
+  对每只股票的 CSV 文件，调用 func CLI 计算 MACD 和 ATR 指标，汇总结果。
+
+  读取 data/rockflow-meta.json，对每个条目执行：
+
+  FUNC=~/.pi-go/bin/func
+  FORMULA='ema12=ema(c,12); ema26=ema(c,26); macd=ema12-ema26; sig=ema(macd,9); hist=macd-sig; prev_hist=ref(hist,1); atr5=ema(max(h-l,max(abs(h-ref(c,1)),abs(l-ref(c,1)))),5); atr10=ema(max(h-l,max(abs(h-ref(c,1)),abs(l-ref(c,1)))),10)'
+
+  对每只股票运行：
+  $FUNC "$FORMULA" <csv_path> > data/csv/<safe_sym>_ind.csv
+
+  从输出 CSV 的最后一行读取：hist, prev_hist, atr5, atr10
+
+  汇总写入 data/rockflow-indicators.json：
+  {
+    "<symbol>": {
+      "market": "HK"/"US",
+      "latest_price": X,
+      "latest_date": "...",
+      "hist": X,
+      "prev_hist": X,
+      "atr5": X,
+      "atr10": X,
+      "trend": "BULLISH"/"BEARISH",         # hist > 0 → BULLISH
+      "crossover": "GOLDEN"/"DEATH"/"NONE", # prev<0且curr>0 → GOLDEN；prev>0且curr<0 → DEATH
+      "volatility_rising": true/false       # atr5 > atr10
+    }
+  }
+
+  输出 INDICATORS_OK: N 只计算完成
+  """
+
+# ── 阶段 4：生成交易信号 ──
+let signals = session: market-analyst
+  prompt: """
+  筛选有效信号，计算止损止盈，并与已有持仓对比（避免重复开仓）。
+
+  读取 data/rockflow-indicators.json
+  市场状态：{market_status}
+  当前持仓：{arena_state.positions}
+
+  筛选规则（全部满足才通过）：
+  1. volatility_rising == true（ATR(5) > ATR(10)）
+  2. 信号分 >= 60
+  3. 只保留当前开市市场的标的
+  4. 不与已有持仓重复（同 symbol 已持仓且方向相同则跳过）
+
+  评分规则：
+  - 基础分 40
+  - crossover 为 GOLDEN 或 DEATH：+30
+  - volatility_rising == true：+30
+  - volatility_rising==false 且 crossover==NONE：-20
+
+  对每个有效信号：
+  - direction: hist > 0 → long（买入），hist < 0 → short（卖空）
+  - entry_price = latest_price
+  - atr_pct = atr5 / entry_price
+  - stop_loss:  多头 entry*(1 - atr_pct*1.5)，空头 entry*(1 + atr_pct*1.5)
+  - take_profit: 多头 entry*(1 + atr_pct*3.0)，空头 entry*(1 - atr_pct*3.0)
+  - risk_reward = tp距离 / sl距离（需 >= 1.5 才保留）
+
+  同时检查持仓中是否有需要平仓的标的：
+  - 已持多头 + 当前 trend == BEARISH 且 crossover == DEATH → 标记为 CLOSE_LONG
+  - 已持空头 + 当前 trend == BULLISH 且 crossover == GOLDEN → 标记为 CLOSE_SHORT
+
+  写入 data/rockflow-signals.json：
+  {
+    "ts": "[ISO]",
+    "market_status": { "hk": "...", "us": "..." },
+    "open_signals":  [ { symbol, market, direction, score, entry_price,
+                         stop_loss, take_profit, risk_reward, atr5,
+                         atr_ratio, trend, crossover, reason } ],
+    "close_signals": [ { symbol, market, action: "CLOSE_LONG"/"CLOSE_SHORT", reason } ]
+  }
+
+  如无任何信号输出：NO_VALID_SIGNALS
+  否则输出：SIGNALS_OK: 开仓=N 平仓=N
+  """
+
+let no_signals = **signals 包含 NO_VALID_SIGNALS 或 no_market_data == true**
+
+if no_signals:
+  # 无行情或无信号时，跳过风控和交易，直接生成报告（若报告不存在）
+  let risk_check = { approved_open: [], approved_close: [], rejected: [], summary: "SKIPPED" }
+  let close_results = "NO_CLOSE_ORDERS: 无行情或无信号，跳过平仓"
+  let open_results  = "NO_OPEN_ORDERS: 无行情或无信号，跳过开仓"
+
+if **no_signals == false**:
+
+# ── 阶段 5：风控检查 ──
+let risk_check = session: trader
+  prompt: """
+  对信号执行风控检查，计算每笔建议仓位。
+
+  信号：{signals}
+  账户状态：{arena_state}
+
+  默认风控参数（可由 data/rockflow-config.json 覆盖）：
+  - max_open_trades_total: 6
+  - max_open_trades_per_market: 4
+  - max_position_pct: 0.10       # 单仓占总资产上限
+  - max_portfolio_risk_pct: 0.02 # 单仓最大亏损占总资产
+  - min_risk_reward: 1.5
+  - max_cash_usage_pct: 0.80     # 最多使用 80% 可用现金
+
+  读取配置（若存在）：cat data/rockflow-config.json 2>/dev/null || echo '{}'
+
+  对每个 open_signal：
+  1. 总持仓 positions.length + 1 <= max_open_trades_total
+  2. 同市场持仓 + 1 <= max_open_trades_per_market
+  3. risk_reward >= min_risk_reward
+  4. 无重复持仓（同 symbol 已在 positions 中且方向相同）
+  5. 可用现金充足（多头需要 entry_price * qty < cash_balance * max_cash_usage_pct）
+
+  仓位计算（Kelly 保守法）：
+  - risk_per_trade = total_asset * max_portfolio_risk_pct
+  - qty_by_risk = floor(risk_per_trade / abs(entry_price - stop_loss))
+  - qty_by_cap  = floor(total_asset * max_position_pct / entry_price)
+  - suggested_qty = max(1, min(qty_by_risk, qty_by_cap))
+
+  空头需额外检查 shortable 字段（通过 GET /markets/{market}/quotes/{symbol} 确认）
+
+  输出：
+  {
+    "approved_open":  [ { symbol, market, direction, entry_price, stop_loss,
+                          take_profit, score, suggested_qty, reason } ],
+    "approved_close": [ { symbol, market, action } ],
+    "rejected": [ { symbol, direction, reason } ],
+    "summary": "RISK_PASSED: 开仓=N 平仓=N" 或 "RISK_BLOCKED: 全部被拒绝"
+  }
+  """
+
+if **no_signals == false && risk_check.summary 包含 RISK_BLOCKED**:
+  throw "全部信号未通过风控：{risk_check.rejected}"
+
+# ── 阶段 6：执行平仓订单 ──
+let close_results = session: trader
+  prompt: """
+  对 approved_close 列表执行平仓操作。
+
+  平仓信号：{risk_check.approved_close}
+  当前持仓：{arena_state.positions}
+
+  GATEWAY="https://paper-mcp.rockflow.tech/bot/api/http_gateway/v1"
+  KEY="$ROCKFLOW_API_KEY"
+
+  对每个平仓信号，从 positions 中找到对应条目，获取 quantity：
+
+  1. 查询最新价（用于市价单参考）：
+     curl -sS "$GATEWAY/market/tick/latest?market=<market>&symbol=<symbol>" \
+       -H "X-API-Key: $KEY"
+
+  2. 提交平仓市价单（平多 → SELL，平空 → BUY）：
+     curl -sS -X POST "$GATEWAY/orders" \
+       -H "X-API-Key: $KEY" \
+       -H "Content-Type: application/json" \
+       -d '{
+         "market": "<market>",
+         "symbol": "<symbol>",
+         "instrument": "STOCK",
+         "orderType": "MARKET_ORDER",
+         "quantity": <quantity>,
+         "side": "<SELL/BUY>",
+         "validity": "GOOD_FOR_DAY",
+         "session": "TRADING_SESSION"
+       }'
+
+  3. 记录平仓结果到 data/rockflow-trades.json（追加）：
+     { ts, type: "close", symbol, market, side, quantity,
+       order_id, status: "submitted"/"failed", reason, error }
+
+  每笔输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"order_close","data":{"symbol":"...","side":"...","qty":N,"order_id":"..."}}
+  失败时：{"ts":"[ISO]","event":"order_close_failed","data":{"symbol":"...","error":"..."}}
+
+  如 approved_close 为空，输出 "NO_CLOSE_ORDERS: 本轮无需平仓"
+  """
+
+# ── 阶段 7：执行开仓订单 ──
+let open_results = session: trader
+  prompt: """
+  对 approved_open 列表执行开仓操作。
+
+  开仓信号：{risk_check.approved_open}
+
+  GATEWAY="https://paper-mcp.rockflow.tech/bot/api/http_gateway/v1"
+  KEY="$ROCKFLOW_API_KEY"
+
+  对每个开仓信号：
+
+  1. 查询可交易数量（确认）：
+     curl -sS "$GATEWAY/quantities?symbol=<symbol>&market=<market>&side=<BUY/SELL>" \
+       -H "X-API-Key: $KEY"
+     如果 maxQuantity < suggested_qty，取 min(suggested_qty, maxQuantity)，若 < 1 则跳过
+
+  2. 查询最新行情（获取实时价格）：
+     curl -sS "$GATEWAY/market/tick/latest?market=<market>&symbol=<symbol>" \
+       -H "X-API-Key: $KEY"
+     提取 latestPrice 作为限价单价格
+
+  3. 提交限价开仓单（多头 → BUY，空头 → SELL）：
+     curl -sS -X POST "$GATEWAY/orders" \
+       -H "X-API-Key: $KEY" \
+       -H "Content-Type: application/json" \
+       -d '{
+         "market": "<market>",
+         "symbol": "<symbol>",
+         "instrument": "STOCK",
+         "orderType": "LIMIT_ORDER",
+         "quantity": <final_qty>,
+         "price": <latestPrice>,
+         "side": "<BUY/SELL>",
+         "validity": "GOOD_FOR_DAY",
+         "session": "TRADING_SESSION"
+       }'
+
+  4. 追加记录到 data/rockflow-trades.json：
+     { ts, type: "open", symbol, market, direction, quantity,
+       entry_price: latestPrice, stop_loss, take_profit, risk_reward, score,
+       order_id, status: "submitted"/"failed", reason, error }
+
+  发布赛场观点（每轮最多1条，合并所有开仓观点）：
+  curl -sS -X POST "$GATEWAY/arena/chats" \
+    -H "X-API-Key: $KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"content": "<本轮开仓摘要，含信号理由>", "analysis": "<MACD+ATR指标状态>"}'
+
+  每笔输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"order_open","data":{"symbol":"...","direction":"...","qty":N,"price":X,"score":N}}
+  失败时：{"ts":"[ISO]","event":"order_open_failed","data":{"symbol":"...","error":"..."}}
+  """
+
+# ── 阶段 8：生成 Canvas 看板 ──
+# 若无行情/无信号，先检查报告是否存在，不存在才生成
+session: reporter
+  prompt: """
+  检查并生成 Rockflow 策略看板。
+
+  首先检查报告是否已存在：
+  test -f ~/.pi-go/canvas/rockflow.html && echo "REPORT_EXISTS" || echo "REPORT_MISSING"
+
+  如果输出 REPORT_EXISTS 且本次有正常行情数据（no_market_data=={no_market_data}），则跳过生成，输出 CANVAS_SKIPPED。
+  否则继续生成报告，写入 ~/.pi-go/canvas/rockflow.html。
+
+  生成含 K 线图表的 Rockflow 策略看板：
+
+  输入数据：
+  - 市场状态：{market_status}
+  - 赛场状态（含赛前持仓）：{arena_state}
+  - 信号结果：{signals}
+  - 风控结果：{risk_check}
+  - 平仓结果：{close_results}
+  - 开仓结果：{open_results}
+  - 无行情/无信号模式：{no_market_data}
+
+  ── 步骤 1：查询执行后最新持仓与资产 ────────────────────────────
+  GATEWAY="https://paper-mcp.rockflow.tech/bot/api/http_gateway/v1"
+  KEY="$ROCKFLOW_API_KEY"
+  curl -sS "$GATEWAY/positions" -H "X-API-Key: $KEY" > /tmp/rf_positions.json
+  curl -sS "$GATEWAY/assets"    -H "X-API-Key: $KEY" > /tmp/rf_assets.json
+
+  ── 步骤 2：用 Python 读取行情+指标数据，生成 HTML ──────────────
+  运行以下 Python 脚本，它会读取所有 data/csv/*_ind.csv 和
+  data/rockflow-indicators.json，将数据内嵌到 HTML 中：
+
+  python3 - <<'PYEOF'
+  import json, csv, os, sys
+  from pathlib import Path
+
+  # ── 读取数据 ──
+  indicators = {}
+  ind_path = Path("data/rockflow-indicators.json")
+  if ind_path.exists():
+      indicators = json.loads(ind_path.read_text())
+
+  meta = {}
+  meta_path = Path("data/rockflow-meta.json")
+  if meta_path.exists():
+      meta = json.loads(meta_path.read_text())
+
+  # 读取每只股票的 K 线 + 指标 CSV
+  charts = {}
+  for sym, info in meta.items():
+      safe = sym.replace('.', '_')
+      ind_csv = Path(f"data/csv/{safe}_ind.csv")
+      if not ind_csv.exists():
+          continue
+      rows = []
+      with open(ind_csv) as f:
+          for r in csv.DictReader(f):
+              try:
+                  date = str(r.get('date',''))[:10]
+                  if not date: continue
+                  rows.append({
+                      'time':  date,
+                      'open':  round(float(r['open']),  4),
+                      'high':  round(float(r['high']),  4),
+                      'low':   round(float(r['low']),   4),
+                      'close': round(float(r['close']), 4),
+                      'volume':int(float(r.get('volume',0))),
+                      'macd':  round(float(r.get('macd', 0) or 0), 6),
+                      'sig':   round(float(r.get('sig',  0) or 0), 6),
+                      'hist':  round(float(r.get('hist', 0) or 0), 6),
+                      'atr5':  round(float(r.get('atr5', 0) or 0), 4),
+                      'atr10': round(float(r.get('atr10',0) or 0), 4),
+                  })
+              except: pass
+      if rows:
+          charts[sym] = rows
+
+  # 读取持仓与资产
+  positions = []
+  try: positions = json.loads(Path('/tmp/rf_positions.json').read_text()) or []
+  except: pass
+  assets = {}
+  try: assets = json.loads(Path('/tmp/rf_assets.json').read_text()) or {}
+  except: pass
+
+  # 本轮操作
+  signals_data  = {signals}
+  risk_data     = {risk_check}
+  close_results = {close_results}
+  open_results  = {open_results}
+  market_status = {market_status}
+  arena_state   = {arena_state}
+
+  # ── 生成 HTML ──
+  charts_json     = json.dumps(charts,     ensure_ascii=False)
+  indicators_json = json.dumps(indicators, ensure_ascii=False)
+  positions_json  = json.dumps(positions,  ensure_ascii=False)
+  assets_json     = json.dumps(assets,     ensure_ascii=False)
+  signals_json    = json.dumps(signals_data,  ensure_ascii=False)
+  risk_json       = json.dumps(risk_data,     ensure_ascii=False)
+  market_json     = json.dumps(market_status, ensure_ascii=False)
+  arena_json      = json.dumps(arena_state,   ensure_ascii=False)
+  open_json       = json.dumps(open_results,  ensure_ascii=False)
+  close_json      = json.dumps(close_results, ensure_ascii=False)
+
+  import datetime
+  run_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+  html = f"""<!DOCTYPE html>
+  <html lang="zh">
+  <head>
+  <meta charset="UTF-8">
+  <title>Rockflow Dashboard</title>
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{background:#16161400;color:#f0ede5;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;font-size:13px;padding:16px;background:#161614}}
+  h1{{font-size:18px;font-weight:600;letter-spacing:-.3px}}
+  h2{{font-size:13px;font-weight:600;color:rgba(240,237,229,.6);text-transform:uppercase;letter-spacing:.6px;margin:20px 0 8px}}
+  .header{{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,.08)}}
+  .badges{{display:flex;gap:8px;flex-wrap:wrap}}
+  .badge{{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}}
+  .badge-open{{background:rgba(52,199,89,.15);color:#34c759;border:1px solid rgba(52,199,89,.25)}}
+  .badge-closed{{background:rgba(255,255,255,.06);color:rgba(255,255,255,.4);border:1px solid rgba(255,255,255,.1)}}
+  .badge-rank{{background:rgba(38,136,249,.15);color:#2688f9;border:1px solid rgba(38,136,249,.25)}}
+  .badge-yield{{color:#f0ede5;border:1px solid rgba(255,255,255,.15)}}
+  .cards{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}}
+  .card{{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px}}
+  .card-label{{font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px}}
+  .card-value{{font-size:20px;font-weight:600}}
+  .green{{color:#34c759}}.red{{color:#ff3b30}}.yellow{{color:#ffd60a}}
+  table{{width:100%;border-collapse:collapse;margin-bottom:12px}}
+  th{{text-align:left;padding:6px 10px;font-size:11px;color:rgba(255,255,255,.4);border-bottom:1px solid rgba(255,255,255,.08);font-weight:500}}
+  td{{padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}}
+  tr:last-child td{{border-bottom:none}}
+  .charts-grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:16px;margin-bottom:16px}}
+  .chart-card{{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden}}
+  .chart-header{{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.07)}}
+  .chart-sym{{font-size:13px;font-weight:600}}
+  .chart-meta{{display:flex;gap:6px;align-items:center;font-size:11px;color:rgba(255,255,255,.4)}}
+  .chart-wrap{{height:200px;position:relative}}
+  .macd-wrap{{height:80px;border-top:1px solid rgba(255,255,255,.05)}}
+  .signal-tag{{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600}}
+  .tag-bull{{background:rgba(52,199,89,.18);color:#34c759}}
+  .tag-bear{{background:rgba(255,59,48,.18);color:#ff3b30}}
+  .tag-golden{{background:rgba(255,214,10,.18);color:#ffd60a}}
+  .tag-death{{background:rgba(255,59,48,.18);color:#ff3b30}}
+  .tag-none{{background:rgba(255,255,255,.06);color:rgba(255,255,255,.4)}}
+  .section{{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:14px;margin-bottom:12px}}
+  .run-time{{font-size:11px;color:rgba(255,255,255,.3)}}
+  </style>
+  </head>
+  <body>
+  <div class="header">
+    <div>
+      <h1>⚡ Rockflow Dashboard</h1>
+      <div class="run-time">更新于 {run_time}</div>
+    </div>
+    <div class="badges" id="badges"></div>
+  </div>
+
+  <div class="cards" id="asset-cards"></div>
+
+  <h2>持仓</h2>
+  <div class="section"><table id="pos-table">
+    <tr><th>Symbol</th><th>市场</th><th>方向</th><th>数量</th><th>成本价</th><th>当前价</th><th>浮动盈亏</th><th>盈亏%</th></tr>
+  </table></div>
+
+  <h2>本轮操作</h2>
+  <div class="section"><table id="ops-table">
+    <tr><th>类型</th><th>Symbol</th><th>方向</th><th>数量</th><th>价格</th><th>状态</th></tr>
+  </table></div>
+
+  <h2>K 线 · 指标</h2>
+  <div class="charts-grid" id="charts"></div>
+
+  <script>
+  const CHARTS_DATA     = {charts_json};
+  const INDICATORS_DATA = {indicators_json};
+  const POSITIONS       = {positions_json};
+  const ASSETS          = {assets_json};
+  const SIGNALS         = {signals_json};
+  const RISK            = {risk_json};
+  const MARKET          = {market_json};
+  const ARENA           = {arena_json};
+  const OPEN_RESULTS    = {open_json};
+  const CLOSE_RESULTS   = {close_json};
+
+  // ── Badges ──
+  const badgesEl = document.getElementById('badges');
+  const hk = MARKET.hk || {{}};
+  const us = MARKET.us || {{}};
+  badgesEl.innerHTML = `
+    <span class="badge ${{hk.status==='OPEN'?'badge-open':'badge-closed'}}">HK ${{hk.local_time||''}}</span>
+    <span class="badge ${{us.status==='OPEN'?'badge-open':'badge-closed'}}">US ${{us.local_time||''}}</span>
+    <span class="badge badge-rank">Rank #${{ARENA.rank||'-'}}</span>
+    <span class="badge badge-yield ${{(ARENA.yield_rate||0)>=0?'green':'red'}}">${{((ARENA.yield_rate||0)*100).toFixed(2)}}%</span>
+  `;
+
+  // ── Asset cards ──
+  const cardsEl = document.getElementById('asset-cards');
+  const ta = ASSETS.totalAsset || ASSETS.total_asset || 0;
+  const cb = ASSETS.cashBalance || ASSETS.cash_balance || 0;
+  const up = ASSETS.unrealizedPnl || ASSETS.unrealized_pnl || 0;
+  cardsEl.innerHTML = `
+    <div class="card"><div class="card-label">总资产</div><div class="card-value">${{ta.toLocaleString()}}</div></div>
+    <div class="card"><div class="card-label">可用现金</div><div class="card-value">${{cb.toLocaleString()}}</div></div>
+    <div class="card"><div class="card-label">浮动盈亏</div><div class="card-value ${{up>=0?'green':'red'}}">${{up>=0?'+':''}}${{up.toLocaleString()}}</div></div>
+  `;
+
+  // ── Positions table ──
+  const posTable = document.getElementById('pos-table');
+  const positions = Array.isArray(POSITIONS) ? POSITIONS : (POSITIONS.list||[]);
+  if (positions.length === 0) {{
+    posTable.innerHTML += '<tr><td colspan="8" style="color:rgba(255,255,255,.3);text-align:center;padding:20px">暂无持仓</td></tr>';
+  }} else {{
+    positions.forEach(p => {{
+      const pnl  = p.unrealizedPnl || p.unrealized_pnl || 0;
+      const cost = p.costPrice  || p.cost_price  || 0;
+      const cur  = p.currentPrice || p.current_price || 0;
+      const pct  = cost > 0 ? ((cur - cost) / cost * 100).toFixed(2) : '-';
+      const cls  = pnl >= 0 ? 'green' : 'red';
+      const side = (p.side||'').toUpperCase();
+      posTable.innerHTML += `<tr>
+        <td style="font-weight:600">${{p.symbol||''}}</td>
+        <td>${{p.market||''}}</td>
+        <td class="${{side==='BUY'?'green':'red'}}">${{side==='BUY'?'多':'空'}}</td>
+        <td>${{p.quantity||0}}</td>
+        <td>${{cost}}</td>
+        <td>${{cur}}</td>
+        <td class="${{cls}}">${{pnl>=0?'+':''}}${{pnl.toFixed(2)}}</td>
+        <td class="${{cls}}">${{pct}}%</td>
+      </tr>`;
+    }});
+  }}
+
+  // ── Operations table ──
+  const opsTable = document.getElementById('ops-table');
+  let ops = [];
+  // parse open_results and close_results for order lines
+  const parseOps = (txt, type) => {{
+    if (!txt) return;
+    const s = typeof txt === 'string' ? txt : JSON.stringify(txt);
+    const re = /"symbol"\s*:\s*"([^"]+)".*?"(?:direction|action)"\s*:\s*"([^"]+)".*?"(?:qty|quantity|suggested_qty)"\s*:\s*(\d+).*?"(?:price|entry_price)"\s*:\s*([\d.]+).*?"status"\s*:\s*"([^"]+)"/gs;
+    let m;
+    while ((m = re.exec(s)) !== null) {{
+      ops.push({{type, symbol:m[1], dir:m[2], qty:m[3], price:m[4], status:m[5]}});
+    }}
+  }};
+  parseOps(OPEN_RESULTS,  '开仓');
+  parseOps(CLOSE_RESULTS, '平仓');
+  if (ops.length === 0) {{
+    opsTable.innerHTML += '<tr><td colspan="6" style="color:rgba(255,255,255,.3);text-align:center;padding:20px">本轮无操作</td></tr>';
+  }} else {{
+    ops.forEach(o => {{
+      opsTable.innerHTML += `<tr>
+        <td>${{o.type}}</td>
+        <td style="font-weight:600">${{o.symbol}}</td>
+        <td>${{o.dir}}</td>
+        <td>${{o.qty}}</td>
+        <td>${{o.price}}</td>
+        <td style="color:rgba(52,199,89,.9)">${{o.status}}</td>
+      </tr>`;
+    }});
+  }}
+
+  // ── K 线图表 ──
+  const chartsEl = document.getElementById('charts');
+  const LWC = LightweightCharts;
+
+  Object.entries(CHARTS_DATA).forEach(([sym, rows]) => {{
+    if (!rows || rows.length === 0) return;
+    const ind = INDICATORS_DATA[sym] || {{}};
+    const trend     = ind.trend     || 'N/A';
+    const crossover = ind.crossover || 'NONE';
+    const volRising = ind.volatility_rising;
+    const atr5      = ind.atr5  || 0;
+    const atr10     = ind.atr10 || 0;
+
+    const trendCls = trend === 'BULLISH' ? 'tag-bull' : trend === 'BEARISH' ? 'tag-bear' : 'tag-none';
+    const croCls   = crossover === 'GOLDEN' ? 'tag-golden' : crossover === 'DEATH' ? 'tag-death' : 'tag-none';
+
+    const div = document.createElement('div');
+    div.className = 'chart-card';
+    div.innerHTML = `
+      <div class="chart-header">
+        <span class="chart-sym">${{sym}}</span>
+        <div class="chart-meta">
+          <span class="signal-tag ${{trendCls}}">${{trend}}</span>
+          <span class="signal-tag ${{croCls}}">${{crossover}}</span>
+          <span style="color:${{volRising?'#34c759':'rgba(255,255,255,.3)'}}">${{volRising?'ATR↑':'ATR-'}}</span>
+          <span>ATR5=${{atr5.toFixed(2)}} ATR10=${{atr10.toFixed(2)}}</span>
+        </div>
+      </div>
+      <div class="chart-wrap" id="candle-${{sym.replace(/\./g,'_')}}"></div>
+      <div class="macd-wrap"  id="macd-${{sym.replace(/\./g,'_')}}"></div>
+    `;
+    chartsEl.appendChild(div);
+
+    // Candlestick chart
+    const candleEl = div.querySelector('.chart-wrap');
+    const candleChart = LWC.createChart(candleEl, {{
+      width: candleEl.offsetWidth || 480,
+      height: 200,
+      layout: {{ background: {{ color: 'transparent' }}, textColor: 'rgba(240,237,229,.6)' }},
+      grid: {{ vertLines: {{ color: 'rgba(255,255,255,.05)' }}, horzLines: {{ color: 'rgba(255,255,255,.05)' }} }},
+      timeScale: {{ borderColor: 'rgba(255,255,255,.1)', timeVisible: true }},
+      rightPriceScale: {{ borderColor: 'rgba(255,255,255,.1)' }},
+      crosshair: {{ mode: 1 }},
+    }});
+    const candleSeries = candleChart.addCandlestickSeries({{
+      upColor: '#34c759', downColor: '#ff3b30',
+      borderUpColor: '#34c759', borderDownColor: '#ff3b30',
+      wickUpColor: '#34c759', wickDownColor: '#ff3b30',
+    }});
+    candleSeries.setData(rows.map(r => ({{time:r.time, open:r.open, high:r.high, low:r.low, close:r.close}})));
+
+    // ATR band overlay (simple line)
+    const atr5Line = candleChart.addLineSeries({{ color:'rgba(255,214,10,.5)', lineWidth:1, priceLineVisible:false, lastValueVisible:false }});
+    atr5Line.setData(rows.map(r => ({{time:r.time, value: r.close + r.atr5}})));
+
+    // MACD chart
+    const macdEl = div.querySelector('.macd-wrap');
+    const macdChart = LWC.createChart(macdEl, {{
+      width: macdEl.offsetWidth || 480,
+      height: 80,
+      layout: {{ background: {{ color: 'transparent' }}, textColor: 'rgba(240,237,229,.5)' }},
+      grid: {{ vertLines: {{ color: 'rgba(255,255,255,.03)' }}, horzLines: {{ color: 'rgba(255,255,255,.03)' }} }},
+      timeScale: {{ borderColor: 'rgba(255,255,255,.1)', timeVisible: true, visible: false }},
+      rightPriceScale: {{ borderColor: 'rgba(255,255,255,.1)', scaleMargins: {{ top:0.1, bottom:0.1 }} }},
+    }});
+    // MACD histogram
+    const histSeries = macdChart.addHistogramSeries({{
+      color: '#2688f9',
+      priceFormat: {{ type:'price', precision:6, minMove:0.000001 }},
+    }});
+    histSeries.setData(rows.map(r => ({{
+      time: r.time,
+      value: r.hist,
+      color: r.hist >= 0 ? 'rgba(52,199,89,.7)' : 'rgba(255,59,48,.7)',
+    }})));
+    // MACD line
+    const macdLine = macdChart.addLineSeries({{ color:'#2688f9', lineWidth:1, priceLineVisible:false, lastValueVisible:false }});
+    macdLine.setData(rows.map(r => ({{time:r.time, value:r.macd}})));
+    // Signal line
+    const sigLine = macdChart.addLineSeries({{ color:'rgba(255,159,10,.8)', lineWidth:1, priceLineVisible:false, lastValueVisible:false }});
+    sigLine.setData(rows.map(r => ({{time:r.time, value:r.sig}})));
+
+    // Sync time scales
+    candleChart.timeScale().subscribeVisibleLogicalRangeChange(range => {{
+      if (range) macdChart.timeScale().setVisibleLogicalRange(range);
+    }});
+    macdChart.timeScale().subscribeVisibleLogicalRangeChange(range => {{
+      if (range) candleChart.timeScale().setVisibleLogicalRange(range);
+    }});
+
+    candleChart.timeScale().fitContent();
+    macdChart.timeScale().fitContent();
+  }});
+
+  // Resize charts on window resize
+  window.addEventListener('resize', () => {{
+    document.querySelectorAll('.chart-wrap,.macd-wrap').forEach(el => {{
+      const chart = el._lwChart;
+      if (chart) chart.resize(el.offsetWidth, el.offsetHeight);
+    }});
+  }});
+  </script>
+  </body></html>"""
+
+  out_dir = Path.home() / '.pi-go' / 'canvas'
+  out_dir.mkdir(parents=True, exist_ok=True)
+  out_path = out_dir / 'rockflow.html'
+  out_path.write_text(html, encoding='utf-8')
+  print(f"CANVAS_OK: {out_path} ({len(html)} bytes, {len(CHARTS_DATA)} charts)")
+  PYEOF
+
+  ── 步骤 3：WorkflowEvent ────────────────────────────────────────
+  输出：
+  {"ts":"[ISO]","event":"stage_complete","stage":"rockflow","data":{
+    "markets_open": [...],
+    "rank": N,
+    "yield_rate": X,
+    "symbols_scanned": N,
+    "signals_open": N,
+    "signals_close": N,
+    "orders_submitted": N,
+    "orders_failed": N,
+    "total_asset": X,
+    "cash_balance": X,
+    "canvas": "~/.pi-go/canvas/rockflow.html"
+  }}
+  """

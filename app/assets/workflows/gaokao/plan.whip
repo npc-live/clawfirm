@@ -1,0 +1,179 @@
+# whips/gaokao/plan.whip
+# 功能：生成最终志愿填报方案 —— 确定顺序、填写技巧、最终确认检查
+# 调用方：match.whip 完成后 / 手动触发
+# 前置：data/gaokao-matches.json 存在
+# 输出：data/gaokao-plan.json（最终方案），docs/final-plan.md（打印版）
+
+agent planner:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  高考志愿填报方案制定专家。将分析结果转化为具体可执行的填报顺序。
+  深知每个志愿位置的价值，帮助学生在有限的志愿数量内最大化录取机会。
+  方案要清晰、可执行，让学生和家长能直接按照方案填写系统。
+  """
+
+agent final_checker:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read"]
+  prompt: """
+  志愿方案最终审核专家。逐条检查方案是否存在遗漏、矛盾或操作风险。
+  发现任何问题立即标记，宁可多问，不能让学生因为填报失误浪费一年。
+  """
+
+# ── 读取数据 ──
+let data = session: planner
+  prompt: """
+  读取所有数据：
+  1. 读取 data/gaokao-profile.json
+  2. 读取 data/gaokao-matches.json（评分后的候选列表）
+  3. 读取 docs/match-analysis.md（风险分析）
+  4. 读取 docs/gaokao-strategy.md（总体策略）
+
+  如果 data/gaokao-matches.json 为空，输出 "NO_MATCHES: 请先运行 match.whip"
+  """
+
+if **data 包含 NO_MATCHES**:
+  throw "匹配结果为空，请先运行 match.whip"
+
+# ── 生成最终方案 ──
+let final_plan = session: planner
+  prompt: """
+  基于所有分析数据，生成可直接填写到系统的最终志愿方案：
+
+  数据：{data}
+
+  **方案生成原则：**
+  1. 严格按照 {data.profile.province} 的志愿填报规则（顺序/平行志愿）
+  2. 梯度合理：同档内相邻志愿之间有一定分差缓冲
+  3. 专业选择策略：每所学校内的专业顺序如何排列？
+     - 服从专业调剂是否勾选（根据各校情况单独说明）
+  4. 批次策略：提前批/专项计划是否参与？如参与，填什么？
+
+  **生成最终志愿清单（格式：可直接填入志愿系统）**
+
+  平行志愿格式（如适用）：
+
+  第1志愿：[院校全称] — [专业名称1] / [专业名称2] / [专业名称3]
+             录取概率：约X%  |  预估分数线：X分  |  服从调剂：是/否
+             填报理由：[一句话]
+             风险提示：[如有]
+
+  第2志愿：...
+
+  [按照实际志愿数量依次列出，通常8-24个不等，视省份而定]
+
+  **专业填报顺序建议：**
+  对每所院校，说明内部专业的排列逻辑
+  （如：喜欢计算机 > 软件工程 > 数据科学，三者都可接受则按此顺序）
+
+  **提前批/专项计划建议：**
+  - 是否参与提前批？参与什么类型？
+  - 是否参与专项计划？（高校专项/地方专项/农村专项）
+
+  **总体说明：**
+  - 方案的核心逻辑（3 条）
+  - 最坏情况下的兜底（保底志愿能确保上什么层次的学校）
+  - 如果没考上本科一批/预期结果，如何应对
+
+  写入 docs/final-plan.md。
+  """
+
+# ── 最终审核 ──
+let final_check = session: final_checker
+  prompt: """
+  对最终志愿方案做逐条审核：
+
+  方案：{final_plan}
+  学生画像：{data.profile}
+
+  逐项检查：
+
+  1. **完整性检查**
+     - 冲/稳/保三档是否都有覆盖？
+     - 志愿总数是否符合该省规定？
+     - 是否遗漏了重要的注意事项？
+
+  2. **合规性检查**
+     - 所有填报院校是否在该省有招生计划？
+     - 专业是否有体检/政治面貌限制未注意？
+     - 服从调剂的勾选是否与建议一致？
+
+  3. **逻辑一致性检查**
+     - 方案是否与学生的核心优先级一致？
+     - 城市分布是否符合偏好？
+     - 专业分布是否与职业目标对齐？
+
+  4. **经济可行性检查**
+     - 每所院校的预估 4 年费用是否在家庭承受范围内？
+     - 是否有充分的奖学金/助学金兜底？
+
+  5. **关键提醒**
+     - 志愿填报截止时间（提醒学生提前确认官方公告）
+     - 是否需要额外材料（体检表/特殊证明等）
+     - 录取结果查询方式提醒
+
+  对每个问题输出：PASS / WARNING: [具体问题] / CRITICAL: [必须修改]
+
+  如果有 CRITICAL 问题，输出 "PLAN_NEEDS_REVISION: [问题摘要]"
+  否则输出 "PLAN_APPROVED"
+  """
+
+loop until **final_check 包含 PLAN_APPROVED** (max: 2):
+  final_plan = session: planner
+    prompt: """
+    根据审核意见修改方案：{final_check}
+    修正所有 CRITICAL 问题和 WARNING 项，更新 docs/final-plan.md。
+    """
+  final_check = session: final_checker
+    prompt: """
+    重新审核修改后的方案：{final_plan}
+    输出 PLAN_APPROVED 或 PLAN_NEEDS_REVISION: [问题]
+    """
+
+# ── 生成打印版 + 写入最终数据 ──
+session: planner
+  prompt: """
+  生成最终可打印的志愿填报清单，追加到 docs/final-plan.md 末尾：
+
+  ## 📋 志愿填写速查表（打印后对照填写）
+
+  | 志愿序号 | 院校名称 | 专业1 | 专业2 | 专业3 | 服从调剂 |
+  |----------|----------|-------|-------|-------|----------|
+  | 第1志愿  | ...      | ...   | ...   | ...   | 是/否    |
+  ...
+
+  ## ⚠️ 填报前最后确认清单
+  - [ ] 确认所有院校在本省当年有招生计划
+  - [ ] 确认无体检/政治面貌/视力等专业限制
+  - [ ] 确认家长已阅读并同意方案
+  - [ ] 确认志愿填报系统的截止时间
+  - [ ] 截图保存已填报的志愿页面
+  - [ ] 填报完成后再次核对每个志愿
+
+  写入 data/gaokao-plan.json：
+  {
+    "run_id": "...",
+    "student_score": N,
+    "province": "...",
+    "total_volunteers": N,
+    "plan": [每个志愿的详细信息],
+    "core_logic": ["逻辑1", "逻辑2", "逻辑3"],
+    "worst_case": "保底结果说明",
+    "created_at": "[ISO]",
+    "approved": true
+  }
+
+  追加 data/stage-log.json：{ stage: "plan", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"plan","data":{
+    "plan_file": "docs/final-plan.md",
+    "total_volunteers": N,
+    "guaranteed_outcome": "保底结果",
+    "best_case": "冲刺目标",
+    "ready_to_fill": true
+  }}
+  """

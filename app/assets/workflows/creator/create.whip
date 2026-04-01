@@ -1,0 +1,244 @@
+# whips/creator/create.whip
+# 功能：给定业务描述，自动生成完整的 whip 子目录（setup/scan/monitor/trade/report.whip）
+# 调用方：手动触发
+# 前置：data/current-run.json 包含业务描述，或直接在 prompt 中传入
+# 输出：whips/<name>/ 目录，含所有必要的 .whip 文件
+
+agent analyst:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  whip 架构分析专家。深度分析业务需求，拆解工作流阶段，
+  识别所需 agent 角色和数据流。输出结构清晰、无歧义的设计方案。
+  """
+
+agent writer:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write"]
+  prompt: """
+  whip 文件编写专家。严格遵循 whip 语法规范编写 .whip 文件。
+  参考已有 whips 的风格和惯例，生成可直接运行的工作流文件。
+  不增加不必要的功能，保持每个文件职责单一。
+  """
+
+# ── 读取请求 ──
+let request = session: analyst
+  prompt: """
+  读取用户的业务描述：
+  1. 读取 data/current-run.json，提取字段：
+     - name:        whip 子目录名（小写字母+连字符，如 "my-strategy"）
+     - description: 业务描述（自然语言，说明这个 whip 要做什么）
+     - files:       需要生成哪些文件（默认：["setup","scan","monitor","trade","report"]）
+     - apis:        涉及的 API 列表（可选，帮助生成更准确的代码）
+     - data_prefix: 数据文件前缀（默认与 name 相同）
+
+  2. 如果 data/current-run.json 不存在，输出：
+     "REQUEST_MISSING: 请在 data/current-run.json 中写入业务描述"
+
+  输出读取到的请求参数。
+  """
+
+if **request 包含 REQUEST_MISSING**:
+  throw "缺少业务描述：{request}"
+
+# ── 分析业务需求 ──
+let design = session: analyst
+  prompt: """
+  分析业务需求，设计 whip 工作流结构：
+
+  请求：{request}
+
+  参考现有 whips 的目录结构，读取以下文件了解规范：
+  - whips/hyperliquid/setup.whip
+  - whips/hyperliquid/scan.whip
+  - whips/hyperliquid/trade.whip
+  - whips/hyperliquid/monitor.whip
+  - whips/hyperliquid/report.whip
+
+  基于业务描述，为每个需要生成的文件设计：
+
+  1. **setup.whip** —— 初始化流程：
+     - 需要哪些环境检查（node/python/其他工具）
+     - 需要哪些 API 凭证（key/secret/token）
+     - 需要生成哪些配置文件（data/<prefix>-config.json）
+     - 需要初始化哪些数据文件
+
+  2. **scan.whip** —— 数据采集和信号识别：
+     - 从哪些数据源获取数据（API/网页/文件）
+     - 如何筛选有价值的机会（过滤条件、评分逻辑）
+     - 输出格式（data/<prefix>-signals.json）
+
+  3. **trade.whip** / **execute.whip** / **run.whip**：
+     - 核心执行动作（下单/发布/提交/部署）
+     - 风控或质量检查逻辑
+     - 执行结果记录格式
+
+  4. **monitor.whip** —— 持续监控循环：
+     - 轮询间隔（秒）
+     - 需要检查的状态变化
+     - 触发后续动作的条件
+
+  5. **report.whip** —— 绩效/状态报告：
+     - 统计哪些指标
+     - 输出格式（控制台 + data/<prefix>-reports.json）
+
+  输出设计方案：{
+    dir_name: "<name>",
+    data_prefix: "<prefix>",
+    agents: [{ role, model, description }],
+    files: {
+      "setup": { stages: [...], config_fields: [...], data_files: [...] },
+      "scan":  { sources: [...], filter_logic: "...", output_fields: [...] },
+      "trade": { action: "...", risk_checks: [...], record_fields: [...] },
+      "monitor": { interval_seconds: N, watch_conditions: [...] },
+      "report": { metrics: [...] }
+    }
+  }
+  """
+
+# ── 生成目录和文件 ──
+let gen_setup = session: writer
+  prompt: """
+  根据设计方案，生成 setup.whip 文件：
+
+  设计方案：{design}
+  请求：{request}
+
+  生成规则：
+  - 文件头注释：# whips/<dir_name>/setup.whip，功能说明，前置条件，输出文件
+  - agent 定义：env-checker (haiku) + validator (sonnet)，prompt 贴合业务场景
+  - 流程阶段：
+    0. 读取 data/current-run.json
+    1. 环境检查（工具版本、私钥来源检测，优先 openvault）
+    2. API 连通性测试（逐一 curl，检查关键字段）
+    3. 账户/资源验证（余额、配额、权限）
+    4. 写入配置文件（data/<prefix>-config.json，无明文密钥）
+  - 每个阶段追加 data/stage-log.json
+  - 错误用 if ... throw 中止
+  - 最后输出 WorkflowEvent JSON
+
+  将生成的内容写入文件：whips/{design.dir_name}/setup.whip
+
+  输出 "DONE: setup.whip" 或 "FAILED: [原因]"
+  """
+
+let gen_scan = session: writer
+  prompt: """
+  根据设计方案，生成 scan.whip 文件：
+
+  设计方案：{design}
+  请求：{request}
+
+  生成规则：
+  - 文件头注释：功能、调用方（手动/monitor触发）、前置、输出
+  - agent 定义：fetcher (haiku) + analyst (sonnet)，prompt 贴合数据采集场景
+  - 流程阶段：
+    1. 读取配置（data/<prefix>-config.json）
+    2. 并发拉取数据源（具体 curl/命令根据业务描述）
+    3. 信号识别和过滤（评分、时效检查、去重）
+    4. 写入 data/<prefix>-signals.json
+  - 无可用信号时 throw 跳过
+  - 最后输出 WorkflowEvent JSON
+
+  将生成的内容写入文件：whips/{design.dir_name}/scan.whip
+
+  输出 "DONE: scan.whip" 或 "FAILED: [原因]"
+  """
+
+let gen_trade = session: writer
+  prompt: """
+  根据设计方案，生成核心执行 whip 文件（trade.whip 或业务对应的动作名）：
+
+  设计方案：{design}
+  请求：{request}
+
+  生成规则：
+  - 文件名：根据业务决定（交易→trade.whip，发布→publish.whip，部署→deploy.whip 等）
+  - agent 定义：risk-manager/checker (sonnet) + executor/trader (sonnet)
+  - 流程阶段：
+    1. 读取信号/任务（检查是否为空/过期）
+    2. 风控/质量检查（对每个条目标记 APPROVED/REJECTED/SKIP）
+    3. 执行核心动作（下单/提交/发布，优先 openvault 注入密钥）
+    4. 写入结果记录（data/<prefix>-<actions>.json）
+  - 全部拒绝时 throw 中止
+  - 每次执行输出 WorkflowEvent，最后输出汇总 WorkflowEvent
+
+  将生成的内容写入对应文件：whips/{design.dir_name}/<action>.whip
+
+  输出 "DONE: <action>.whip" 或 "FAILED: [原因]"
+  """
+
+let gen_monitor = session: writer
+  prompt: """
+  根据设计方案，生成 monitor.whip 文件：
+
+  设计方案：{design}
+  请求：{request}
+
+  生成规则：
+  - agent 定义：watcher (haiku) + orchestrator (haiku)，强调实时性和稳定性
+  - 流程阶段：
+    1. 读取配置和当前状态
+    2. 检查活跃任务/持仓状态变化（触发条件、超时处理）
+    3. 执行对应动作（平仓/更新/通知）
+    4. 等待 poll_interval_seconds 后触发新一轮 scan + execute
+    5. 循环（说明持续运行直到手动停止）
+  - 每轮输出 WorkflowEvent（包含 next_scan_in）
+
+  将生成的内容写入文件：whips/{design.dir_name}/monitor.whip
+
+  输出 "DONE: monitor.whip" 或 "FAILED: [原因]"
+  """
+
+let gen_report = session: writer
+  prompt: """
+  根据设计方案，生成 report.whip 文件：
+
+  设计方案：{design}
+  请求：{request}
+
+  生成规则：
+  - agent 定义：analyst (sonnet)，强调数据分析和可操作建议
+  - 流程阶段：
+    1. 读取历史数据（无数据时 throw 提示先运行 monitor）
+    2. 计算核心指标（总体、按维度分析）
+    3. 策略调整建议（3-5 条具体可操作）
+    4. 写入 data/<prefix>-reports.json
+    5. 输出完整报告（中文，格式清晰）
+  - 最后输出 WorkflowEvent JSON
+
+  将生成的内容写入文件：whips/{design.dir_name}/report.whip
+
+  输出 "DONE: report.whip" 或 "FAILED: [原因]"
+  """
+
+# ── 验证生成结果 ──
+session: analyst
+  prompt: """
+  验证所有 whip 文件已成功生成：
+
+  目录：whips/{design.dir_name}/
+
+  1. 列出目录下所有 .whip 文件：
+     ls whips/{design.dir_name}/
+
+  2. 对每个文件检查：
+     - 文件非空（wc -l）
+     - 包含 agent 定义（grep "^agent"）
+     - 包含 WorkflowEvent 输出（grep "WorkflowEvent"）
+
+  3. 更新 data/runs.json：
+     读取现有文件（不存在则 []），追加：
+     { id: run_id, type: "{design.dir_name}", status: "created", created_at: "[ISO]" }
+     写回文件。
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"create","data":{
+    "dir": "whips/{design.dir_name}",
+    "files_created": [...],
+    "files_failed": [...],
+    "ready": true
+  }}
+  """

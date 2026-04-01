@@ -1,0 +1,111 @@
+# whips/saas/report.whip
+# 功能：出海增长周报 —— 渠道效果、MRR 进展、用户反馈洞察、下周行动计划
+# 调用方：手动触发（建议每周一）
+# 前置：至少运行一周的 monitor.whip 数据
+# 输出：docs/weekly-report-[date].md，data/saas-metrics.json 更新
+
+agent analyst:
+  provider: "claude-code"
+  model: opus
+  tools: ["bash", "read", "write"]
+  prompt: """
+  SaaS 增长分析师。擅长从原始数据中提炼行动洞察。
+  每条洞察必须对应具体可执行的行动建议。
+  关注 leading indicators（信号）而非只看 lagging indicators（结果）。
+  输出要简洁，重点突出，CEO/创始人 5 分钟能读完。
+  """
+
+# ── 读取历史数据 ──
+let data = session: analyst
+  prompt: """
+  读取过去 7 天的所有数据：
+  1. 读取 data/saas-config.json
+  2. 读取 data/saas-metrics.json（过去 7 天的每日快照）
+  3. 读取 data/saas-posts.json（所有发布记录和状态）
+  4. 读取 data/saas-leads.json（冷邮件线索状态）
+  5. 读取 data/current-run.json，获取本周 MRR 数据（用户手动填写）
+
+  如果 data/saas-metrics.json 不存在或数据少于 3 天：
+  输出 "INSUFFICIENT_DATA: 需要至少运行 3 天 monitor.whip 才能生成有意义的报告"
+
+  输出所有数据的汇总。
+  """
+
+if **data 包含 INSUFFICIENT_DATA**:
+  throw "{data}"
+
+# ── 生成周报 ──
+session: analyst
+  prompt: """
+  生成本周出海增长周报：
+
+  数据：{data}
+
+  ## 本周核心指标
+
+  | 指标 | 本周 | 上周 | 变化 |
+  |------|------|------|------|
+  | MRR ($) | ... | ... | ↑/↓ X% |
+  | 新注册用户 | ... | ... | ... |
+  | 活跃用户 | ... | ... | ... |
+  | 付费转化率 | ...% | ...% | ... |
+  | 各渠道总曝光 | ... | ... | ... |
+
+  ## 渠道效果分析
+
+  对每个使用的渠道（reddit / hn / cold-email / seo / producthunt）分析：
+  - 本周发布数量 vs 计划
+  - 获得的互动/流量（基于 metrics 数据）
+  - 效果最好的 1 条内容（为什么好？）
+  - 效果最差的 1 条（原因分析）
+  - 渠道 ROI 评估（时间投入 vs 回报）
+
+  ## 用户反馈洞察
+
+  基于本周收集的评论/问题：
+  - 最高频的用户痛点（Top 3）
+  - 最多被请求的功能（Top 3）
+  - 正面反馈的核心原因（产品哪里打动了用户）
+  - 需要立即修复的问题（如有）
+
+  ## 竞品动态
+
+  本周竞品有无重大变化：
+  - 新功能发布
+  - 定价调整
+  - 营销活动
+  - 对我们策略的影响
+
+  ## 下周行动计划（优先级排序）
+
+  🔴 必须做（直接影响 MRR）：
+  1. ...
+  2. ...
+
+  🟡 应该做（增长杠杆）：
+  3. ...
+  4. ...
+
+  🟢 可以做（锦上添花）：
+  5. ...
+
+  ## 30 天展望
+
+  基于当前增长趋势：
+  - 预计 MRR 达到 $X 需要 Y 天（如果保持当前速度）
+  - 最大风险：...
+  - 最大机会：...
+
+  写入 docs/weekly-report-{today}.md。
+  更新 data/saas-metrics.json 中最新条目，添加 weekly_report 字段。
+
+  追加 data/stage-log.json：{ stage: "weekly-report", status: "done", ts: "[ISO]" }
+
+  输出 WorkflowEvent：
+  {"ts":"[ISO]","event":"stage_complete","stage":"report","data":{
+    "report_file": "docs/weekly-report-[today].md",
+    "mrr_this_week": X,
+    "top_channel": "...",
+    "urgent_actions": N
+  }}
+  """

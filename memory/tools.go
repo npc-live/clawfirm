@@ -13,8 +13,9 @@ import (
 // The manager is required; if nil a no-op tool is returned.
 func SearchTool(m *Manager) tool.AgentTool {
 	return &tool.BaseToolImpl{
-		ToolName:  "memory_search",
-		ToolLabel: "Search memory",
+		ToolName:          "memory_search",
+		ToolLabel:         "Search memory",
+		IsConcurrencySafe: true,
 		ToolDescription: `Search long-term memory for relevant information from past sessions.
 Returns the most relevant text fragments together with their source file path and line numbers.
 Call this tool before answering questions about past work, decisions, or user preferences.`,
@@ -86,8 +87,9 @@ Call this tool before answering questions about past work, decisions, or user pr
 // context around a search hit.
 func GetTool() tool.AgentTool {
 	return &tool.BaseToolImpl{
-		ToolName:  "memory_get",
-		ToolLabel: "Get memory",
+		ToolName:          "memory_get",
+		ToolLabel:         "Get memory",
+		IsConcurrencySafe: true,
 		ToolDescription: `Read a specific range of lines from a memory file.
 Use after memory_search to retrieve the full text around a result.`,
 		ToolSchema: map[string]any{
