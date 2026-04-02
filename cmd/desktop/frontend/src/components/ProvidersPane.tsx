@@ -44,14 +44,14 @@ interface ProviderEntry {
 }
 
 const inputCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] " +
-  "bg-[rgba(255,255,255,0.05)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)]";
+  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
+  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
+  "bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]";
 
 const selectCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] " +
-  "bg-[rgb(40,40,38)] text-[rgb(240,237,229)]";
+  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
+  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
+  "bg-[#ece5d8] text-[#3d3929]";
 
 export function ProvidersPane() {
   const [cfg, setCfg] = useState<Config | null>(null);
@@ -171,12 +171,12 @@ export function ProvidersPane() {
     <div className="p-8">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Providers</h2>
-          <p className="text-[13px] text-[rgba(255,255,255,0.3)] mt-1">Manage LLM provider API keys and endpoints</p>
+          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Providers</h2>
+          <p className="text-[13px] text-[rgba(61,57,41,0.3)] mt-1">Manage LLM provider API keys and endpoints</p>
         </div>
         {editing === null && (
           <button onClick={startAdd}
-            className="px-4 py-2 bg-[#2688f9] text-white text-[13px] rounded-xl hover:bg-[#1a7ae8] transition-colors font-semibold">
+            className="px-4 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] transition-colors font-semibold">
             + Add Provider
           </button>
         )}
@@ -190,14 +190,14 @@ export function ProvidersPane() {
 
       {/* Add / Edit form */}
       {editing !== null && (
-        <div className="mb-6 p-5 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.1)] rounded-2xl max-w-xl">
-          <h3 className="text-[14px] font-semibold text-[rgb(240,237,229)] mb-4">
+        <div className="mb-6 p-5 bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.12)] rounded-2xl max-w-xl">
+          <h3 className="text-[14px] font-semibold text-[#3d3929] mb-4">
             {editing === "new" ? "New Provider" : `Edit · ${editing}`}
           </h3>
           <div className="space-y-3">
             {editing === "new" && (
               <div>
-                <label className="block text-[12px] text-[rgba(255,255,255,0.4)] mb-1">Provider ID</label>
+                <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">Provider ID</label>
                 <input
                   className={inputCls}
                   placeholder="e.g. my-openai"
@@ -207,7 +207,7 @@ export function ProvidersPane() {
               </div>
             )}
             <div>
-              <label className="block text-[12px] text-[rgba(255,255,255,0.4)] mb-1">Type</label>
+              <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">Type</label>
               <select className={selectCls} value={form.type} onChange={e => handleTypeChange(e.target.value)}>
                 {PROVIDER_TYPES.map(t => (
                   <option key={t} value={t}>{t}</option>
@@ -215,7 +215,7 @@ export function ProvidersPane() {
               </select>
             </div>
             <div>
-              <label className="block text-[12px] text-[rgba(255,255,255,0.4)] mb-1">API Key</label>
+              <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">API Key</label>
               <input
                 className={inputCls}
                 type="password"
@@ -225,8 +225,8 @@ export function ProvidersPane() {
               />
             </div>
             <div>
-              <label className="block text-[12px] text-[rgba(255,255,255,0.4)] mb-1">
-                Base URL <span className="text-[rgba(255,255,255,0.2)]">(optional, uses default if empty)</span>
+              <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">
+                Base URL <span className="text-[rgba(61,57,41,0.3)]">(optional, uses default if empty)</span>
               </label>
               <input
                 className={inputCls}
@@ -238,11 +238,11 @@ export function ProvidersPane() {
           </div>
           <div className="flex gap-2 mt-4">
             <button onClick={handleSave} disabled={saving}
-              className="px-4 py-2 bg-[#2688f9] text-white text-[13px] rounded-xl hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
+              className="px-4 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
               {saving ? "Saving…" : "Save"}
             </button>
             <button onClick={cancelEdit}
-              className="px-4 py-2 bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.6)] text-[13px] rounded-xl hover:bg-[rgba(255,255,255,0.1)] transition-colors">
+              className="px-4 py-2 bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.6)] text-[13px] rounded-xl hover:bg-[rgba(61,57,41,0.12)] transition-colors">
               Cancel
             </button>
           </div>
@@ -252,18 +252,18 @@ export function ProvidersPane() {
       {/* Provider list */}
       <div className="space-y-3 max-w-2xl">
         {providers.length === 0 && editing === null && (
-          <p className="text-[13px] text-[rgba(255,255,255,0.3)] py-8 text-center">
+          <p className="text-[13px] text-[rgba(61,57,41,0.3)] py-8 text-center">
             No providers configured. Click "Add Provider" to get started.
           </p>
         )}
         {providers.map(p => (
           <div key={p.id}
-            className="p-4 bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl hover:border-[rgba(255,255,255,0.15)] transition-colors">
+            className="p-4 bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl hover:border-[rgba(61,57,41,0.15)] transition-colors">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[14px] font-semibold text-[rgb(240,237,229)]">{p.id}</span>
-                  <span className="px-2 py-0.5 text-[11px] bg-[rgba(38,136,249,0.15)] text-[#2688f9] rounded-full font-medium">
+                  <span className="text-[14px] font-semibold text-[#3d3929]">{p.id}</span>
+                  <span className="px-2 py-0.5 text-[11px] bg-[rgba(200,90,42,0.15)] text-[#c85a2a] rounded-full font-medium">
                     {p.type}
                   </span>
                   {testResult[p.id] === true && (
@@ -274,11 +274,11 @@ export function ProvidersPane() {
                   )}
                 </div>
                 <div className="mt-1.5 space-y-0.5">
-                  <p className="text-[12px] text-[rgba(255,255,255,0.35)] font-mono truncate">
+                  <p className="text-[12px] text-[rgba(61,57,41,0.35)] font-mono truncate">
                     key: {p.api_key ? "••••••••" + p.api_key.slice(-4) : <span className="text-[rgba(255,100,100,0.6)]">not set</span>}
                   </p>
                   {p.base_url && (
-                    <p className="text-[12px] text-[rgba(255,255,255,0.25)] font-mono truncate">
+                    <p className="text-[12px] text-[rgba(61,57,41,0.2)] font-mono truncate">
                       {p.base_url}
                     </p>
                   )}
@@ -288,12 +288,12 @@ export function ProvidersPane() {
                 <button
                   onClick={() => handleTest(p.id)}
                   disabled={testing === p.id}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)] hover:text-[rgba(255,255,255,0.8)] disabled:opacity-50 transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.8)] disabled:opacity-50 transition-colors">
                   {testing === p.id ? "…" : "Test"}
                 </button>
                 <button
                   onClick={() => { startEdit(p); }}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
                   Edit
                 </button>
                 {deleteConfirm === p.id ? (
@@ -303,13 +303,13 @@ export function ProvidersPane() {
                       Confirm
                     </button>
                     <button onClick={() => setDeleteConfirm(null)}
-                      className="px-3 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)] transition-colors">
+                      className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
                       Cancel
                     </button>
                   </>
                 ) : (
                   <button onClick={() => setDeleteConfirm(p.id)}
-                    className="px-3 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(239,68,68,0.15)] hover:text-red-400 transition-colors">
+                    className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(239,68,68,0.15)] hover:text-red-400 transition-colors">
                     Delete
                   </button>
                 )}

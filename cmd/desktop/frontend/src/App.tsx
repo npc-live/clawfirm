@@ -23,7 +23,7 @@ export default function App() {
 
   if (view.name === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-400">
+      <div className="min-h-screen flex items-center justify-center text-[rgba(61,57,41,0.4)] bg-[#f5f0e8]">
         <div className="animate-pulse text-lg">Loading…</div>
       </div>
     );
