@@ -396,12 +396,12 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
     "bg-red-400";
 
   return (
-    <div className="flex flex-col h-screen bg-[rgb(30,30,28)]">
+    <div className="flex flex-col h-screen bg-[#f5f0e8]">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(255,255,255,0.08)]">
-        <button onClick={onBack} className="text-[rgba(255,255,255,0.4)] hover:text-[rgb(240,237,229)] transition-colors">←</button>
-        <h1 className="font-semibold text-[rgb(240,237,229)] text-[15px] tracking-tight">{agentName}</h1>
-        <span className="flex items-center gap-1.5 text-[11px] text-[rgba(255,255,255,0.4)] ml-auto">
+      <header className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(61,57,41,0.08)]">
+        <button onClick={onBack} className="text-[rgba(61,57,41,0.4)] hover:text-[#3d3929] transition-colors">←</button>
+        <h1 className="font-semibold text-[#3d3929] text-[15px] tracking-tight">{agentName}</h1>
+        <span className="flex items-center gap-1.5 text-[11px] text-[rgba(61,57,41,0.4)] ml-auto">
           <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
           {wsStatus}
         </span>
@@ -413,15 +413,15 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
         <div className="w-[40%] flex flex-col min-w-0">
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.length === 0 && (
-              <div className="text-center text-[rgba(255,255,255,0.2)] mt-16 text-[13px]">Start a conversation</div>
+              <div className="text-center text-[rgba(61,57,41,0.3)] mt-16 text-[13px]">Start a conversation</div>
             )}
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[75%] min-w-0 overflow-hidden rounded-2xl px-4 py-3 text-[13px] ${
                     msg.role === "user"
-                      ? "bg-[#2688f9] text-white"
-                      : "bg-[rgba(255,255,255,0.05)] text-[rgba(240,237,229,0.85)] border border-[rgba(255,255,255,0.08)]"
+                      ? "bg-[#c85a2a] text-white"
+                      : "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.85)] border border-[rgba(61,57,41,0.08)]"
                   }`}
                 >
                   <div className="prose-pre:overflow-x-auto prose-pre:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-white/20 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-white/20 [&_td]:px-2 [&_td]:py-1">
@@ -442,9 +442,9 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           </div>
           {/* Whip Plan inline banner */}
           {whipPlanCode && (
-            <div className="border-t border-[rgba(255,255,255,0.08)] px-4 py-3 flex flex-col gap-2">
+            <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[rgba(255,255,255,0.4)] font-mono">workflow.whip</span>
+                <span className="text-[11px] text-[rgba(61,57,41,0.4)] font-mono">workflow.whip</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
@@ -457,7 +457,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                         setWhipPlanEditing(true);
                       }
                     }}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(255,255,255,0.07)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.12)] transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.1)] transition-colors"
                   >
                     {whipPlanEditing ? "Save" : "Edit"}
                   </button>
@@ -470,13 +470,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                       send(JSON.stringify({ type: "run_tool", tool_name: "whipflow_run", tool_id: callID, tool_args: { source: code, user_inputs: whipAskValues } }));
                     }}
                     disabled={isStreaming || wsStatus !== "open" || !whipAskReady}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#2688f9] text-white hover:bg-[#1a7ae8] disabled:opacity-40 transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#c85a2a] text-white hover:bg-[#a84a22] disabled:opacity-40 transition-colors"
                   >
                     Execute
                   </button>
                   <button
                     onClick={() => { setWhipPlanCode(null); setWhipPlanEditing(false); setWhipAskFields([]); setWhipAskReady(false); }}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(255,255,255,0.04)] text-[rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.08)] transition-colors"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.04)] text-[rgba(61,57,41,0.3)] hover:bg-[rgba(61,57,41,0.08)] transition-colors"
                   >
                     ✕
                   </button>
@@ -485,24 +485,24 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
 
               {/* Ask fields form — shown when workflow has ask statements */}
               {whipAskFields.length > 0 && !whipAskReady && (
-                <div className="flex flex-col gap-2 bg-[rgba(38,136,249,0.06)] border border-[rgba(38,136,249,0.2)] rounded-lg p-3">
-                  <span className="text-[11px] text-[rgba(38,136,249,0.8)] font-medium">Workflow inputs required</span>
+                <div className="flex flex-col gap-2 bg-[rgba(200,90,42,0.06)] border border-[rgba(200,90,42,0.2)] rounded-lg p-3">
+                  <span className="text-[11px] text-[rgba(200,90,42,0.8)] font-medium">Workflow inputs required</span>
                   {whipAskFields.map(({ varName, prompt }) => (
                     <div key={varName} className="flex flex-col gap-1">
-                      <label className="text-[10px] text-[rgba(255,255,255,0.4)]">{prompt || varName}</label>
+                      <label className="text-[10px] text-[rgba(61,57,41,0.4)]">{prompt || varName}</label>
                       <input
                         type="text"
                         value={whipAskValues[varName] ?? ""}
                         onChange={(e) => setWhipAskValues((prev) => ({ ...prev, [varName]: e.target.value }))}
                         placeholder={varName}
-                        className="bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.1)] rounded-md px-2.5 py-1.5 text-[11px] text-[rgba(240,237,229,0.85)] focus:outline-none focus:ring-1 focus:ring-[rgba(38,136,249,0.4)] placeholder-[rgba(255,255,255,0.2)]"
+                        className="bg-[rgba(61,57,41,0.06)] border border-[rgba(61,57,41,0.12)] rounded-md px-2.5 py-1.5 text-[11px] text-[rgba(61,57,41,0.85)] focus:outline-none focus:ring-1 focus:ring-[rgba(200,90,42,0.4)] placeholder-[rgba(61,57,41,0.3)]"
                       />
                     </div>
                   ))}
                   <button
                     onClick={() => setWhipAskReady(true)}
                     disabled={whipAskFields.some(f => !(whipAskValues[f.varName] ?? "").trim())}
-                    className="mt-1 self-end px-3 py-1.5 rounded-lg text-[11px] font-medium bg-[rgba(38,136,249,0.2)] text-[rgba(38,136,249,0.9)] hover:bg-[rgba(38,136,249,0.3)] disabled:opacity-40 transition-colors"
+                    className="mt-1 self-end px-3 py-1.5 rounded-lg text-[11px] font-medium bg-[rgba(200,90,42,0.2)] text-[rgba(200,90,42,0.9)] hover:bg-[rgba(200,90,42,0.3)] disabled:opacity-40 transition-colors"
                   >
                     Confirm inputs →
                   </button>
@@ -513,11 +513,11 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
               {whipAskFields.length > 0 && whipAskReady && (
                 <div className="flex flex-wrap gap-2">
                   {whipAskFields.map(({ varName }) => (
-                    <span key={varName} className="text-[10px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] rounded px-2 py-0.5 text-[rgba(255,255,255,0.5)]">
-                      {varName}: <span className="text-[rgba(240,237,229,0.7)]">{whipAskValues[varName]}</span>
+                    <span key={varName} className="text-[10px] bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.08)] rounded px-2 py-0.5 text-[rgba(61,57,41,0.5)]">
+                      {varName}: <span className="text-[rgba(61,57,41,0.7)]">{whipAskValues[varName]}</span>
                     </span>
                   ))}
-                  <button onClick={() => setWhipAskReady(false)} className="text-[10px] text-[rgba(38,136,249,0.6)] hover:text-[rgba(38,136,249,0.9)]">edit</button>
+                  <button onClick={() => setWhipAskReady(false)} className="text-[10px] text-[rgba(200,90,42,0.6)] hover:text-[rgba(200,90,42,0.9)]">edit</button>
                 </div>
               )}
 
@@ -526,36 +526,36 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                   value={whipPlanEditText}
                   onChange={(e) => setWhipPlanEditText(e.target.value)}
                   rows={6}
-                  className="w-full bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.1)] rounded-lg p-2.5 text-[11px] font-mono text-[rgba(240,237,229,0.85)] resize-none focus:outline-none focus:ring-1 focus:ring-[rgba(38,136,249,0.4)] leading-relaxed"
+                  className="w-full bg-[rgba(61,57,41,0.06)] border border-[rgba(61,57,41,0.12)] rounded-lg p-2.5 text-[11px] font-mono text-[rgba(61,57,41,0.85)] resize-none focus:outline-none focus:ring-1 focus:ring-[rgba(200,90,42,0.4)] leading-relaxed"
                   spellCheck={false}
                 />
               ) : (
-                <pre className="text-[11px] font-mono text-[rgba(240,237,229,0.7)] bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.08)] rounded-lg p-2.5 max-h-36 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">{whipPlanCode}</pre>
+                <pre className="text-[11px] font-mono text-[rgba(61,57,41,0.7)] bg-[rgba(61,57,41,0.06)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2.5 max-h-36 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">{whipPlanCode}</pre>
               )}
             </div>
           )}
           {/* Input — inside left column */}
-          <div className="border-t border-[rgba(255,255,255,0.08)] px-4 py-3">
+          <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3">
             {/* Skill Picker */}
             {showSkillPicker && (showNewCommand || showPlanCommand || filteredSkills.length > 0) && (
-              <div className="mb-2 rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgb(40,40,38)] overflow-hidden shadow-xl">
+              <div className="mb-2 rounded-xl border border-[rgba(61,57,41,0.12)] bg-[#ece5d8] overflow-hidden shadow-xl">
                 <div className="max-h-52 overflow-y-auto">
                   {showNewCommand && (
                     <button
                       onMouseDown={(e) => { e.preventDefault(); setInput("/new"); setShowSkillPicker(false); }}
-                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(255,255,255,0.05)] border-b border-[rgba(255,255,255,0.06)]"
+                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(61,57,41,0.05)] border-b border-[rgba(61,57,41,0.08)]"
                     >
-                      <span className="text-[13px] font-medium text-[rgb(240,237,229)]">/new</span>
-                      <span className="text-[11px] text-[rgba(255,255,255,0.4)]">Start a new chat session</span>
+                      <span className="text-[13px] font-medium text-[#3d3929]">/new</span>
+                      <span className="text-[11px] text-[rgba(61,57,41,0.4)]">Start a new chat session</span>
                     </button>
                   )}
                   {showPlanCommand && (
                     <button
                       onMouseDown={(e) => { e.preventDefault(); setInput("/plan "); setShowSkillPicker(false); inputRef.current?.focus(); }}
-                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(255,255,255,0.05)] border-b border-[rgba(255,255,255,0.06)]"
+                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(61,57,41,0.05)] border-b border-[rgba(61,57,41,0.08)]"
                     >
-                      <span className="text-[13px] font-medium text-[rgb(240,237,229)]">/plan</span>
-                      <span className="text-[11px] text-[rgba(255,255,255,0.4)]">Generate a Whipflow workflow from a description</span>
+                      <span className="text-[13px] font-medium text-[#3d3929]">/plan</span>
+                      <span className="text-[11px] text-[rgba(61,57,41,0.4)]">Generate a Whipflow workflow from a description</span>
                     </button>
                   )}
                   {filteredSkills.map((s, i) => (
@@ -564,12 +564,12 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                       onMouseDown={(e) => { e.preventDefault(); selectSkill(s); }}
                       className={`w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors ${
                         i === skillPickerIdx
-                          ? "bg-[rgba(38,136,249,0.2)]"
-                          : "hover:bg-[rgba(255,255,255,0.05)]"
+                          ? "bg-[rgba(200,90,42,0.2)]"
+                          : "hover:bg-[rgba(61,57,41,0.05)]"
                       }`}
                     >
-                      <span className="text-[13px] font-medium text-[rgb(240,237,229)]">{s.name}</span>
-                      <span className="text-[11px] text-[rgba(255,255,255,0.4)] line-clamp-1">{s.description}</span>
+                      <span className="text-[13px] font-medium text-[#3d3929]">{s.name}</span>
+                      <span className="text-[11px] text-[rgba(61,57,41,0.4)] line-clamp-1">{s.description}</span>
                     </button>
                   ))}
                 </div>
@@ -583,7 +583,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                     <img
                       src={f.preview}
                       alt={f.file.name}
-                      className="w-14 h-14 object-cover rounded-lg border border-[rgba(255,255,255,0.1)]"
+                      className="w-14 h-14 object-cover rounded-lg border border-[rgba(61,57,41,0.12)]"
                     />
                     <button
                       onClick={() => removeFile(i)}
@@ -608,7 +608,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isStreaming || wsStatus !== "open"}
-                className="flex-shrink-0 w-[42px] h-[42px] flex items-center justify-center rounded-xl border border-[rgba(255,255,255,0.1)] bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.4)] hover:text-[rgb(240,237,229)] hover:bg-[rgba(255,255,255,0.1)] disabled:opacity-40 transition-colors"
+                className="flex-shrink-0 w-[42px] h-[42px] flex items-center justify-center rounded-xl border border-[rgba(61,57,41,0.12)] bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.4)] hover:text-[#3d3929] hover:bg-[rgba(61,57,41,0.12)] disabled:opacity-40 transition-colors"
                 title="Attach files"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -624,7 +624,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                 onKeyDown={handleInputKeyDown}
                 onPaste={handlePaste}
                 disabled={isStreaming || wsStatus !== "open"}
-                className="flex-1 border border-[rgba(255,255,255,0.1)] rounded-xl px-4 py-2.5 text-[13px] bg-[rgba(255,255,255,0.05)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.25)] focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
+                className="flex-1 border border-[rgba(61,57,41,0.12)] rounded-xl px-4 py-2.5 text-[13px] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)] focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
                 style={{ minHeight: "42px", maxHeight: "200px" }}
               />
               {isStreaming ? (
@@ -635,7 +635,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                 <button
                   onClick={handleSend}
                   disabled={!input.trim() || wsStatus !== "open"}
-                  className="px-4 py-2.5 rounded-xl bg-[#2688f9] text-white text-[13px] font-medium hover:bg-[#1a7ae8] disabled:opacity-40 transition-colors"
+                  className="px-4 py-2.5 rounded-xl bg-[#c85a2a] text-white text-[13px] font-medium hover:bg-[#a84a22] disabled:opacity-40 transition-colors"
                 >
                   Send
                 </button>
@@ -645,15 +645,15 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
         </div>
 
         {/* Right: Tabbed Panel (60%) */}
-        <div className="w-[60%] border-l border-[rgba(255,255,255,0.08)] min-h-0 flex flex-col">
+        <div className="w-[60%] border-l border-[rgba(61,57,41,0.08)] min-h-0 flex flex-col">
           {/* Tab bar */}
-          <div className="flex border-b border-[rgba(255,255,255,0.08)] flex-shrink-0">
+          <div className="flex border-b border-[rgba(61,57,41,0.08)] flex-shrink-0">
             <button
               onClick={() => setActiveTab("tools")}
               className={`px-4 py-2.5 text-[13px] font-medium transition-colors ${
                 activeTab === "tools"
-                  ? "text-[rgb(240,237,229)] border-b-2 border-[#2688f9]"
-                  : "text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.6)]"
+                  ? "text-[#3d3929] border-b-2 border-[#c85a2a]"
+                  : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(255,255,255,0.6)]"
               }`}
             >
               Tool Activity
@@ -662,10 +662,10 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
               onClick={() => previewHtml && setActiveTab("preview")}
               className={`px-4 py-2.5 text-[13px] font-medium transition-colors ${
                 activeTab === "preview"
-                  ? "text-[rgb(240,237,229)] border-b-2 border-[#2688f9]"
+                  ? "text-[#3d3929] border-b-2 border-[#c85a2a]"
                   : previewHtml
-                  ? "text-[rgba(255,255,255,0.4)] hover:text-[rgba(255,255,255,0.6)]"
-                  : "text-[rgba(255,255,255,0.2)] cursor-not-allowed"
+                  ? "text-[rgba(61,57,41,0.4)] hover:text-[rgba(255,255,255,0.6)]"
+                  : "text-[rgba(61,57,41,0.3)] cursor-not-allowed"
               }`}
             >
               HTML Preview
@@ -680,7 +680,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                 <HtmlPreview html={previewHtml} />
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full text-[rgba(255,255,255,0.2)] text-[13px]">
+              <div className="flex items-center justify-center h-full text-[rgba(61,57,41,0.3)] text-[13px]">
                 No HTML preview available
               </div>
             )}

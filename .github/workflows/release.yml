@@ -106,6 +106,7 @@ jobs:
 
       - name: Build desktop app
         if: runner.os != 'Linux'
+        shell: bash
         run: |
           wails build \
             -ldflags "-X github.com/ai-gateway/clawfirm/app.Version=${{ steps.version.outputs.version }}" \

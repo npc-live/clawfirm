@@ -25,8 +25,8 @@ export function MemoryPane() {
     <div className="p-8 h-full flex flex-col">
       <header className="mb-5 flex-shrink-0 flex items-start justify-between">
         <div>
-          <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Memory</h2>
-          <p className="text-[11px] text-[rgba(255,255,255,0.25)] mt-0.5 font-mono">{memDir}</p>
+          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Memory</h2>
+          <p className="text-[11px] text-[rgba(61,57,41,0.2)] mt-0.5 font-mono">{memDir}</p>
         </div>
         <SyncButton />
       </header>
@@ -37,8 +37,8 @@ export function MemoryPane() {
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
               tab === t
-                ? "bg-[rgba(38,136,249,0.15)] text-[#2688f9]"
-                : "text-[rgba(240,237,229,0.5)] hover:bg-[rgba(255,255,255,0.05)] hover:text-[rgb(240,237,229)]"
+                ? "bg-[rgba(200,90,42,0.15)] text-[#c85a2a]"
+                : "text-[rgba(240,237,229,0.5)] hover:bg-[rgba(61,57,41,0.05)] hover:text-[#3d3929]"
             }`}>
             {t === "files" ? "Files" : "Search"}
           </button>
@@ -71,7 +71,7 @@ function SyncButton() {
 
   return (
     <button onClick={handleSync} disabled={syncing}
-      className="text-[12px] px-3 py-1.5 rounded-lg border border-[rgba(255,255,255,0.1)] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.05)] hover:text-[rgb(240,237,229)] disabled:opacity-40 transition-colors">
+      className="text-[12px] px-3 py-1.5 rounded-lg border border-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.05)] hover:text-[#3d3929] disabled:opacity-40 transition-colors">
       {syncing ? "Syncing…" : ok ? "✓ Synced" : "Sync"}
     </button>
   );
@@ -158,7 +158,7 @@ function FilesTab() {
       {/* File list */}
       <div className="w-52 flex-shrink-0 flex flex-col gap-1 overflow-y-auto">
         <button onClick={() => setCreating(true)}
-          className="w-full text-[12px] px-3 py-1.5 rounded-lg bg-[#2688f9] text-white hover:bg-[#1a7ae8] transition-colors font-medium mb-1 flex-shrink-0">
+          className="w-full text-[12px] px-3 py-1.5 rounded-lg bg-[#c85a2a] text-white hover:bg-[#a84a22] transition-colors font-medium mb-1 flex-shrink-0">
           + New file
         </button>
 
@@ -167,26 +167,26 @@ function FilesTab() {
             <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleCreate(); if (e.key === "Escape") { setCreating(false); setNewName(""); } }}
               placeholder="filename.md"
-              className="flex-1 min-w-0 px-2 py-1 text-[12px] bg-[rgba(255,255,255,0.07)] border border-[rgba(38,136,249,0.5)] rounded-lg text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)] focus:outline-none" />
-            <button onClick={handleCreate} className="px-2 py-1 text-[11px] bg-[rgba(38,136,249,0.2)] text-[#2688f9] rounded-lg hover:bg-[rgba(38,136,249,0.3)]">OK</button>
+              className="flex-1 min-w-0 px-2 py-1 text-[12px] bg-[rgba(61,57,41,0.1)] border border-[rgba(200,90,42,0.5)] rounded-lg text-[#3d3929] placeholder-[rgba(61,57,41,0.3)] focus:outline-none" />
+            <button onClick={handleCreate} className="px-2 py-1 text-[11px] bg-[rgba(200,90,42,0.2)] text-[#c85a2a] rounded-lg hover:bg-[rgba(200,90,42,0.3)]">OK</button>
           </div>
         )}
 
         {loading ? (
-          <p className="text-[12px] text-[rgba(255,255,255,0.3)] px-1">Loading…</p>
+          <p className="text-[12px] text-[rgba(61,57,41,0.3)] px-1">Loading…</p>
         ) : files.length === 0 ? (
-          <p className="text-[12px] text-[rgba(255,255,255,0.3)] px-1 italic">No files yet.</p>
+          <p className="text-[12px] text-[rgba(61,57,41,0.3)] px-1 italic">No files yet.</p>
         ) : (
           files.map((f) => (
             <button key={f.path} onClick={() => openFile(f)}
               className={`w-full text-left px-3 py-2 rounded-lg transition-colors group flex items-center justify-between gap-1 ${
                 selected?.path === f.path
-                  ? "bg-[rgba(38,136,249,0.12)] border border-[rgba(38,136,249,0.25)]"
-                  : "hover:bg-[rgba(255,255,255,0.05)]"
+                  ? "bg-[rgba(200,90,42,0.12)] border border-[rgba(200,90,42,0.25)]"
+                  : "hover:bg-[rgba(61,57,41,0.05)]"
               }`}>
               <div className="min-w-0">
-                <p className={`text-[12px] font-medium truncate ${selected?.path === f.path ? "text-[#2688f9]" : "text-[rgba(240,237,229,0.8)]"}`}>{f.name}</p>
-                <p className="text-[10px] text-[rgba(255,255,255,0.25)] mt-0.5">{f.chunkCount} chunk{f.chunkCount !== 1 ? "s" : ""}</p>
+                <p className={`text-[12px] font-medium truncate ${selected?.path === f.path ? "text-[#c85a2a]" : "text-[rgba(240,237,229,0.8)]"}`}>{f.name}</p>
+                <p className="text-[10px] text-[rgba(61,57,41,0.2)] mt-0.5">{f.chunkCount} chunk{f.chunkCount !== 1 ? "s" : ""}</p>
               </div>
               <button onClick={(e) => { e.stopPropagation(); handleDelete(f); }}
                 className="opacity-0 group-hover:opacity-100 text-[10px] text-[rgba(255,80,80,0.7)] hover:text-red-400 transition-all px-1 flex-shrink-0">
@@ -202,11 +202,11 @@ function FilesTab() {
         {selected ? (
           <>
             <div className="flex items-center justify-between mb-2 flex-shrink-0">
-              <p className="text-[12px] text-[rgba(255,255,255,0.4)] font-mono truncate">{selected.path}</p>
+              <p className="text-[12px] text-[rgba(61,57,41,0.4)] font-mono truncate">{selected.path}</p>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {dirty && <span className="text-[11px] text-amber-400">Unsaved</span>}
                 <button onClick={handleSave} disabled={saving || !dirty}
-                  className="text-[12px] px-3 py-1.5 bg-[#2688f9] text-white rounded-lg hover:bg-[#1a7ae8] disabled:opacity-40 transition-colors font-medium">
+                  className="text-[12px] px-3 py-1.5 bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-40 transition-colors font-medium">
                   {saving ? "Saving…" : "Save"}
                 </button>
               </div>
@@ -216,13 +216,13 @@ function FilesTab() {
               value={content}
               onChange={(e) => { setContent(e.target.value); setDirty(true); }}
               spellCheck={false}
-              className="flex-1 min-h-0 w-full px-4 py-3 text-[13px] font-mono bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.3)] resize-none leading-relaxed text-[rgba(240,237,229,0.85)] placeholder-[rgba(255,255,255,0.15)]"
+              className="flex-1 min-h-0 w-full px-4 py-3 text-[13px] font-mono bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.3)] resize-none leading-relaxed text-[rgba(61,57,41,0.85)] placeholder-[rgba(61,57,41,0.15)]"
               placeholder="Write Markdown here…"
             />
             {error && <p className="text-[11px] text-red-400 mt-2 flex-shrink-0">{error}</p>}
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-[rgba(255,255,255,0.2)]">
+          <div className="flex-1 flex items-center justify-center text-[rgba(61,57,41,0.3)]">
             <div className="text-center">
               <div className="text-3xl mb-2">🧠</div>
               <p className="text-[13px]">Select a file to edit</p>
@@ -263,10 +263,10 @@ function SearchTab() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search memory…"
-          className="flex-1 px-4 py-2 text-[13px] bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.25)]"
+          className="flex-1 px-4 py-2 text-[13px] bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)]"
         />
         <button type="submit" disabled={searching || !query.trim()}
-          className="px-5 py-2 bg-[#2688f9] text-white text-[13px] font-semibold rounded-xl hover:bg-[#1a7ae8] disabled:opacity-40 transition-colors">
+          className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] font-semibold rounded-xl hover:bg-[#a84a22] disabled:opacity-40 transition-colors">
           {searching ? "…" : "Search"}
         </button>
       </form>
@@ -275,7 +275,7 @@ function SearchTab() {
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
         {searched && results.length === 0 && (
-          <div className="text-center py-12 text-[rgba(255,255,255,0.25)]">
+          <div className="text-center py-12 text-[rgba(61,57,41,0.2)]">
             <div className="text-2xl mb-2">🔍</div>
             <p className="text-[13px]">No results found.</p>
           </div>
@@ -293,7 +293,7 @@ function SearchResultCard({ result }: { result: MemorySearchResult }) {
   const pct = Math.round(result.score * 100);
 
   return (
-    <div className="rounded-xl bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.07)] overflow-hidden">
+    <div className="rounded-xl bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)] overflow-hidden">
       <button className="w-full text-left px-4 py-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors"
         onClick={() => setExpanded(!expanded)}>
         <div className="flex items-center justify-between gap-3">
@@ -307,14 +307,14 @@ function SearchResultCard({ result }: { result: MemorySearchResult }) {
           </div>
           <div className="flex-shrink-0 flex items-center gap-2">
             <ScoreBadge pct={pct} />
-            <span className="text-[rgba(255,255,255,0.3)] text-[11px]">{expanded ? "▲" : "▼"}</span>
+            <span className="text-[rgba(61,57,41,0.3)] text-[11px]">{expanded ? "▲" : "▼"}</span>
           </div>
         </div>
       </button>
       {expanded && (
-        <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-3">
-          <p className="text-[11px] text-[rgba(255,255,255,0.35)] font-mono mb-2">{result.filePath}</p>
-          <pre className="text-[12px] text-[rgba(240,237,229,0.7)] whitespace-pre-wrap break-words font-mono leading-relaxed max-h-48 overflow-y-auto">
+        <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3">
+          <p className="text-[11px] text-[rgba(61,57,41,0.35)] font-mono mb-2">{result.filePath}</p>
+          <pre className="text-[12px] text-[rgba(61,57,41,0.7)] whitespace-pre-wrap break-words font-mono leading-relaxed max-h-48 overflow-y-auto">
             {result.content}
           </pre>
         </div>
@@ -327,6 +327,6 @@ function ScoreBadge({ pct }: { pct: number }) {
   const cls =
     pct >= 70 ? "bg-[rgba(52,199,89,0.15)] text-emerald-400" :
     pct >= 40 ? "bg-[rgba(255,179,64,0.15)] text-amber-400" :
-               "bg-[rgba(255,255,255,0.07)] text-[rgba(255,255,255,0.4)]";
+               "bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.4)]";
   return <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${cls}`}>{pct}%</span>;
 }

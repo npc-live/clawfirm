@@ -72,13 +72,13 @@ function CollapsibleJSON({ label, data }: { label: string; data: any }) {
     <div className="mt-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[11px] text-[rgba(255,255,255,0.35)] hover:text-[rgba(255,255,255,0.6)] flex items-center gap-1 transition-colors"
+        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(255,255,255,0.6)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         {label}
       </button>
       {open && (
-        <pre className="mt-1 text-[11px] text-[rgba(240,237,229,0.65)] bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono">
+        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(255,255,255,0.03)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono">
           {text}
         </pre>
       )}
@@ -88,7 +88,7 @@ function CollapsibleJSON({ label, data }: { label: string; data: any }) {
 
 function StatusIndicator({ status }: { status: ToolExecution["status"] }) {
   if (status === "running") {
-    return <span className="inline-block w-2 h-2 rounded-full bg-[#2688f9] animate-pulse" />;
+    return <span className="inline-block w-2 h-2 rounded-full bg-[#c85a2a] animate-pulse" />;
   }
   if (status === "done") {
     return <span className="text-emerald-400 text-[13px]">&#10003;</span>;
@@ -98,7 +98,7 @@ function StatusIndicator({ status }: { status: ToolExecution["status"] }) {
 
 function Spinner() {
   return (
-    <svg className="animate-spin w-4 h-4 text-[#2688f9]" viewBox="0 0 24 24" fill="none">
+    <svg className="animate-spin w-4 h-4 text-[#c85a2a]" viewBox="0 0 24 24" fill="none">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
@@ -131,18 +131,18 @@ function WhipflowSource({ exec }: { exec: ToolExecution }) {
     <div className="mt-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[11px] text-[rgba(255,255,255,0.35)] hover:text-[rgba(255,255,255,0.6)] flex items-center gap-1 transition-colors"
+        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(255,255,255,0.6)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         {label}
       </button>
       {open && content && (
-        <pre className="mt-1 text-[11px] text-[rgba(240,237,229,0.65)] bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.06)] rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
+        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(255,255,255,0.03)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
           {content}
         </pre>
       )}
       {open && !content && args.file && (
-        <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.3)] font-mono">{args.file}</p>
+        <p className="mt-1 text-[11px] text-[rgba(61,57,41,0.3)] font-mono">{args.file}</p>
       )}
     </div>
   );
@@ -163,9 +163,9 @@ function WhipflowSessionSteps({ exec, onRetryFromSession }: { exec: ToolExecutio
   return (
     <div className="mt-2 space-y-1.5">
       {/* Summary row */}
-      <div className="flex items-center gap-2 text-[11px] text-[rgba(255,255,255,0.4)]">
+      <div className="flex items-center gap-2 text-[11px] text-[rgba(61,57,41,0.4)]">
         <span className="font-mono">{doneCount + errorCount}/{steps.length} sessions</span>
-        {runningCount > 0 && <span className="text-[#2688f9] animate-pulse">· {runningCount} running</span>}
+        {runningCount > 0 && <span className="text-[#c85a2a] animate-pulse">· {runningCount} running</span>}
         {errorCount > 0 && <span className="text-red-400">· {errorCount} failed</span>}
       </div>
       {/* Per-session cards */}
@@ -183,10 +183,10 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
   const isDone = step.done && !step.error;
 
   const borderCls = isRunning
-    ? "border-[rgba(38,136,249,0.3)] bg-[rgba(38,136,249,0.04)]"
+    ? "border-[rgba(200,90,42,0.3)] bg-[rgba(200,90,42,0.04)]"
     : isError
     ? "border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.04)]"
-    : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.03)]";
+    : "border-[rgba(61,57,41,0.08)] bg-[rgba(255,255,255,0.03)]";
 
   const label = step.name
     ? `#${step.index + 1} · ${step.name}`
@@ -200,7 +200,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
       >
         {/* Status dot */}
         {isRunning ? (
-          <span className="w-2 h-2 rounded-full bg-[#2688f9] animate-pulse flex-shrink-0" />
+          <span className="w-2 h-2 rounded-full bg-[#c85a2a] animate-pulse flex-shrink-0" />
         ) : isDone ? (
           <span className="text-emerald-400 text-[12px] flex-shrink-0">✓</span>
         ) : (
@@ -212,13 +212,13 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
         </span>
         {/* Provider badge */}
         {step.provider && (
-          <span className="text-[10px] font-mono text-[rgba(255,255,255,0.3)] flex-shrink-0">
+          <span className="text-[10px] font-mono text-[rgba(61,57,41,0.3)] flex-shrink-0">
             {step.provider}
           </span>
         )}
         {/* Duration */}
         {step.duration_ms != null && step.duration_ms > 0 && (
-          <span className="text-[10px] text-[rgba(255,255,255,0.25)] font-mono flex-shrink-0">
+          <span className="text-[10px] text-[rgba(61,57,41,0.2)] font-mono flex-shrink-0">
             {step.duration_ms < 1000 ? `${step.duration_ms}ms` : `${(step.duration_ms / 1000).toFixed(1)}s`}
           </span>
         )}
@@ -226,20 +226,20 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
         {(isDone || isError) && onRetry && (
           <button
             onClick={(e) => { e.stopPropagation(); onRetry(); }}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(38,136,249,0.15)] text-[rgba(38,136,249,0.8)] hover:bg-[rgba(38,136,249,0.25)] transition-colors flex-shrink-0"
+            className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(200,90,42,0.15)] text-[rgba(200,90,42,0.8)] hover:bg-[rgba(200,90,42,0.25)] transition-colors flex-shrink-0"
           >
             Retry from here
           </button>
         )}
         {/* Expand toggle */}
-        <span className={`text-[rgba(255,255,255,0.2)] text-[10px] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        <span className={`text-[rgba(61,57,41,0.3)] text-[10px] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
 
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[rgba(255,255,255,0.06)]">
+        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[rgba(61,57,41,0.08)]">
           {/* Prompt */}
           <div>
-            <p className="text-[10px] font-semibold text-[rgba(255,255,255,0.3)] uppercase tracking-wider mb-1">Prompt</p>
+            <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Prompt</p>
             <pre className="text-[11px] text-[rgba(240,237,229,0.6)] bg-[rgba(255,255,255,0.03)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto font-mono leading-relaxed">
               {step.prompt}
             </pre>
@@ -247,7 +247,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
           {/* Output */}
           {step.output && (
             <div>
-              <p className="text-[10px] font-semibold text-[rgba(255,255,255,0.3)] uppercase tracking-wider mb-1">Output</p>
+              <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Output</p>
               <pre className="text-[11px] text-[rgba(240,237,229,0.75)] bg-[rgba(255,255,255,0.03)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
                 {step.output}
               </pre>
@@ -291,7 +291,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
     : "Waiting...";
 
   return (
-    <div className="flex-shrink-0 border-b border-[rgba(255,255,255,0.08)]">
+    <div className="flex-shrink-0 border-b border-[rgba(61,57,41,0.08)]">
       <button
         onClick={() => setCollapsed(!collapsed)}
         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(255,255,255,0.03)] transition-colors"
@@ -305,15 +305,15 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
           <span className="text-emerald-400 text-[14px]">&#10003;</span>
         )}
         {/* Task label */}
-        <span className="flex-1 text-left text-[13px] text-[rgba(240,237,229,0.85)] truncate">
+        <span className="flex-1 text-left text-[13px] text-[rgba(61,57,41,0.85)] truncate">
           {label}
         </span>
         {/* Progress counter */}
-        <span className="text-[12px] text-[rgba(255,255,255,0.4)] font-mono tabular-nums">
+        <span className="text-[12px] text-[rgba(61,57,41,0.4)] font-mono tabular-nums">
           {doneCount + errorCount}/{total}
         </span>
         {/* Collapse toggle */}
-        <span className={`text-[rgba(255,255,255,0.3)] text-[11px] transition-transform ${collapsed ? "" : "rotate-180"}`}>
+        <span className={`text-[rgba(61,57,41,0.3)] text-[11px] transition-transform ${collapsed ? "" : "rotate-180"}`}>
           ▾
         </span>
       </button>
@@ -327,32 +327,32 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 
 export function ToolPanel({ executions, onRetryFromSession, whipflowArgs }: Props) {
   return (
-    <div className="flex flex-col h-full bg-[rgb(26,26,24)] text-[rgb(240,237,229)]">
+    <div className="flex flex-col h-full bg-[rgb(26,26,24)] text-[#3d3929]">
       {/* Task summary bar */}
       <TaskSummaryBar executions={executions} />
 
       {/* Tool execution cards */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {executions.length === 0 && (
-          <div className="text-center text-[rgba(255,255,255,0.2)] mt-8 text-[13px]">No tool activity</div>
+          <div className="text-center text-[rgba(61,57,41,0.3)] mt-8 text-[13px]">No tool activity</div>
         )}
         {executions.map((exec) => (
           <div
             key={exec.id}
             className={`rounded-xl p-3 text-[13px] border ${
               exec.status === "running"
-                ? "border-[rgba(38,136,249,0.25)] bg-[rgba(38,136,249,0.05)]"
+                ? "border-[rgba(200,90,42,0.25)] bg-[rgba(200,90,42,0.05)]"
                 : exec.status === "error"
                 ? "border-[rgba(255,69,58,0.25)] bg-[rgba(255,69,58,0.05)]"
-                : "border-[rgba(255,255,255,0.08)] bg-[rgba(255,255,255,0.05)]"
+                : "border-[rgba(61,57,41,0.08)] bg-[rgba(61,57,41,0.05)]"
             }`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <StatusIndicator status={exec.status} />
-                <span className="font-mono font-medium text-[rgb(240,237,229)] text-[13px]">{exec.name}</span>
+                <span className="font-mono font-medium text-[#3d3929] text-[13px]">{exec.name}</span>
               </div>
-              <span className="text-[11px] text-[rgba(255,255,255,0.3)]">
+              <span className="text-[11px] text-[rgba(61,57,41,0.3)]">
                 {formatDuration(exec.startTime, exec.endTime)}
               </span>
             </div>

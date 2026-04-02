@@ -89,12 +89,12 @@ export function Dashboard({ onOpenChat }: Props) {
   }, []);
 
   return (
-    <div className="flex h-full bg-[rgb(30,30,28)]">
+    <div className="flex h-full bg-[#f5f0e8]">
       {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 bg-[rgb(26,26,24)] border-r border-[rgba(255,255,255,0.08)] flex flex-col h-full">
+      <aside className="w-52 flex-shrink-0 bg-[#ece5d8] border-r border-[rgba(61,57,41,0.12)] flex flex-col h-full">
         <div className="px-5 pt-6 pb-4">
-          <h1 className="text-[15px] font-semibold text-[rgb(240,237,229)] tracking-tight">Pi Go</h1>
-          <p className="text-[11px] text-[rgba(255,255,255,0.3)] mt-0.5">AI Gateway</p>
+          <h1 className="text-[15px] font-semibold text-[#3d3929] tracking-tight">Clawfirm</h1>
+          <p className="text-[11px] text-[rgba(61,57,41,0.45)] mt-0.5">AI Gateway</p>
         </div>
         <nav className="flex-1 px-3 space-y-0.5">
           <SidebarItem icon="💬" label="Chats" active={nav === "chats"} onClick={() => setNav("chats")} />
@@ -110,8 +110,8 @@ export function Dashboard({ onOpenChat }: Props) {
           <SidebarItem icon="🌐" label="Browser" active={nav === "browser"} onClick={() => setNav("browser")} />
           <SidebarItem icon="⚙️" label="Settings" active={nav === "settings"} onClick={() => setNav("settings")} />
         </nav>
-        <div className="px-4 py-4 border-t border-[rgba(255,255,255,0.06)]">
-          <p className="text-[11px] text-[rgba(255,255,255,0.3)]">{channels.length} agent{channels.length !== 1 ? "s" : ""}</p>
+        <div className="px-4 py-4 border-t border-[rgba(61,57,41,0.1)]">
+          <p className="text-[11px] text-[rgba(61,57,41,0.4)]">{channels.length} agent{channels.length !== 1 ? "s" : ""}</p>
         </div>
       </aside>
 
@@ -139,8 +139,8 @@ function SidebarItem({ icon, label, active, onClick }: { icon: string; label: st
     <button onClick={onClick}
       className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors text-left ${
         active
-          ? "bg-[rgba(38,136,249,0.15)] text-[#2688f9] font-medium"
-          : "text-[rgba(240,237,229,0.65)] hover:bg-[rgba(255,255,255,0.05)] hover:text-[rgb(240,237,229)]"
+          ? "bg-[rgba(61,57,41,0.1)] text-[#3d3929] font-medium"
+          : "text-[rgba(61,57,41,0.6)] hover:bg-[rgba(61,57,41,0.06)] hover:text-[#3d3929]"
       }`}>
       <span className="text-base leading-none">{icon}</span>{label}
     </button>
@@ -227,9 +227,9 @@ function SkillsPane() {
   return (
     <div className="p-8">
       <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">
+        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">
           Skills
-          <span className="ml-2 text-[11px] font-normal text-[rgba(255,255,255,0.5)] bg-[rgba(255,255,255,0.08)] px-2 py-0.5 rounded-full">
+          <span className="ml-2 text-[11px] font-normal text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.08)] px-2 py-0.5 rounded-full">
             {loading ? "…" : `${skills.length} loaded`}
           </span>
         </h2>
@@ -244,15 +244,15 @@ function SkillsPane() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doSearch()}
             placeholder="Search remote skills (e.g. code-review, commit)…"
-            className="flex-1 px-3 py-2 rounded-lg bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.1)]
-              text-[13px] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.25)]
-              focus:outline-none focus:border-[rgba(255,255,255,0.25)] transition-colors"
+            className="flex-1 px-3 py-2 rounded-lg bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.12)]
+              text-[13px] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)]
+              focus:outline-none focus:border-[rgba(61,57,41,0.2)] transition-colors"
           />
           <button
             onClick={doSearch}
             disabled={searching || !searchQuery.trim()}
-            className="px-4 py-2 rounded-lg bg-[rgba(255,255,255,0.08)] border border-[rgba(255,255,255,0.1)]
-              text-[13px] text-[rgb(240,237,229)] hover:bg-[rgba(255,255,255,0.12)] transition-colors
+            className="px-4 py-2 rounded-lg bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.12)]
+              text-[13px] text-[#3d3929] hover:bg-[rgba(61,57,41,0.1)] transition-colors
               disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {searching ? "Searching…" : "Search"}
@@ -269,12 +269,12 @@ function SkillsPane() {
         {searchResults.length > 0 && (
           <div className="mt-3 space-y-2">
             {searchResults.map((r) => (
-              <div key={r.name} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.07)]">
+              <div key={r.name} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)]">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-medium text-[rgb(240,237,229)]">{r.name}</p>
-                    <span className="text-[11px] text-[rgba(255,255,255,0.35)] font-mono">v{r.version}</span>
-                    {r.author && <span className="text-[11px] text-[rgba(255,255,255,0.25)]">by {r.author}</span>}
+                    <p className="text-[13px] font-medium text-[#3d3929]">{r.name}</p>
+                    <span className="text-[11px] text-[rgba(61,57,41,0.35)] font-mono">v{r.version}</span>
+                    {r.author && <span className="text-[11px] text-[rgba(61,57,41,0.2)]">by {r.author}</span>}
                   </div>
                   {r.description && (
                     <p className="text-[12px] text-[rgba(255,255,255,0.4)] mt-0.5 line-clamp-2">{r.description}</p>
@@ -283,8 +283,8 @@ function SkillsPane() {
                 <button
                   onClick={() => doInstall(r.name)}
                   disabled={installing !== null}
-                  className="flex-shrink-0 px-3 py-1.5 rounded-md bg-[rgba(96,196,255,0.15)] border border-[rgba(96,196,255,0.25)]
-                    text-[12px] text-[rgba(96,196,255,0.9)] hover:bg-[rgba(96,196,255,0.25)] transition-colors
+                  className="flex-shrink-0 px-3 py-1.5 rounded-md bg-[rgba(200,90,42,0.15)] border border-[rgba(200,90,42,0.25)]
+                    text-[12px] text-[rgba(200,90,42,0.9)] hover:bg-[rgba(200,90,42,0.25)] transition-colors
                     disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {installing === r.name ? "Installing…" : "Install"}
@@ -305,21 +305,21 @@ function SkillsPane() {
           const content = contentMap[s.filePath] ?? "";
           const urls = isOpen ? extractUrls(content) : [];
           return (
-            <div key={s.filePath} className="rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.07)] overflow-hidden">
-              <button className="w-full text-left px-4 py-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+            <div key={s.filePath} className="rounded-lg bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)] overflow-hidden">
+              <button className="w-full text-left px-4 py-3 hover:bg-[rgba(61,57,41,0.03)] transition-colors"
                 onClick={() => toggle(s.filePath)}>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[13px] font-medium text-[rgb(240,237,229)]">{s.name}</p>
+                  <p className="text-[13px] font-medium text-[#3d3929]">{s.name}</p>
                   <span className="text-[rgba(255,255,255,0.3)] text-[11px] flex-shrink-0">{isOpen ? "▲" : "▼"}</span>
                 </div>
                 {s.description && (
                   <p className="text-[12px] text-[rgba(255,255,255,0.4)] mt-0.5 line-clamp-2">{s.description}</p>
                 )}
-                <p className="text-[11px] text-[rgba(255,255,255,0.2)] font-mono mt-1">{s.filePath}</p>
+                <p className="text-[11px] text-[rgba(61,57,41,0.3)] font-mono mt-1">{s.filePath}</p>
               </button>
 
               {isOpen && (
-                <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-3 space-y-3">
+                <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3 space-y-3">
                   {/* URLs */}
                   {content === "" ? (
                     <p className="text-[12px] text-[rgba(255,255,255,0.3)]">Loading…</p>
@@ -328,7 +328,7 @@ function SkillsPane() {
                       <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-2">URLs</p>
                       <div className="space-y-1">
                         {urls.map((u) => (
-                          <p key={u} className="text-[12px] font-mono text-[rgba(96,196,255,0.8)] break-all">{u}</p>
+                          <p key={u} className="text-[12px] font-mono text-[rgba(200,90,42,0.8)] break-all">{u}</p>
                         ))}
                       </div>
                     </div>
@@ -336,7 +336,7 @@ function SkillsPane() {
                   {/* Raw content */}
                   <div>
                     <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-2">Content</p>
-                    <pre className="text-[11px] text-[rgba(255,255,255,0.5)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
+                    <pre className="text-[11px] text-[rgba(61,57,41,0.5)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
                       {content}
                     </pre>
                   </div>
@@ -547,23 +547,23 @@ function CronJobsPane() {
     setHistoryJobId(id => id === jobId ? null : jobId);
   }
 
-  const inputCls = "w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] bg-[rgba(255,255,255,0.05)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)]";
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]";
 
   return (
     <div className="p-8 h-full flex flex-col">
       <header className="mb-6 flex-shrink-0 flex items-center justify-between">
         <div>
-          <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">
+          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">
             Cron Jobs
-            <span className="ml-2 text-[11px] font-normal text-[rgba(255,255,255,0.5)] bg-[rgba(255,255,255,0.08)] px-2 py-0.5 rounded-full">
+            <span className="ml-2 text-[11px] font-normal text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.08)] px-2 py-0.5 rounded-full">
               {loading ? "…" : `${jobs.length}`}
             </span>
           </h2>
-          <p className="text-[13px] text-[rgba(255,255,255,0.5)] mt-1">Schedule agents to run on a timer</p>
+          <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Schedule agents to run on a timer</p>
         </div>
         {editing === null && (
           <button onClick={startNew}
-            className="text-[13px] bg-[#2688f9] text-white px-4 py-2 rounded-xl hover:bg-[#1a7ae8] transition-colors font-semibold">
+            className="text-[13px] bg-[#c85a2a] text-white px-4 py-2 rounded-xl hover:bg-[#a84a22] transition-colors font-semibold">
             + New Job
           </button>
         )}
@@ -572,16 +572,16 @@ function CronJobsPane() {
       {/* Edit / Create form */}
       {editing !== null && (
         <GlassCard className="mb-5 flex-shrink-0 max-w-2xl">
-          <h3 className="text-[13px] font-semibold text-[rgb(240,237,229)] mb-4">
+          <h3 className="text-[13px] font-semibold text-[#3d3929] mb-4">
             {editing === "new" ? "New Cron Job" : "Edit Cron Job"}
           </h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Name</label>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Name</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="daily-report" className={inputCls} />
             </div>
             <div>
-              <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Agent</label>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Agent</label>
               <select value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} className={selectCls}>
                 <option value="">— select agent —</option>
                 {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
@@ -589,14 +589,14 @@ function CronJobsPane() {
             </div>
           </div>
           <div className="mt-3">
-            <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Schedule Kind</label>
+            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Schedule Kind</label>
             <div className="flex gap-2">
               {(["cron", "every", "at"] as const).map((k) => (
                 <button key={k} onClick={() => setForm({ ...form, scheduleKind: k })}
                   className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
                     form.scheduleKind === k
-                      ? "bg-[rgba(38,136,249,0.2)] text-[#2688f9] border border-[rgba(38,136,249,0.3)]"
-                      : "bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.5)] border border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.08)]"
+                      ? "bg-[rgba(200,90,42,0.2)] text-[#c85a2a] border border-[rgba(200,90,42,0.3)]"
+                      : "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.5)] border border-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.08)]"
                   }`}>
                   {k}
                 </button>
@@ -606,11 +606,11 @@ function CronJobsPane() {
           {form.scheduleKind === "cron" && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Cron Expression</label>
+                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Cron Expression</label>
                 <input value={form.expr} onChange={(e) => setForm({ ...form, expr: e.target.value })} placeholder="0 9 * * MON-FRI" className={inputCls} />
               </div>
               <div>
-                <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Timezone (optional)</label>
+                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Timezone (optional)</label>
                 <input value={form.tz} onChange={(e) => setForm({ ...form, tz: e.target.value })} placeholder="Asia/Shanghai" className={inputCls} />
               </div>
             </div>
@@ -618,11 +618,11 @@ function CronJobsPane() {
           {form.scheduleKind === "every" && (
             <div className="grid grid-cols-[1fr_auto] gap-2 mt-3">
               <div>
-                <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Interval</label>
+                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Interval</label>
                 <input type="number" min="1" value={form.everyVal} onChange={(e) => setForm({ ...form, everyVal: e.target.value })} placeholder="30" className={inputCls} />
               </div>
               <div>
-                <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Unit</label>
+                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Unit</label>
                 <select value={form.everyUnit} onChange={(e) => setForm({ ...form, everyUnit: e.target.value as EveryUnit })}
                   className={`${inputCls} appearance-none cursor-pointer pr-8`}>
                   <option value="seconds">Seconds</option>
@@ -635,31 +635,31 @@ function CronJobsPane() {
           )}
           {form.scheduleKind === "at" && (
             <div className="mt-3">
-              <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Run At</label>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Run At</label>
               <input type="datetime-local" value={form.at} onChange={(e) => setForm({ ...form, at: e.target.value })}
                 className={`${inputCls} [color-scheme:dark]`} />
             </div>
           )}
           <div className="mt-3">
-            <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">Prompt</label>
+            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Prompt</label>
             <textarea value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} rows={3} placeholder="Generate a daily report..."
               className={`${inputCls} resize-none leading-relaxed`} />
           </div>
           <div className="mt-3 flex items-center gap-2">
             <button onClick={() => setForm({ ...form, enabled: !form.enabled })}
-              className={`w-9 h-5 rounded-full transition-colors relative ${form.enabled ? "bg-[#2688f9]" : "bg-[rgba(255,255,255,0.15)]"}`}>
+              className={`w-9 h-5 rounded-full transition-colors relative ${form.enabled ? "bg-[#c85a2a]" : "bg-[rgba(61,57,41,0.15)]"}`}>
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.enabled ? "left-[18px]" : "left-0.5"}`} />
             </button>
-            <span className="text-[12px] text-[rgba(255,255,255,0.5)]">{form.enabled ? "Enabled" : "Disabled"}</span>
+            <span className="text-[12px] text-[rgba(61,57,41,0.5)]">{form.enabled ? "Enabled" : "Disabled"}</span>
           </div>
           {error && <p className="text-[11px] text-red-400 mt-2">{error}</p>}
           <div className="flex gap-2 mt-4">
             <button onClick={handleSave} disabled={saving}
-              className="px-5 py-2 bg-[#2688f9] text-white text-[13px] rounded-xl hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
+              className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
               {saving ? "Saving…" : "Save"}
             </button>
             <button onClick={cancelEdit}
-              className="px-4 py-2 rounded-xl border border-[rgba(255,255,255,0.1)] text-[13px] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.05)]">
+              className="px-4 py-2 rounded-xl border border-[rgba(61,57,41,0.12)] text-[13px] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.05)]">
               Cancel
             </button>
           </div>
@@ -675,35 +675,35 @@ function CronJobsPane() {
       )}
       <div className="space-y-2 max-w-2xl flex-1 min-h-0 overflow-y-auto">
         {jobs.map((j) => (
-          <div key={j.id} className="rounded-lg bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.07)] overflow-hidden">
+          <div key={j.id} className="rounded-lg bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)] overflow-hidden">
             <div className="px-4 py-3 flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-[13px] font-medium text-[rgb(240,237,229)] truncate">{j.name}</p>
+                  <p className="text-[13px] font-medium text-[#3d3929] truncate">{j.name}</p>
                   <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                    j.scheduleKind === "cron" ? "bg-[rgba(38,136,249,0.15)] text-[#2688f9]"
+                    j.scheduleKind === "cron" ? "bg-[rgba(200,90,42,0.15)] text-[#c85a2a]"
                     : j.scheduleKind === "every" ? "bg-[rgba(52,199,89,0.15)] text-emerald-400"
                     : "bg-[rgba(255,179,64,0.15)] text-amber-400"
                   }`}>
                     {j.scheduleKind}
                   </span>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                    j.enabled ? "bg-[rgba(52,199,89,0.15)] text-emerald-400" : "bg-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.35)]"
+                    j.enabled ? "bg-[rgba(52,199,89,0.15)] text-emerald-400" : "bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.35)]"
                   }`}>
                     {j.enabled ? "ON" : "OFF"}
                   </span>
                 </div>
-                <p className="text-[11px] text-[rgba(255,255,255,0.35)] mt-0.5 truncate">
+                <p className="text-[11px] text-[rgba(61,57,41,0.35)] mt-0.5 truncate">
                   {j.scheduleKind === "cron" && `${j.schedule.expr}${j.schedule.tz ? ` (${j.schedule.tz})` : ""}`}
                   {j.scheduleKind === "every" && j.schedule.everyMs && (() => { const h = msToHuman(j.schedule.everyMs!); return `every ${h.val} ${h.unit}`; })()}
                   {j.scheduleKind === "at" && (j.schedule.at ? new Date(j.schedule.at).toLocaleString() : "")}
                   {" · agent: "}{j.agentName}
                 </p>
-                <p className="text-[11px] text-[rgba(255,255,255,0.25)] mt-0.5 truncate">{j.prompt}</p>
+                <p className="text-[11px] text-[rgba(61,57,41,0.2)] mt-0.5 truncate">{j.prompt}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => handleToggle(j.id, !j.enabled)}
-                  className={`w-8 h-[18px] rounded-full transition-colors relative ${j.enabled ? "bg-[#2688f9]" : "bg-[rgba(255,255,255,0.15)]"}`}>
+                  className={`w-8 h-[18px] rounded-full transition-colors relative ${j.enabled ? "bg-[#c85a2a]" : "bg-[rgba(61,57,41,0.15)]"}`}>
                   <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${j.enabled ? "left-[15px]" : "left-[2px]"}`} />
                 </button>
                 <button onClick={() => handleTrigger(j.id)}
@@ -712,11 +712,11 @@ function CronJobsPane() {
                   {triggering === j.id ? "Running…" : "▶ Run"}
                 </button>
                 <button onClick={() => showHistory(j.id)}
-                  className="text-[11px] text-[rgba(255,255,255,0.4)] hover:text-[rgb(240,237,229)] transition-colors">
+                  className="text-[11px] text-[rgba(255,255,255,0.4)] hover:text-[#3d3929] transition-colors">
                   History
                 </button>
                 <button onClick={() => startEdit(j)}
-                  className="text-[11px] text-[#2688f9] hover:text-[#5aa3fb] transition-colors">
+                  className="text-[11px] text-[#c85a2a] hover:text-[#5aa3fb] transition-colors">
                   Edit
                 </button>
                 <button onClick={() => handleDelete(j.id)}
@@ -778,7 +778,7 @@ function HistoryPanel({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="border-t border-[rgba(255,255,255,0.06)] px-4 py-3">
+    <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3">
       <div className="flex items-center justify-between mb-2">
         <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] uppercase tracking-wider">
           Execution History
@@ -799,33 +799,33 @@ function HistoryPanel({ jobId }: { jobId: string }) {
             const log = h.resultText || h.errorText || "";
             return (
               <div key={h.id}
-                className="rounded-lg border border-[rgba(255,255,255,0.07)] overflow-hidden bg-[rgba(255,255,255,0.02)]">
+                className="rounded-lg border border-[rgba(61,57,41,0.1)] overflow-hidden bg-[rgba(255,255,255,0.02)]">
                 {/* Header row */}
                 <button
                   onClick={() => setExpanded(isExpanded ? null : h.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[rgba(255,255,255,0.03)] transition-colors">
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[rgba(61,57,41,0.03)] transition-colors">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     h.status === "success" ? "bg-emerald-400" :
                     h.status === "error"   ? "bg-red-400" :
-                    "bg-[#2688f9] animate-pulse"
+                    "bg-[#c85a2a] animate-pulse"
                   }`} />
-                  <span className="text-[11px] font-mono text-[rgba(255,255,255,0.5)] flex-1 truncate">
+                  <span className="text-[11px] font-mono text-[rgba(61,57,41,0.5)] flex-1 truncate">
                     {fmtTime(h.startedAt)}
                   </span>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
                     h.status === "success" ? "text-emerald-400 bg-[rgba(52,199,89,0.1)]" :
                     h.status === "error"   ? "text-red-400 bg-[rgba(255,59,48,0.1)]" :
-                    "text-[#2688f9] bg-[rgba(38,136,249,0.1)]"
+                    "text-[#c85a2a] bg-[rgba(200,90,42,0.1)]"
                   }`}>{h.status}</span>
-                  <span className="text-[10px] text-[rgba(255,255,255,0.25)] tabular-nums w-12 text-right">
+                  <span className="text-[10px] text-[rgba(61,57,41,0.2)] tabular-nums w-12 text-right">
                     {duration(h)}
                   </span>
-                  <span className="text-[10px] text-[rgba(255,255,255,0.2)]">{isExpanded ? "▲" : "▼"}</span>
+                  <span className="text-[10px] text-[rgba(61,57,41,0.3)]">{isExpanded ? "▲" : "▼"}</span>
                 </button>
 
                 {/* Expanded log */}
                 {isExpanded && (
-                  <div className="border-t border-[rgba(255,255,255,0.05)]">
+                  <div className="border-t border-[rgba(61,57,41,0.05)]">
                     {log ? (
                       <pre className="px-3 py-2.5 text-[11px] font-mono leading-relaxed
                         text-[rgba(240,237,229,0.7)] whitespace-pre-wrap break-words
@@ -833,7 +833,7 @@ function HistoryPanel({ jobId }: { jobId: string }) {
                         {log}
                       </pre>
                     ) : (
-                      <p className="px-3 py-2 text-[11px] text-[rgba(255,255,255,0.25)] italic">No output.</p>
+                      <p className="px-3 py-2 text-[11px] text-[rgba(61,57,41,0.2)] italic">No output.</p>
                     )}
                   </div>
                 )}
@@ -880,7 +880,7 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
     <div className="p-8">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Chats</h2>
+          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Chats</h2>
           <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">Your conversation history</p>
         </div>
         <button
@@ -888,7 +888,7 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
             const agentName = channels[0]?.name;
             if (agentName) onOpenChat(agentName, "s" + Date.now());
           }}
-          className="px-4 py-2 text-[13px] bg-[#2688f9] text-white rounded-xl hover:bg-[#1a7ae8] transition-colors font-medium"
+          className="px-4 py-2 text-[13px] bg-[#c85a2a] text-white rounded-xl hover:bg-[#a84a22] transition-colors font-medium"
         >
           + New Chat
         </button>
@@ -902,11 +902,11 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
             <button
               key={`${agentName}/${session.id}`}
               onClick={() => onOpenChat(agentName, session.id)}
-              className="w-full text-left bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl px-4 py-3 hover:bg-[rgba(255,255,255,0.07)] hover:border-[rgba(255,255,255,0.14)] transition-all group"
+              className="w-full text-left bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl px-4 py-3 hover:bg-[rgba(61,57,41,0.1)] hover:border-[rgba(255,255,255,0.14)] transition-all group"
             >
               <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-medium text-[rgba(38,136,249,0.8)] uppercase tracking-wider">{agentName}</span>
-                <span className="text-[11px] text-[rgba(255,255,255,0.25)]">{formatTime(session.lastMs)}</span>
+                <span className="text-[11px] font-medium text-[rgba(200,90,42,0.8)] uppercase tracking-wider">{agentName}</span>
+                <span className="text-[11px] text-[rgba(61,57,41,0.2)]">{formatTime(session.lastMs)}</span>
               </div>
               <p className="text-[13px] text-[rgba(240,237,229,0.75)] truncate leading-snug group-hover:text-[rgba(240,237,229,0.9)]">
                 {session.preview}
@@ -923,7 +923,7 @@ function AgentsPane() {
   return (
     <div className="p-8">
       <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Agents</h2>
+        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Agents</h2>
         <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">Edit each agent's provider, model and system prompt</p>
       </header>
       <AgentsEditor />
@@ -935,7 +935,7 @@ function ChannelsPane() {
   return (
     <div className="p-8">
       <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Channels</h2>
+        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Channels</h2>
         <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">Messaging integrations</p>
       </header>
       <ChannelsSettings />
@@ -993,32 +993,32 @@ function AgentsEditor() {
     <div className="space-y-3 max-w-2xl">
       {agents.length === 0 && <p className="text-[13px] text-[rgba(255,255,255,0.3)]">No agents configured.</p>}
       {agents.map(agent => (
-        <div key={agent.name} className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl">
+        <div key={agent.name} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl">
           {/* Header row */}
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-[14px] font-semibold text-[rgb(240,237,229)]">{agent.name}</span>
+              <span className="text-[14px] font-semibold text-[#3d3929]">{agent.name}</span>
               {success === agent.name && <span className="text-[11px] text-emerald-400">✓ saved</span>}
               {editing !== agent.name && (
                 <>
-                  <span className="px-2 py-0.5 text-[11px] bg-[rgba(38,136,249,0.15)] text-[#2688f9] rounded-full">{agent.provider || "—"}</span>
-                  {agent.model && <span className="text-[11px] text-[rgba(255,255,255,0.35)]">{agent.model}</span>}
+                  <span className="px-2 py-0.5 text-[11px] bg-[rgba(200,90,42,0.15)] text-[#c85a2a] rounded-full">{agent.provider || "—"}</span>
+                  {agent.model && <span className="text-[11px] text-[rgba(61,57,41,0.35)]">{agent.model}</span>}
                 </>
               )}
             </div>
             {editing !== agent.name ? (
               <button onClick={() => startEdit(agent)}
-                className="px-3 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
+                className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
                 Edit
               </button>
             ) : (
               <div className="flex gap-1.5">
                 <button onClick={handleSave} disabled={saving}
-                  className="px-3 py-1.5 text-[12px] bg-[#2688f9] text-white rounded-lg hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
+                  className="px-3 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
                   {saving ? "…" : "Save"}
                 </button>
                 <button onClick={() => { setEditing(null); setError(""); }}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)] transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
                   Cancel
                 </button>
               </div>
@@ -1027,7 +1027,7 @@ function AgentsEditor() {
 
           {/* Edit form */}
           {editing === agent.name && (
-            <div className="px-4 pb-4 space-y-3 border-t border-[rgba(255,255,255,0.06)] pt-3">
+            <div className="px-4 pb-4 space-y-3 border-t border-[rgba(61,57,41,0.08)] pt-3">
               {error && <p className="text-[12px] text-red-400">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1134,14 +1134,14 @@ function tokenizeWhip(line: string): React.ReactNode[] {
 }
 
 const inputCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] " +
-  "bg-[rgba(255,255,255,0.05)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)]";
+  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
+  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
+  "bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]";
 
 const selectCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] " +
-  "bg-[rgb(40,40,38)] text-[rgb(240,237,229)]";
+  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
+  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
+  "bg-[rgb(40,40,38)] text-[#3d3929]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vault
@@ -1206,7 +1206,7 @@ function VaultPane() {
   return (
     <div className="p-8 max-w-2xl">
       <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Vault</h2>
+        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Vault</h2>
         <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">
           Key-value secrets injected as environment variables when running bash, exec, process and CLI workflows.
         </p>
@@ -1220,9 +1220,9 @@ function VaultPane() {
           <p className="text-[13px] text-[rgba(255,255,255,0.3)]">No secrets stored yet.</p>
         )}
         {entries.map(e => (
-          <div key={e.key} className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl overflow-hidden">
+          <div key={e.key} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-3">
-              <span className="font-mono text-[13px] text-[rgb(240,237,229)] flex-shrink-0 w-44 truncate">{e.key}</span>
+              <span className="font-mono text-[13px] text-[#3d3929] flex-shrink-0 w-44 truncate">{e.key}</span>
               {editKey === e.key ? (
                 <input
                   autoFocus
@@ -1241,18 +1241,18 @@ function VaultPane() {
                 {editKey === e.key ? (
                   <>
                     <button onClick={() => handleSave(e.key)} disabled={saving}
-                      className="px-2.5 py-1 text-[11px] bg-[#2688f9] text-white rounded-lg hover:bg-[#1a7ae8] disabled:opacity-50 font-semibold">Save</button>
+                      className="px-2.5 py-1 text-[11px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-50 font-semibold">Save</button>
                     <button onClick={() => setEditKey(null)}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)]">Cancel</button>
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)]">Cancel</button>
                   </>
                 ) : (
                   <>
                     <button onClick={() => toggleReveal(e.key)}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.4)] rounded-lg hover:bg-[rgba(255,255,255,0.1)] font-mono">
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.4)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] font-mono">
                       {revealed.has(e.key) ? "hide" : "show"}
                     </button>
                     <button onClick={() => { setEditKey(e.key); setEditVal(e.value); }}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)]">Edit</button>
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)]">Edit</button>
                     <button onClick={() => handleDelete(e.key)} disabled={saving}
                       className="px-2.5 py-1 text-[11px] bg-[rgba(239,68,68,0.12)] text-red-400 rounded-lg hover:bg-[rgba(239,68,68,0.2)] disabled:opacity-50">Del</button>
                   </>
@@ -1265,7 +1265,7 @@ function VaultPane() {
 
       {/* Add new */}
       {adding ? (
-        <div className="bg-[rgba(255,255,255,0.04)] border border-[rgba(38,136,249,0.3)] rounded-2xl p-4 space-y-3">
+        <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(200,90,42,0.3)] rounded-2xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] text-[rgba(255,255,255,0.4)] mb-1">Key</label>
@@ -1281,18 +1281,18 @@ function VaultPane() {
           </div>
           <div className="flex gap-2">
             <button onClick={handleAdd} disabled={saving || !newKey.trim() || !newVal.trim()}
-              className="px-4 py-1.5 text-[12px] bg-[#2688f9] text-white rounded-lg hover:bg-[#1a7ae8] disabled:opacity-40 font-semibold">
+              className="px-4 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-40 font-semibold">
               {saving ? "Saving…" : "Add Secret"}
             </button>
             <button onClick={() => { setAdding(false); setNewKey(""); setNewVal(""); }}
-              className="px-4 py-1.5 text-[12px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.5)] rounded-lg hover:bg-[rgba(255,255,255,0.1)]">
+              className="px-4 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)]">
               Cancel
             </button>
           </div>
         </div>
       ) : (
         <button onClick={() => setAdding(true)}
-          className="px-4 py-2 text-[13px] bg-[rgba(255,255,255,0.06)] text-[rgba(255,255,255,0.6)] rounded-xl hover:bg-[rgba(255,255,255,0.1)] hover:text-[rgba(255,255,255,0.9)] transition-colors border border-[rgba(255,255,255,0.08)]">
+          className="px-4 py-2 text-[13px] bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.6)] rounded-xl hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.9)] transition-colors border border-[rgba(61,57,41,0.08)]">
           + Add Secret
         </button>
       )}
@@ -1363,17 +1363,17 @@ function BrowserPane() {
   return (
     <div className="p-8 max-w-3xl">
       <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Browser</h2>
+        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Browser</h2>
         <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">
           Chrome DevTools Protocol (CDP) connection and browser automation shortcuts.
         </p>
       </header>
 
       {/* Status card */}
-      <div className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl p-5 mb-6">
+      <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl p-5 mb-6">
         <div className="flex items-center gap-3 mb-3">
           <span className={`w-2.5 h-2.5 rounded-full ${status?.connected ? "bg-green-400" : "bg-red-400"}`} />
-          <span className="text-[14px] font-medium text-[rgb(240,237,229)]">
+          <span className="text-[14px] font-medium text-[#3d3929]">
             {status === null ? "Checking..." : status.connected ? "Connected" : "Disconnected"}
           </span>
         </div>
@@ -1381,32 +1381,32 @@ function BrowserPane() {
         {status?.connected && (
           <div className="space-y-1.5 mb-4">
             {status.browser && (
-              <p className="text-[12px] text-[rgba(255,255,255,0.5)]">
+              <p className="text-[12px] text-[rgba(61,57,41,0.5)]">
                 <span className="text-[rgba(255,255,255,0.3)]">Browser:</span> {status.browser}
               </p>
             )}
-            <p className="text-[12px] text-[rgba(255,255,255,0.5)] font-mono break-all">
+            <p className="text-[12px] text-[rgba(61,57,41,0.5)] font-mono break-all">
               <span className="text-[rgba(255,255,255,0.3)]">CDP URL:</span> {status.cdpURL}
             </p>
           </div>
         )}
 
         {status && !status.connected && status.error && (
-          <p className="text-[12px] text-[rgba(255,255,255,0.35)] mb-4">{status.error}</p>
+          <p className="text-[12px] text-[rgba(61,57,41,0.35)] mb-4">{status.error}</p>
         )}
 
         <div className="flex gap-2">
           <button
             onClick={testCDP}
             disabled={testing}
-            className="px-4 py-2 text-[13px] rounded-lg bg-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.12)] text-[rgb(240,237,229)] disabled:opacity-40 transition-colors"
+            className="px-4 py-2 text-[13px] rounded-lg bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.1)] text-[#3d3929] disabled:opacity-40 transition-colors"
           >
             {testing ? "Testing..." : "Test CDP"}
           </button>
           <button
             onClick={launchChrome}
             disabled={launching}
-            className="px-4 py-2 text-[13px] rounded-lg bg-[rgba(38,136,249,0.2)] hover:bg-[rgba(38,136,249,0.3)] text-[#2688f9] disabled:opacity-40 transition-colors"
+            className="px-4 py-2 text-[13px] rounded-lg bg-[rgba(200,90,42,0.2)] hover:bg-[rgba(200,90,42,0.3)] text-[#c85a2a] disabled:opacity-40 transition-colors"
           >
             {launching ? "Launching..." : "Launch Chrome with CDP"}
           </button>
@@ -1414,7 +1414,7 @@ function BrowserPane() {
       </div>
 
       {/* Shortcuts */}
-      <h3 className="text-[15px] font-medium text-[rgb(240,237,229)] mb-3">Shortcuts</h3>
+      <h3 className="text-[15px] font-medium text-[#3d3929] mb-3">Shortcuts</h3>
       <p className="text-[12px] text-[rgba(255,255,255,0.3)] mb-4">
         YAML browser automation adapters in <code className="text-[rgba(255,255,255,0.45)]">~/.clawfirm/shortcuts/</code>.
         Requires Chrome connected via CDP.
@@ -1427,7 +1427,7 @@ function BrowserPane() {
           value={cmdArgs}
           onChange={e => setCmdArgs(e.target.value)}
           placeholder="Command arguments (space-separated)..."
-          className="w-full px-3 py-2 text-[13px] rounded-lg bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] text-[rgb(240,237,229)] placeholder:text-[rgba(255,255,255,0.25)] outline-none focus:border-[rgba(38,136,249,0.4)]"
+          className="w-full px-3 py-2 text-[13px] rounded-lg bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.08)] text-[#3d3929] placeholder:text-[rgba(61,57,41,0.2)] outline-none focus:border-[rgba(200,90,42,0.4)]"
         />
       </div>
 
@@ -1436,10 +1436,10 @@ function BrowserPane() {
       ) : (
         <div className="space-y-3">
           {shortcuts.map(sc => (
-            <div key={sc.file} className="bg-[rgba(255,255,255,0.04)] border border-[rgba(255,255,255,0.08)] rounded-2xl p-4">
+            <div key={sc.file} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[14px] font-medium text-[rgb(240,237,229)]">{sc.platform}</span>
-                <span className="text-[11px] text-[rgba(255,255,255,0.25)] font-mono">{sc.file}</span>
+                <span className="text-[14px] font-medium text-[#3d3929]">{sc.platform}</span>
+                <span className="text-[11px] text-[rgba(61,57,41,0.2)] font-mono">{sc.file}</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {sc.commands.map(cmd => {
@@ -1450,7 +1450,7 @@ function BrowserPane() {
                       key={cmd}
                       onClick={() => runCmd(sc.file, cmd)}
                       disabled={!!runningCmd || !status?.connected}
-                      className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.1)] text-[rgba(240,237,229,0.7)] disabled:opacity-30 transition-colors font-mono"
+                      className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.12)] text-[rgba(240,237,229,0.7)] disabled:opacity-30 transition-colors font-mono"
                     >
                       {isRunning ? `${cmd}...` : cmd}
                     </button>
@@ -1472,15 +1472,15 @@ function BrowserPane() {
         <div className="mt-4 overflow-x-auto">
           <table className="w-full text-[12px] text-[rgba(240,237,229,0.7)]">
             <thead>
-              <tr className="border-b border-[rgba(255,255,255,0.08)]">
+              <tr className="border-b border-[rgba(61,57,41,0.08)]">
                 {Object.keys(cmdResult[0]).map(k => (
-                  <th key={k} className="text-left py-2 px-2 font-medium text-[rgba(255,255,255,0.5)]">{k}</th>
+                  <th key={k} className="text-left py-2 px-2 font-medium text-[rgba(61,57,41,0.5)]">{k}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {cmdResult.map((row, i) => (
-                <tr key={i} className="border-b border-[rgba(255,255,255,0.04)]">
+                <tr key={i} className="border-b border-[rgba(61,57,41,0.04)]">
                   {Object.values(row).map((v, j) => (
                     <td key={j} className="py-1.5 px-2 font-mono truncate max-w-[200px]">{String(v ?? "")}</td>
                   ))}
@@ -1569,33 +1569,33 @@ function WhipflowPane() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: file list ── */}
-      <div className="w-52 flex-shrink-0 border-r border-[rgba(255,255,255,0.07)] flex flex-col">
-        <div className="px-4 py-3 border-b border-[rgba(255,255,255,0.07)]">
-          <span className="text-[11px] font-semibold text-[rgba(255,255,255,0.35)] uppercase tracking-wider">Workflows</span>
+      <div className="w-52 flex-shrink-0 border-r border-[rgba(61,57,41,0.1)] flex flex-col">
+        <div className="px-4 py-3 border-b border-[rgba(61,57,41,0.1)]">
+          <span className="text-[11px] font-semibold text-[rgba(61,57,41,0.35)] uppercase tracking-wider">Workflows</span>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {whipFiles.length === 0 ? (
-            <p className="px-4 py-3 text-[12px] text-[rgba(255,255,255,0.25)]">No .whip files in<br/>~/.clawfirm/workflows/</p>
+            <p className="px-4 py-3 text-[12px] text-[rgba(61,57,41,0.2)]">No .whip files in<br/>~/.clawfirm/workflows/</p>
           ) : whipFiles.map(f => (
             <button
               key={f}
               onClick={() => selectFile(f)}
               className={`w-full text-left px-4 py-2 text-[12.5px] truncate transition-colors ${
                 selectedFile === f
-                  ? "bg-[rgba(255,255,255,0.08)] text-[rgb(240,237,229)]"
-                  : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[rgb(240,237,229)]"
+                  ? "bg-[rgba(61,57,41,0.08)] text-[#3d3929]"
+                  : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(61,57,41,0.04)] hover:text-[#3d3929]"
               }`}
             >
-              <span className="text-[rgba(255,255,255,0.25)] mr-1">⚡</span>{basename(f)}
+              <span className="text-[rgba(61,57,41,0.2)] mr-1">⚡</span>{basename(f)}
             </button>
           ))}
         </div>
 
         {/* ── Config section (collapsed by default) ── */}
-        <div className="border-t border-[rgba(255,255,255,0.07)]">
+        <div className="border-t border-[rgba(61,57,41,0.1)]">
           <button
             onClick={() => setCfgOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(255,255,255,0.35)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
           >
             <span className="font-semibold uppercase tracking-wider">Config</span>
             <span>{cfgOpen ? "▲" : "▼"}</span>
@@ -1604,7 +1604,7 @@ function WhipflowPane() {
             <div className="px-3 pb-3 space-y-2">
               {error && <p className="text-[11px] text-red-400">{error}</p>}
               <select
-                className="w-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg px-2 py-1.5 text-[11.5px] text-[rgb(240,237,229)] outline-none"
+                className="w-full bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-lg px-2 py-1.5 text-[11.5px] text-[#3d3929] outline-none"
                 value={defaultProvider}
                 onChange={e => setDefaultProvider(e.target.value)}
               >
@@ -1621,7 +1621,7 @@ function WhipflowPane() {
               </select>
               {defaultProvider === "__custom__" && (
                 <input
-                  className="w-full bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-lg px-2 py-1.5 text-[11.5px] text-[rgb(240,237,229)] outline-none"
+                  className="w-full bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-lg px-2 py-1.5 text-[11.5px] text-[#3d3929] outline-none"
                   placeholder="provider name"
                   value={customProvider}
                   onChange={e => setCustomProvider(e.target.value)}
@@ -1629,7 +1629,7 @@ function WhipflowPane() {
               )}
               <div className="flex items-center gap-2">
                 <button onClick={handleSave} disabled={saving || !cfg}
-                  className="px-3 py-1 bg-[#2688f9] text-white text-[11px] rounded-lg hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
+                  className="px-3 py-1 bg-[#c85a2a] text-white text-[11px] rounded-lg hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
                   {saving ? "…" : "Save"}
                 </button>
                 {success && <span className="text-[11px] text-emerald-400">{success}</span>}
@@ -1643,23 +1643,23 @@ function WhipflowPane() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {selectedFile ? (
           <>
-            <div className="px-5 py-3 border-b border-[rgba(255,255,255,0.07)] flex items-center gap-2">
+            <div className="px-5 py-3 border-b border-[rgba(61,57,41,0.1)] flex items-center gap-2">
               <span className="text-[rgba(255,255,255,0.4)] text-[12px]">⚡</span>
-              <span className="text-[13px] font-medium text-[rgb(240,237,229)]">{basename(selectedFile)}</span>
-              <span className="text-[11px] text-[rgba(255,255,255,0.25)] ml-1 truncate">{selectedFile}</span>
+              <span className="text-[13px] font-medium text-[#3d3929]">{basename(selectedFile)}</span>
+              <span className="text-[11px] text-[rgba(61,57,41,0.2)] ml-1 truncate">{selectedFile}</span>
             </div>
             <div className="flex-1 overflow-auto p-5">
               {fileError ? (
                 <p className="text-[12px] text-red-400">{fileError}</p>
               ) : (
-                <div className="bg-[rgba(0,0,0,0.25)] rounded-xl p-4 border border-[rgba(255,255,255,0.06)]">
+                <div className="bg-[rgba(0,0,0,0.25)] rounded-xl p-4 border border-[rgba(61,57,41,0.08)]">
                   <WhipHighlight code={fileContent} />
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-[13px] text-[rgba(255,255,255,0.2)]">
+          <div className="flex-1 flex items-center justify-center text-[13px] text-[rgba(61,57,41,0.3)]">
             Select a .whip file to preview
           </div>
         )}
@@ -1698,18 +1698,18 @@ function SettingsPane() {
   return (
     <div className="p-8 h-full flex flex-col">
       <header className="mb-6 flex-shrink-0">
-        <h2 className="text-[22px] font-semibold text-[rgb(240,237,229)] tracking-[-0.43px]">Settings</h2>
+        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Settings</h2>
         <p className="text-[13px] text-[rgba(255,255,255,0.3)] mt-1 font-mono">{filePath}</p>
       </header>
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         spellCheck={false}
-        className="flex-1 min-h-0 w-full max-w-2xl px-4 py-3 text-[13px] font-mono bg-[rgba(255,255,255,0.05)] border border-[rgba(255,255,255,0.1)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] resize-none leading-relaxed text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)] backdrop-blur-xl"
+        className="flex-1 min-h-0 w-full max-w-2xl px-4 py-3 text-[13px] font-mono bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] resize-none leading-relaxed text-[#3d3929] placeholder-[rgba(61,57,41,0.3)] backdrop-blur-xl"
       />
       <div className="flex items-center gap-3 mt-4 flex-shrink-0">
         <button onClick={handleSave} disabled={saving}
-          className="px-5 py-2 bg-[#2688f9] text-white text-[13px] rounded-xl hover:bg-[#1a7ae8] disabled:opacity-50 transition-colors font-semibold">
+          className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
           {saving ? "Saving…" : "Save & Reload"}
         </button>
         {error && <p className="text-[13px] text-red-400">{error}</p>}
@@ -1756,9 +1756,9 @@ function WhatsAppCard() {
   const waMap: Record<string, { label: string; cls: string }> = {
     connected:    { label: "Connected",    cls: "bg-[rgba(52,199,89,0.15)] text-emerald-400" },
     qr_pending:   { label: "Scan QR",      cls: "bg-[rgba(255,179,64,0.15)] text-amber-400" },
-    disconnected: { label: "Disconnected", cls: "bg-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]" },
+    disconnected: { label: "Disconnected", cls: "bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.4)]" },
     logged_out:   { label: "Logged out",   cls: "bg-[rgba(255,69,58,0.15)] text-red-400" },
-    disabled:     { label: "Disabled",     cls: "bg-[rgba(255,255,255,0.05)] text-[rgba(255,255,255,0.25)]" },
+    disabled:     { label: "Disabled",     cls: "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.2)]" },
   };
 
   return (
@@ -1769,14 +1769,14 @@ function WhatsAppCard() {
         : null}>
       {status === "qr_pending" && qrURL && (
         <div className="flex flex-col items-center gap-2 pt-2">
-          <p className="text-[11px] text-[rgba(255,255,255,0.5)] text-center">WhatsApp → Linked Devices → Link a Device → scan QR</p>
-          <img src={qrURL} alt="QR" className="w-44 h-44 rounded-xl border border-[rgba(255,255,255,0.1)]" />
+          <p className="text-[11px] text-[rgba(61,57,41,0.5)] text-center">WhatsApp → Linked Devices → Link a Device → scan QR</p>
+          <img src={qrURL} alt="QR" className="w-44 h-44 rounded-xl border border-[rgba(61,57,41,0.12)]" />
         </div>
       )}
       {status === "qr_pending" && !qrURL && <p className="text-[11px] text-[rgba(255,255,255,0.3)] italic pt-1">Generating QR…</p>}
       {status === "disabled" && (
         <p className="text-[11px] text-[rgba(255,255,255,0.3)] pt-1">
-          Set <code className="font-mono bg-[rgba(255,255,255,0.08)] px-1 rounded">whatsapp.enabled: true</code> in config.yml to enable.
+          Set <code className="font-mono bg-[rgba(61,57,41,0.08)] px-1 rounded">whatsapp.enabled: true</code> in config.yml to enable.
         </p>
       )}
       {(status === "disconnected" || status === "logged_out") && (
@@ -1819,32 +1819,32 @@ function FeishuCard() {
     <Card title="飞书"
       badge={configured
         ? <Badge label="已配置" cls="bg-[rgba(52,199,89,0.15)] text-emerald-400" />
-        : <Badge label="未配置" cls="bg-[rgba(255,255,255,0.08)] text-[rgba(255,255,255,0.4)]" />}
+        : <Badge label="未配置" cls="bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.4)]" />}
       action={configured && !editing
-        ? <button onClick={() => setEditing(true)} className="text-[11px] text-[#2688f9] hover:text-[#5aa3fb]">修改</button>
+        ? <button onClick={() => setEditing(true)} className="text-[11px] text-[#c85a2a] hover:text-[#5aa3fb]">修改</button>
         : null}>
       {(!configured || editing) ? (
         <div className="space-y-3 pt-1">
           <p className="text-[11px] text-[rgba(255,255,255,0.3)]">企业自建应用，开启消息事件订阅（长连接）。</p>
           <div>
-            <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">App ID</label>
+            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">App ID</label>
             <input type="text" placeholder="cli_xxxxxxxxxxxx" value={appID} onChange={(e) => setAppID(e.target.value)}
-              className="w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] bg-[rgba(255,255,255,0.05)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)]" />
+              className="w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]" />
           </div>
           <div>
-            <label className="block text-[11px] text-[rgba(255,255,255,0.5)] mb-1">App Secret</label>
+            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">App Secret</label>
             <input type="password" placeholder={secretMasked || "App Secret"} value={appSecret} onChange={(e) => setAppSecret(e.target.value)}
-              className="w-full px-3 py-2 text-[13px] border border-[rgba(255,255,255,0.1)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(38,136,249,0.4)] bg-[rgba(255,255,255,0.05)] text-[rgb(240,237,229)] placeholder-[rgba(255,255,255,0.2)]" />
+              className="w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]" />
           </div>
           {error && <p className="text-[11px] text-red-400">{error}</p>}
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving}
-              className="flex-1 py-2 rounded-xl bg-[#2688f9] text-white text-[13px] font-semibold hover:bg-[#1a7ae8] disabled:opacity-50">
+              className="flex-1 py-2 rounded-xl bg-[#c85a2a] text-white text-[13px] font-semibold hover:bg-[#a84a22] disabled:opacity-50">
               {saving ? "保存中…" : "保存并连接"}
             </button>
             {editing && (
               <button onClick={() => { setEditing(false); setAppSecret(""); setError(""); }}
-                className="px-3 py-2 rounded-xl border border-[rgba(255,255,255,0.1)] text-[13px] text-[rgba(255,255,255,0.5)] hover:bg-[rgba(255,255,255,0.05)]">
+                className="px-3 py-2 rounded-xl border border-[rgba(61,57,41,0.12)] text-[13px] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.05)]">
                 取消
               </button>
             )}
@@ -1852,7 +1852,7 @@ function FeishuCard() {
         </div>
       ) : (
         <div className="pt-1">
-          <p className="text-[13px] text-[rgba(255,255,255,0.5)]">App ID: <span className="font-mono text-[rgb(240,237,229)] text-[11px]">{appID}</span></p>
+          <p className="text-[13px] text-[rgba(61,57,41,0.5)]">App ID: <span className="font-mono text-[#3d3929] text-[11px]">{appID}</span></p>
           <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.3)]">通过 WebSocket 长连接接收消息，无需公网地址。</p>
         </div>
       )}
@@ -1865,7 +1865,7 @@ function FeishuCard() {
 // ─────────────────────────────────────────────────────────────────────────────
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-[rgba(255,255,255,0.05)] backdrop-blur-xl border border-[rgba(255,255,255,0.1)] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] ${className}`}>
+    <div className={`bg-[rgba(61,57,41,0.05)] backdrop-blur-xl border border-[rgba(61,57,41,0.12)] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(61,57,41,0.08)] ${className}`}>
       {children}
     </div>
   );
@@ -1878,7 +1878,7 @@ function Card({ title, badge, action, children }: {
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-[rgb(240,237,229)] text-[13px]">{title}</span>
+          <span className="font-semibold text-[#3d3929] text-[13px]">{title}</span>
           {badge}
         </div>
         {action}
