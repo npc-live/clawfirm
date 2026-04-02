@@ -114,3 +114,97 @@ commands:
             value: "✅ 转推成功"
           - field: URL
             value: "{{url}}"
+
+  # 发推 + 视频
+  post_video:
+    args: [video, text]   # video: 本地视频文件路径（绝对路径）
+    steps:
+      - open: "https://x.com/compose/post"
+      - wait: 3000
+      # 填写推文文字
+      - type_rich:
+          selector: "[data-testid='tweetTextarea_0']"
+          value: "{{text}}"
+      - wait: 500
+      # 上传视频文件
+      - upload:
+          selector: "input[data-testid='fileInput']"
+          file: "{{video}}"
+      # 等待视频上传+处理完成（进度条消失 + 缩略图/预览出现）
+      - wait_until:
+          eval: >-
+            (function(){
+              var progress = document.querySelector('[role="progressbar"]');
+              if (progress) return false;
+              var attachments = document.querySelector('[data-testid="attachments"]');
+              if (attachments && attachments.querySelector('video, img')) return true;
+              var player = document.querySelector('[data-testid="videoPlayer"]');
+              return !!player;
+            })()
+          timeout: 300000
+          interval: 3000
+      - wait: 1000
+      - capture:
+          name: input_text
+          eval: "document.querySelector('[data-testid=\"tweetTextarea_0\"]')?.textContent?.trim() || ''"
+      - capture:
+          name: has_attachment
+          eval: >-
+            (function(){
+              var a = document.querySelector('[data-testid="attachments"]');
+              return !!(a && a.children.length > 0);
+            })()
+      - return:
+          - field: 状态
+            value: "{{has_attachment == 'true' && '✅ 视频推文已就绪' || '⚠️ 视频可能未成功附加'}}"
+          - field: 推文内容
+            value: "{{input_text}}"
+          - field: 视频附件
+            value: "{{has_attachment}}"
+          - field: 操作
+            value: "确认无误后点击「Post」按钮发布"
+
+  # 发推 + 图片/视频（通用媒体上传）
+  post_media:
+    args: [text, media]   # media: 本地文件路径（视频或图片）
+    steps:
+      - open: "https://x.com/compose/post"
+      - wait: 3000
+      - type_rich:
+          selector: "[data-testid='tweetTextarea_0']"
+          value: "{{text}}"
+      - wait: 500
+      - upload:
+          selector: "input[data-testid='fileInput']"
+          file: "{{media}}"
+      - wait_until:
+          eval: >-
+            (function(){
+              var progress = document.querySelector('[role="progressbar"]');
+              if (progress) return false;
+              var attachments = document.querySelector('[data-testid="attachments"]');
+              if (attachments && attachments.querySelector('video, img')) return true;
+              return !!document.querySelector('[data-testid="videoPlayer"]');
+            })()
+          timeout: 300000
+          interval: 3000
+      - wait: 1000
+      - capture:
+          name: input_text
+          eval: "document.querySelector('[data-testid=\"tweetTextarea_0\"]')?.textContent?.trim() || ''"
+      - capture:
+          name: has_media
+          eval: >-
+            (function(){
+              var a = document.querySelector('[data-testid="attachments"]');
+              return !!(a && a.children.length > 0);
+            })()
+      - return:
+          - field: 状态
+            value: "{{has_media == 'true' && '✅ 媒体推文已就绪' || '⚠️ 媒体可能未成功附加'}}"
+          - field: 推文内容
+            value: "{{input_text}}"
+          - field: 媒体已上传
+            value: "{{has_media}}"
+          - field: 操作
+            value: "确认无误后点击「Post」按钮发布"
