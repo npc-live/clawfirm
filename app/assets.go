@@ -18,3 +18,6 @@ var embeddedSkills embed.FS
 
 //go:embed assets/workflows
 var embeddedWorkflows embed.FS
+
+//go:embed assets/shortcuts
+var embeddedShortcuts embed.FS

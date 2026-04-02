@@ -541,8 +541,18 @@ func (interp *Interpreter) executeSession(spec SessionSpec) (*SessionResult, err
 		allowedTools = spec.Agent.Tools
 	}
 
-	// Collect skill prompts (none currently).
+	// Resolve skill prompts from the agent's skills list.
 	var skillPrompts []string
+	if spec.Agent != nil && len(spec.Agent.Skills) > 0 && interp.env.Config.SkillResolver != nil {
+		for _, name := range spec.Agent.Skills {
+			content, err := interp.env.Config.SkillResolver(name)
+			if err != nil {
+				interp.env.Log("warn", fmt.Sprintf("skill %q: %v", name, err))
+				continue
+			}
+			skillPrompts = append(skillPrompts, content)
+		}
+	}
 
 	enableTools := len(allowedTools) > 0
 

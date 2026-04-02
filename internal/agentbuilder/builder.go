@@ -167,8 +167,11 @@ func BuildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, e
 	case "openrouter":
 		base := pc.BaseURL
 		if base == "" {
-			base = "https://openrouter.ai/api/v1"
+			base = "https://openrouter.ai/api"
 		}
+		// Normalize: the openai provider appends /v1/chat/completions,
+		// so strip trailing /v1 if the user supplied the OpenRouter default.
+		base = strings.TrimSuffix(base, "/v1")
 		if key == "" {
 			return nil, fmt.Errorf("provider %q: no api_key", id)
 		}
@@ -319,13 +322,23 @@ func DefaultModelForProvider(providerID string) string {
 // BuildTools resolves tool names to AgentTool instances.
 // memMgr may be nil — in that case memory_search/memory_get are unavailable.
 // vaultEnv may be nil — in that case the vault is not injected into exec/bash/process.
+// mediaProvider may be nil — in that case media_understand returns a "not configured" message.
 //
 // The returned slice always includes a tool_search meta-tool as the last element
 // (unless names is empty). tool_search lets the LLM discover deferred tools.
-func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string) []tool.AgentTool {
+func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string, mediaProvider provider.LLMProvider) []tool.AgentTool {
 	if len(names) == 0 {
 		return nil
 	}
+
+	// Build shared Skill loader with paths from all agents.
+	var skillPaths []string
+	if cfg != nil {
+		for _, ac := range cfg.Agents {
+			skillPaths = append(skillPaths, ac.SkillPaths...)
+		}
+	}
+	skillTool := &builtin.Skill{SkillPaths: skillPaths}
 
 	available := map[string]tool.AgentTool{
 		// File system
@@ -343,18 +356,25 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		// Network
 		"fetch":      &builtin.Fetch{},
 		"web_search": &builtin.WebSearch{APIKey: os.Getenv("BRAVE_SEARCH_API_KEY")},
+		// Browser automation
+		"browser_shortcut": &builtin.BrowserShortcut{},
 		// Workflows
-		"whipflow_run": &builtin.WhipflowRun{PiConfig: cfg, VaultEnv: vaultEnv},
+		"whipflow_run": &builtin.WhipflowRun{PiConfig: cfg, VaultEnv: vaultEnv, SkillLoader: skillTool},
 		// Memory
 		"memory_search": memory.SearchTool(memMgr),
 		"memory_get":    memory.GetTool(),
 		// Meta
 		"sessions_list":    &builtin.SessionsList{},
-		"skill":            &builtin.Skill{},
+		"skill":            skillTool,
 		"get_current_time": &builtin.GetCurrentTime{},
 		// Interactive / delegation
 		"ask_user":  &builtin.AskUser{},
 		"sub_agent": &builtin.SubAgent{},
+		// Media analysis
+		"media_understand": &builtin.MediaUnderstand{
+			Provider: mediaProvider,
+			Model:    cfg.Media.Model,
+		},
 	}
 
 	out := make([]tool.AgentTool, 0, len(names)+1)
@@ -363,6 +383,15 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 			out = append(out, t)
 		} else {
 			log.Printf("agentbuilder: unknown tool %q (ignored)", n)
+		}
+	}
+
+	// Inject resolved tools into WhipflowRun so its NativeProvider sessions
+	// can use real tools (bash, read, write, etc.) instead of text stubs.
+	for _, t := range out {
+		if wr, ok := t.(*builtin.WhipflowRun); ok {
+			wr.Tools = out
+			break
 		}
 	}
 

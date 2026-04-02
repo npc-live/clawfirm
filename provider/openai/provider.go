@@ -377,15 +377,60 @@ func convertMessages(msgs []types.Message, systemPrompt string) []openAIMessage 
 	for _, m := range msgs {
 		switch msg := m.(type) {
 		case *types.UserMessage:
-			// Simple text only for now; multimodal content handled similarly
-			var textParts []string
+			// Check if message has any multimodal content.
+			hasMedia := false
 			for _, c := range msg.Content {
-				if tc, ok := c.(*types.TextContent); ok {
-					textParts = append(textParts, tc.Text)
+				switch c.(type) {
+				case *types.ImageContent, *types.VideoContent:
+					hasMedia = true
 				}
 			}
-			content := strings.Join(textParts, "\n")
-			out = append(out, openAIMessage{Role: "user", Content: content})
+			if !hasMedia {
+				// Text-only fast path.
+				var textParts []string
+				for _, c := range msg.Content {
+					if tc, ok := c.(*types.TextContent); ok {
+						textParts = append(textParts, tc.Text)
+					}
+				}
+				out = append(out, openAIMessage{Role: "user", Content: strings.Join(textParts, "\n")})
+			} else {
+				// Multimodal: build content parts array.
+				var parts []map[string]any
+				for _, c := range msg.Content {
+					switch block := c.(type) {
+					case *types.TextContent:
+						parts = append(parts, map[string]any{"type": "text", "text": block.Text})
+					case *types.ImageContent:
+						if block.URL != "" {
+							parts = append(parts, map[string]any{
+								"type":      "image_url",
+								"image_url": map[string]any{"url": block.URL},
+							})
+						} else {
+							dataURL := "data:" + block.MimeType + ";base64," + block.Data
+							parts = append(parts, map[string]any{
+								"type":      "image_url",
+								"image_url": map[string]any{"url": dataURL},
+							})
+						}
+					case *types.VideoContent:
+						if block.URL != "" {
+							parts = append(parts, map[string]any{
+								"type":      "image_url",
+								"image_url": map[string]any{"url": block.URL},
+							})
+						} else {
+							dataURL := "data:" + block.MimeType + ";base64," + block.Data
+							parts = append(parts, map[string]any{
+								"type":      "image_url",
+								"image_url": map[string]any{"url": dataURL},
+							})
+						}
+					}
+				}
+				out = append(out, openAIMessage{Role: "user", Content: parts})
+			}
 		case *types.AssistantMessage:
 			oam := openAIMessage{Role: "assistant"}
 			var textParts []string

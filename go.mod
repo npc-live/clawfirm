@@ -1,6 +1,6 @@
 module github.com/ai-gateway/clawfirm
 
-go 1.25.1
+go 1.26
 
 require (
 	github.com/alecthomas/participle/v2 v2.0.0-alpha6

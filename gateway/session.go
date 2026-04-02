@@ -3,7 +3,11 @@ package gateway
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -297,12 +301,27 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 			Text: msg.Content,
 		})
 	}
-	for _, img := range msg.Images {
-		blocks = append(blocks, &types.ImageContent{
-			Type:     types.ContentTypeImage,
-			Data:     img.Data,
-			MimeType: img.MimeType,
-		})
+	// Save attached media to temp files and add text hints so the agent
+	// can use the media_understand tool. This works regardless of whether
+	// the main LLM supports vision.
+	if len(msg.Images) > 0 {
+		var filePaths []string
+		for _, img := range msg.Images {
+			path, err := saveMediaToTemp(img.Data, img.MimeType)
+			if err != nil {
+				log.Printf("webchat: save media: %v", err)
+				continue
+			}
+			filePaths = append(filePaths, path)
+		}
+		if len(filePaths) > 0 {
+			hint := fmt.Sprintf("[User attached %d file(s): %s]\nUse the media_understand tool with the file path(s) above to analyze them.",
+				len(filePaths), strings.Join(filePaths, ", "))
+			blocks = append(blocks, &types.TextContent{
+				Type: types.ContentTypeText,
+				Text: hint,
+			})
+		}
 	}
 	for _, f := range msg.Files {
 		switch f.Placeholder {
@@ -356,4 +375,38 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 // encodeBase64 returns the standard base64 encoding of b.
 func encodeBase64(b []byte) string {
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+// mimeToExt maps common MIME types to file extensions.
+var mimeToExt = map[string]string{
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/gif":       ".gif",
+	"image/webp":      ".webp",
+	"video/mp4":       ".mp4",
+	"video/webm":      ".webm",
+	"video/quicktime": ".mov",
+}
+
+// saveMediaToTemp decodes base64 media data and writes it to a temp file.
+func saveMediaToTemp(b64Data, mimeType string) (string, error) {
+	data, err := base64.StdEncoding.DecodeString(b64Data)
+	if err != nil {
+		return "", fmt.Errorf("decode base64: %w", err)
+	}
+	ext := mimeToExt[mimeType]
+	if ext == "" {
+		ext = ".bin"
+	}
+	dir := filepath.Join(os.TempDir(), "clawfirm-media")
+	os.MkdirAll(dir, 0o755)
+	f, err := os.CreateTemp(dir, "upload-*"+ext)
+	if err != nil {
+		return "", fmt.Errorf("create temp: %w", err)
+	}
+	defer f.Close()
+	if _, err := f.Write(data); err != nil {
+		return "", fmt.Errorf("write temp: %w", err)
+	}
+	return f.Name(), nil
 }

@@ -16,9 +16,12 @@ import (
 // WhipflowRun is a tool that executes WhipFlow (.whip) workflows.
 // PiConfig is the loaded ~/.clawfirm/config.yml; when set it allows WhipFlow
 // sessions to resolve agents and providers defined there.
+// Tools are the AgentTool instances available to NativeProvider sessions.
 type WhipflowRun struct {
-	PiConfig *config.Config
-	VaultEnv func() map[string]string
+	PiConfig     *config.Config
+	VaultEnv     func() map[string]string
+	Tools        []tool.AgentTool
+	SkillLoader  *Skill // shared Skill tool instance for resolving skill content
 }
 
 func (w *WhipflowRun) Name() string        { return "whipflow_run" }
@@ -119,7 +122,37 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 		}
 		rCfg.VaultEnv = w.VaultEnv
 		rCfg.Ctx = ctx
+		if w.SkillLoader != nil {
+			rCfg.SkillResolver = w.SkillLoader.LoadSkill
+		}
 		execOpts = append(execOpts, whipflow.WithRuntimeConfig(&rCfg))
+	}
+
+	// Inject tools into NativeProviders so whipflow sessions can use real tools.
+	// When config.yml agents are resolved as NativeProviders, they are created
+	// without tools. We inject the tools here so the agent loop can call them.
+	if w.PiConfig != nil && len(w.Tools) > 0 {
+		for _, ac := range w.PiConfig.Agents {
+			pc, ok := w.PiConfig.Providers[ac.Provider]
+			if !ok {
+				continue
+			}
+			llmProv, err := runtime.BuildLLMProvider(pc)
+			if err != nil {
+				log.Printf("whipflow_run: skip agent %q: %v", ac.Name, err)
+				continue
+			}
+			np, err := runtime.NewNativeProvider(ac.Name, ac.Model, llmProv,
+				runtime.WithNativeTools(w.Tools),
+				runtime.WithMaxTokens(ac.MaxTokens),
+				runtime.WithSystemPromptHint(ac.SystemPrompt),
+			)
+			if err != nil {
+				log.Printf("whipflow_run: skip agent %q: %v", ac.Name, err)
+				continue
+			}
+			execOpts = append(execOpts, whipflow.WithNativeProvider(ac.Name, np))
+		}
 	}
 
 	// Pre-filled ask inputs (from desktop UI form).

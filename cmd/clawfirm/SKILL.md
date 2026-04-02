@@ -1,32 +1,41 @@
 ---
 name: whipflow
-version: 0.0.1
+version: 1.0.0
 description: |
-  Whipflow is an AI workflow automation tool for harness.farm.
-  Write .whip files in flows/ to define multi-step AI workflows.
-  The runtime handles execution, context passing, and tool permissions.
+  WhipFlow 是 clawfirm 内置的 AI workflow 引擎。
+  用 .whip 文件定义多步骤 AI 工作流，运行时处理执行、上下文传递和工具权限。
 
   Activate when: user wants to create or run a workflow, mentions whipflow,
-  or needs to automate a multi-step AI task for harness.farm.
+  or needs to automate a multi-step AI task.
 
-  If whipflow is not installed, offer to install it:
-  npm i -g @harness.farm/whipflow
+  WhipFlow 已内置于 clawfirm，无需额外安装。
+  运行方式：使用内置工具 whipflow_run（file 或 source 参数）。
 ---
 
-# Whipflow
+# WhipFlow
 
-Whipflow orchestrates AI workflows using the OpenProse DSL. Flows live in `flows/`
-with the `.whip` extension and are run with `whipflow run flows/my-flow.whip`.
+WhipFlow 是 clawfirm 内置的 AI workflow 引擎，使用 OpenProse DSL 编排工作流。
+通过内置 `whipflow_run` 工具直接执行，无需安装任何外部依赖。
 
-## CLI Commands
+## 执行方式
 
-```bash
-whipflow run <file.whip>        # execute a workflow
-whipflow validate <file.whip>   # check syntax without running
-whipflow compile <file.whip>    # show compiled form
-whipflow install-skills         # install this skill into Claude Code
-whipflow install-skills --force # overwrite existing
-whipflow help
+使用内置工具 `whipflow_run`：
+
+| 参数 | 说明 |
+|------|------|
+| `file` | .whip 文件路径 |
+| `source` | 直接传入 WhipFlow 源码 |
+| `user_inputs` | `ask` 变量的预填值，如 `{"track": "美食"}` |
+| `retry_from_session` | 从第 N 个 session 重试（0-based） |
+
+示例：执行文件
+```json
+{"file": "~/.clawfirm/workflows/media.whip", "user_inputs": {"track": "美食"}}
+```
+
+示例：直接传源码
+```json
+{"source": "session \"Hello world\""}
 ```
 
 ## Quick Start
@@ -156,7 +165,7 @@ Source types: `github:user/repo`, `npm:package`, `./local/path`
 agent name:
   provider: "claude-code"   # claude-code | claude | opencode | aider | custom:bin
   model: sonnet             # opus | sonnet | haiku
-  tools: ["bash", "read", "write", "edit"]
+  tools: ["bash", "read", "write", "edit", "browser"]
   skills: ["skill-name"]
   prompt: "System prompt for this agent."
   permissions:
@@ -170,7 +179,7 @@ agent name:
 |----------|-------------|
 | `provider` | Which AI runtime to use |
 | `model` | `sonnet`, `opus`, or `haiku` |
-| `tools` | Tools the agent can use |
+| `tools` | Tools the agent can use (including `browser` for shortcuts) |
 | `skills` | Imported skills assigned to this agent |
 | `prompt` | System prompt / persona |
 | `permissions` | Access control rules |
@@ -374,14 +383,6 @@ parallel (on-fail: "ignore"):
   session "Optional enrichment"
 ```
 
-### Combining Modifiers
-
-```whip
-parallel ("first", on-fail: "continue"):
-  session "Fast but unreliable"
-  session "Slow but reliable"
-```
-
 ---
 
 ## Fixed Loops
@@ -564,19 +565,6 @@ choice **the severity of issues found**:
     session "Deploy immediately"
 ```
 
-### Multi-line Criteria
-
-```whip
-choice ***
-  which strategy is most appropriate
-  given the current project constraints
-***:
-  option "MVP approach":
-    session "Build minimum viable product"
-  option "Full feature set":
-    session "Build complete feature set"
-```
-
 ---
 
 ## Conditional Statements
@@ -590,19 +578,6 @@ elif **the code has performance issues**:
   session "Optimize performance"
 else:
   session "Proceed with normal review"
-```
-
-### Multi-line Conditions
-
-```whip
-if ***
-  the test suite passes
-  and code coverage is above 80%
-  and there are no linting errors
-***:
-  session "Deploy to production"
-else:
-  session "Fix issues before deploying"
 ```
 
 ---
@@ -659,74 +634,17 @@ else:
 
 ## Skill Invocation
 
-Invoke a Claude Code skill (`/<name>`) as a session step. Parameters are passed
-as additional context after the skill name.
-
-### Syntax
+Invoke a Claude Code skill (`/<name>`) as a session step.
 
 ```whip
 # Basic invocation
-skill <name>
-
-# With named parameters
-skill <name> param1=<expr> param2=<expr>
-
-# Capture output
-skill <name> param=<expr> -> varname
-
-# As an expression (in let/const)
-let result = skill <name> param=<expr>
-```
-
-### Examples
-
-```whip
-# Run the /commit skill
 skill commit
 
-# Run /review-pr with a PR number
+# With named parameters
 skill review-pr args="123"
 
-# Run /simplify and capture output
+# Capture output
 let review = skill simplify
-
-# Use a variable as parameter
-let diff = session: researcher
-  prompt: "Show me the git diff"
-
-skill review-pr args=diff -> feedback
-
-session: writer
-  prompt: "Address this feedback:\n{feedback}"
-```
-
-### How It Works
-
-- `skill foo` expands to a session that sends `/foo` to a `claude-code` agent
-- Parameters are appended as `key:\nvalue` blocks after the skill name
-- Output can be captured with `-> varname` or `let result = skill ...`
-- Skills run with the default model and no extra tools/permissions
-
----
-
-## Provider Config (.open-prose.json)
-
-Place in the project root to configure providers:
-
-```json
-{
-  "providers": {
-    "claude-code": {
-      "bin": "claude",
-      "timeout": 300000
-    },
-    "my-tool": {
-      "bin": "/usr/local/bin/my-tool",
-      "args": ["--prompt"],
-      "promptMode": "arg"
-    }
-  }
-}
 ```
 
 ---

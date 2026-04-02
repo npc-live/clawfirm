@@ -87,7 +87,8 @@ func main() {
 
 	// ── Tools ─────────────────────────────────────────────────────────────────
 	// memMgr is nil — memory_search/memory_get require a DB; not opened here.
-	tools := agentbuilder.BuildTools(ac.Tools, nil, cfg, nil)
+	// mediaProvider is nil — CLI mode does not support media analysis.
+	tools := agentbuilder.BuildTools(ac.Tools, nil, cfg, nil, nil)
 
 	// ── Skills ────────────────────────────────────────────────────────────────
 	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})

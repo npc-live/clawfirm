@@ -72,6 +72,12 @@ func unmarshalContentBlocks(data json.RawMessage) ([]ContentBlock, error) {
 				return nil, err
 			}
 			block = v
+		case ContentTypeVideo:
+			v := &VideoContent{}
+			if err := json.Unmarshal(raw, v); err != nil {
+				return nil, err
+			}
+			block = v
 		case ContentTypeAudio:
 			v := &AudioContent{}
 			if err := json.Unmarshal(raw, v); err != nil {

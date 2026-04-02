@@ -9,15 +9,20 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"encoding/json"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/browser"
 	"github.com/ai-gateway/clawfirm/auth"
 	"github.com/ai-gateway/clawfirm/channel/feishu"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
@@ -258,6 +263,7 @@ func initUserDirs() {
 		filepath.Join(base, "workflows"),
 		filepath.Join(base, "canvas"),
 		filepath.Join(base, "bin"),
+		filepath.Join(base, "shortcuts"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -277,6 +283,7 @@ func initUserDirs() {
 
 	extractBuiltinAssets(embeddedSkills, "assets/skills", filepath.Join(base, "skills"))
 	extractBuiltinAssets(embeddedWorkflows, "assets/workflows", filepath.Join(base, "workflows"))
+	extractBuiltinAssets(embeddedShortcuts, "assets/shortcuts", filepath.Join(base, "shortcuts"))
 
 	cfgPath := filepath.Join(base, "config.yml")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
@@ -482,6 +489,12 @@ func (a *App) startGateway() error {
 		return fmt.Errorf("startGateway: providers: %w", err)
 	}
 
+	// Resolve dedicated media provider if configured.
+	var mediaProvider provider.LLMProvider
+	if cfg.Media.Provider != "" {
+		mediaProvider = providerMap[cfg.Media.Provider]
+	}
+
 	registry := gateway.NewAgentRegistry()
 	var msgStore *store.MessageStore
 	if db != nil {
@@ -499,7 +512,7 @@ func (a *App) startGateway() error {
 		}
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
-		tools := buildTools(ac.Tools, memMgr, cfg, a.vault)
+		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
 
 		// Load skills and build the skills prompt with size limits.
 		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
@@ -1891,7 +1904,8 @@ func buildRuntimeInfo(ac config.AgentConfig) string {
 
 // buildTools resolves a list of tool names to AgentTool instances.
 // v may be nil, in which case vault injection is skipped.
-func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault) []tool.AgentTool {
+// mediaProvider may be nil, in which case media_understand is not configured.
+func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, mediaProvider provider.LLMProvider) []tool.AgentTool {
 	var vaultEnv func() map[string]string
 	if v != nil {
 		vaultEnv = func() map[string]string {
@@ -1899,7 +1913,7 @@ func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *v
 			return m
 		}
 	}
-	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv)
+	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, mediaProvider)
 }
 
 // ─── Cron Scheduler ──────────────────────────────────────────────────────────
@@ -1926,12 +1940,17 @@ func (a *App) buildAgentForCron(agentName string) (*agent.Agent, error) {
 		return nil, fmt.Errorf("cron: provider %q not found for agent %q", ac.Provider, agentName)
 	}
 
+	var mediaProvider provider.LLMProvider
+	if cfg.Media.Provider != "" {
+		mediaProvider = providerMap[cfg.Media.Provider]
+	}
+
 	maxTokens := ac.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = 4096
 	}
 	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
-	tools := buildTools(ac.Tools, memMgr, cfg, a.vault)
+	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
 
 	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
 	compacted := skill.CompactSkillPaths(skillResult.Skills)
@@ -2181,4 +2200,165 @@ func streamSummarize(ctx context.Context, prov provider.LLMProvider, model types
 		}
 	}
 	return sb.String(), nil
+}
+
+// ─── Browser (CDP) ──────────────────────────────────────────────────────────
+
+// BrowserStatus holds the CDP connection status returned to the frontend.
+type BrowserStatus struct {
+	Connected bool   `json:"connected"`
+	CDPURL    string `json:"cdpURL"`
+	Browser   string `json:"browser"` // e.g. "Chrome/126.0.6478.63"
+	Error     string `json:"error"`
+}
+
+// BrowserTestCDP probes localhost:9222 for an active Chrome CDP endpoint.
+func (a *App) BrowserTestCDP() BrowserStatus {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://127.0.0.1:9222/json/version")
+	if err != nil {
+		return BrowserStatus{Connected: false, Error: "CDP not reachable: " + err.Error()}
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var info struct {
+		Browser      string `json:"Browser"`
+		WebSocketURL string `json:"webSocketDebuggerUrl"`
+	}
+	if err := json.Unmarshal(body, &info); err != nil {
+		return BrowserStatus{Connected: false, Error: "invalid CDP response"}
+	}
+	return BrowserStatus{
+		Connected: true,
+		CDPURL:    info.WebSocketURL,
+		Browser:   info.Browser,
+	}
+}
+
+// BrowserLaunchChrome kills existing Chrome processes and relaunches with --remote-debugging-port=9222.
+func (a *App) BrowserLaunchChrome() BrowserStatus {
+	// Kill existing Chrome.
+	switch runtime.GOOS {
+	case "darwin":
+		_ = exec.Command("pkill", "-f", "Google Chrome").Run()
+	case "linux":
+		_ = exec.Command("pkill", "-f", "chrome").Run()
+	default:
+		_ = exec.Command("taskkill", "/F", "/IM", "chrome.exe").Run()
+	}
+
+	// Small delay for process cleanup.
+	time.Sleep(500 * time.Millisecond)
+
+	// Find Chrome binary.
+	chromePath := findChromeBinary()
+	if chromePath == "" {
+		return BrowserStatus{Connected: false, Error: "Chrome not found on this system"}
+	}
+
+	cmd := exec.Command(chromePath,
+		"--remote-debugging-port=9222",
+		"--no-first-run",
+		"--no-default-browser-check",
+	)
+	if err := cmd.Start(); err != nil {
+		return BrowserStatus{Connected: false, Error: "failed to launch Chrome: " + err.Error()}
+	}
+	// Detach — don't wait for Chrome to exit.
+	go func() { _ = cmd.Wait() }()
+
+	// Poll for CDP readiness (up to 5 seconds).
+	for i := 0; i < 10; i++ {
+		time.Sleep(500 * time.Millisecond)
+		status := a.BrowserTestCDP()
+		if status.Connected {
+			return status
+		}
+	}
+	return BrowserStatus{Connected: false, Error: "Chrome launched but CDP not ready after 5s"}
+}
+
+// findChromeBinary returns the path to a Chrome/Chromium binary, or "" if not found.
+func findChromeBinary() string {
+	switch runtime.GOOS {
+	case "darwin":
+		candidates := []string{
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+			"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				return c
+			}
+		}
+	case "linux":
+		for _, name := range []string{"google-chrome", "chromium-browser", "chromium"} {
+			if p, err := exec.LookPath(name); err == nil {
+				return p
+			}
+		}
+	default: // windows
+		candidates := []string{
+			filepath.Join(os.Getenv("ProgramFiles"), "Google", "Chrome", "Application", "chrome.exe"),
+			filepath.Join(os.Getenv("ProgramFiles(x86)"), "Google", "Chrome", "Application", "chrome.exe"),
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				return c
+			}
+		}
+	}
+	return ""
+}
+
+// ─── Browser Shortcuts (YAML adapters) ──────────────────────────────────────
+
+// ShortcutInfo describes a browser automation shortcut available to the frontend.
+type ShortcutInfo struct {
+	Platform string   `json:"platform"`
+	File     string   `json:"file"`
+	Commands []string `json:"commands"`
+}
+
+// BrowserListShortcuts returns all YAML adapter shortcuts in ~/.clawfirm/shortcuts/.
+func (a *App) BrowserListShortcuts() []ShortcutInfo {
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".clawfirm", "shortcuts")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []ShortcutInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		fp := filepath.Join(dir, e.Name())
+		adapter, err := browser.LoadAdapterYAML(fp)
+		if err != nil {
+			continue
+		}
+		cmds := make([]string, 0, len(adapter.Commands))
+		for k := range adapter.Commands {
+			cmds = append(cmds, k)
+		}
+		out = append(out, ShortcutInfo{
+			Platform: adapter.Platform,
+			File:     e.Name(),
+			Commands: cmds,
+		})
+	}
+	return out
+}
+
+// BrowserRunShortcut executes a YAML adapter command and returns the result rows.
+func (a *App) BrowserRunShortcut(file, command string, args []string) ([]map[string]any, error) {
+	home, _ := os.UserHomeDir()
+	fp := filepath.Join(home, ".clawfirm", "shortcuts", file)
+	if _, err := os.Stat(fp); err != nil {
+		return nil, fmt.Errorf("shortcut file not found: %s", file)
+	}
+	return browser.RunYAMLCommand(fp, command, args, 9222)
 }

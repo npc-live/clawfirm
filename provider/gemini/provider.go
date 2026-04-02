@@ -344,6 +344,13 @@ func convertMessages(msgs []types.Message) []geminiContent {
 							Data:     block.Data,
 						},
 					})
+				case *types.VideoContent:
+					parts = append(parts, geminiPart{
+						InlineData: &geminiInlineData{
+							MimeType: block.MimeType,
+							Data:     block.Data,
+						},
+					})
 				}
 			}
 			out = append(out, geminiContent{Role: "user", Parts: parts})
