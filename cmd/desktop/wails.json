@@ -1,0 +1,27 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "clawfirm",
+  "outputfilename": "clawfirm",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "clawfirm",
+    "email": ""
+  },
+  "info": {
+    "productName": "clawfirm",
+    "productVersion": "0.1.0",
+    "productIdentifier": "com.ai-gateway.clawfirm",
+    "copyright": "© 2025 clawfirm",
+    "comments": "AI Gateway Desktop"
+  },
+  "obfuscated": false,
+  "garbleargs": "",
+  "devServer": "localhost:34115",
+  "appID": "com.ai-gateway.clawfirm",
+  "wailsVersion": "v2.9.2",
+  "assetdir": "frontend/dist",
+  "frontend:dir": "frontend"
+}

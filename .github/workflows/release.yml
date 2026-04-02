@@ -145,3 +145,30 @@ jobs:
           files: |
             artifacts/**/*.zip
             artifacts/**/*.tar.gz
+          body: |
+            ## Clawfirm ${{ github.ref_name }}
+
+            Clawfirm - AI Gateway Desktop App
+
+            ### Downloads
+
+            Please select the appropriate package for your operating system:
+
+            #### macOS
+            - **Universal (Apple Silicon + Intel)**: `clawfirm-macos-universal.zip`
+
+            #### Windows
+            - **x64**: `clawfirm-windows-amd64.zip`
+
+            #### Linux
+            - **x64**: `clawfirm-linux-amd64.tar.gz`
+
+            ### Installation Notes
+
+            - **macOS**: Unzip, drag to Applications. On first launch you may need to go to System Settings → Privacy & Security to allow the app
+            - **Windows**: Unzip and run `clawfirm.exe`. SmartScreen may block it — click "More info" → "Run anyway"
+            - **Linux**: Extract with `tar xzf clawfirm-linux-amd64.tar.gz` and run `./clawfirm`
+
+            ---
+
+            Found an issue? Please submit an [Issue](https://github.com/${{ github.repository }}/issues)

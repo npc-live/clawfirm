@@ -1,4 +1,17 @@
-cmd/desktop
 bin/
 OPTIMIZATION_PLAN.md
 mi
+.DS_Store
+
+# Desktop build artifacts (keep source, ignore build output)
+cmd/desktop/build/bin/
+cmd/desktop/frontend/node_modules/
+cmd/desktop/frontend/dist/
+cmd/desktop/frontend/package.json.md5
+cmd/desktop/desktop
+cmd/desktop/data/
+cmd/desktop/rwa-reports/
+cmd/desktop/tavily-cli/
+cmd/desktop/tavily-tools/
+cmd/desktop/.whipflow/
+cmd/desktop/trading_dashboard.html
