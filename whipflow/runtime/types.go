@@ -86,6 +86,9 @@ type RuntimeConfig struct {
 	// VaultEnv, if set, is called before each CLI provider execution to
 	// obtain extra environment variables (secrets from the vault).
 	VaultEnv func() map[string]string
+	// SkillResolver, if set, resolves a skill name to its SKILL.md content.
+	// Used by NativeProvider sessions to inject skill knowledge.
+	SkillResolver func(name string) (string, error)
 }
 
 // DefaultRuntimeConfig returns the default configuration.

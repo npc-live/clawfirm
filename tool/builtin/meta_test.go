@@ -25,7 +25,7 @@ func TestSkillCache_HitAndExpiry(t *testing.T) {
 	s := &Skill{SkillPaths: []string{dir}}
 
 	// First call: cache miss, loads from disk.
-	content, err := s.loadSkill("greet")
+	content, err := s.LoadSkill("greet")
 	if err != nil {
 		t.Fatalf("first load: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestSkillCache_HitAndExpiry(t *testing.T) {
 	}
 
 	// Second call: cache hit, should still return v1.
-	content, err = s.loadSkill("greet")
+	content, err = s.LoadSkill("greet")
 	if err != nil {
 		t.Fatalf("cached load: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestSkillCache_HitAndExpiry(t *testing.T) {
 	s.mu.Unlock()
 
 	// Third call: expired, should reload from disk.
-	content, err = s.loadSkill("greet")
+	content, err = s.LoadSkill("greet")
 	if err != nil {
 		t.Fatalf("expired load: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestSkillCache_InvalidateCache(t *testing.T) {
 	s := &Skill{SkillPaths: []string{dir}}
 
 	// Load to populate cache.
-	if _, err := s.loadSkill("test"); err != nil {
+	if _, err := s.LoadSkill("test"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,7 +85,7 @@ func TestSkillCache_InvalidateCache(t *testing.T) {
 	}
 
 	// Still cached.
-	content, _ := s.loadSkill("test")
+	content, _ := s.LoadSkill("test")
 	if content != "original" {
 		t.Fatalf("expected cached 'original', got %q", content)
 	}
@@ -94,7 +94,7 @@ func TestSkillCache_InvalidateCache(t *testing.T) {
 	s.InvalidateCache()
 
 	// Should reload from disk.
-	content, err := s.loadSkill("test")
+	content, err := s.LoadSkill("test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestSkillCache_InvalidateCache(t *testing.T) {
 
 func TestSkillCache_NotFound(t *testing.T) {
 	s := &Skill{SkillPaths: []string{t.TempDir()}}
-	_, err := s.loadSkill("nonexistent")
+	_, err := s.LoadSkill("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for missing skill")
 	}
@@ -156,7 +156,7 @@ func TestSkillCache_ConcurrentAccess(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		go func() {
 			defer func() { done <- struct{}{} }()
-			_, _ = s.loadSkill("concurrent")
+			_, _ = s.LoadSkill("concurrent")
 		}()
 	}
 	for i := 0; i < 20; i++ {

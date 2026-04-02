@@ -1,0 +1,94 @@
+platform: zhipin
+login_url: https://www.zhipin.com
+login_check:
+  cookie: wt2
+
+commands:
+
+  # ── 统计发起对话人数 ────────────────────────────────────────────────────────
+  # 打开聊天列表，滚动加载所有会话，统计总人数及未读数量
+  chat_stats:
+    args: []
+    steps:
+      - open: "https://www.zhipin.com/web/geek/chat"
+      - wait: 4000
+      # 滚动加载所有聊天记录
+      - eval: >-
+          (function(){
+            var list = document.querySelector(".user-list");
+            if(!list) return;
+            var last = 0;
+            var tries = 0;
+            function scroll(){
+              list.scrollTop = list.scrollHeight;
+            }
+            scroll();
+          })()
+      - wait: 2000
+      - eval: "document.querySelector('.user-list') && (document.querySelector('.user-list').scrollTop = 99999)"
+      - wait: 1500
+      - eval: "document.querySelector('.user-list') && (document.querySelector('.user-list').scrollTop = 99999)"
+      - wait: 1500
+      - eval: "document.querySelector('.user-list') && (document.querySelector('.user-list').scrollTop = 99999)"
+      - wait: 1500
+      # 抓取所有聊天条目
+      - capture:
+          name: stats
+          eval: >-
+            (function(){
+              var items = document.querySelectorAll(".geek-item");
+              var total = items.length;
+              var unreadCount = 0;
+              var unreadList = [];
+              Array.from(items).forEach(function(item){
+                var badge = item.querySelector(".badge-count span");
+                var unread = badge ? parseInt(badge.textContent.trim()) || 0 : 0;
+                if(unread > 0){
+                  unreadCount++;
+                  var name = item.querySelector(".geek-name");
+                  var job = item.querySelector(".source-job");
+                  var msg = item.querySelector(".gray");
+                  unreadList.push({
+                    name: name ? name.textContent.trim() : "",
+                    job: job ? job.textContent.trim() : "",
+                    unread: unread,
+                    lastMsg: msg ? msg.textContent.trim().slice(0,40) : ""
+                  });
+                }
+              });
+              return JSON.stringify({
+                total: total,
+                unread_count: unreadCount,
+                unread_list: unreadList
+              });
+            })()
+      - return:
+          - field: 总会话数
+            value: "{{JSON.parse(stats).total}}"
+          - field: 未读会话数
+            value: "{{JSON.parse(stats).unread_count}}"
+          - field: 未读明细
+            value: "{{JSON.parse(stats).unread_list.map(function(x){return x.name+'('+x.job+') 未读'+x.unread+'条: '+x.lastMsg}).join(' | ')}}"
+
+  # ── 获取所有候选人列表 ──────────────────────────────────────────────────────
+  # 返回所有发起对话的候选人信息（姓名、应聘职位、最新消息摘要）
+  candidates:
+    args: []
+    steps:
+      - open: "https://www.zhipin.com/web/geek/chat"
+      - wait: 4000
+      # 多次滚动加载更多
+      - eval: "document.querySelector('.user-list') && (document.querySelector('.user-list').scrollTop = 99999)"
+      - wait: 1500
+      - eval: "document.querySelector('.user-list') && (document.querySelector('.user-list').scrollTop = 99999)"
+      - wait: 1500
+      - eval: "document.querySelector('.user-list') && (document.querySelector('.user-list').scrollTop = 99999)"
+      - wait: 1500
+      - extract:
+          selector: ".geek-item"
+          fields:
+            姓名: ".geek-name"
+            应聘职位: ".source-job"
+            最新消息:
+              selector: ".gray"
+              attr: textContent

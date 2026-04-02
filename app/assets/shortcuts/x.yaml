@@ -1,0 +1,116 @@
+platform: x
+login_url: https://x.com
+login_check:
+  cookie: auth_token
+
+commands:
+
+  search:
+    args: [keyword]
+    steps:
+      - open: "https://x.com/search?q={{keyword}}&src=typed_query&f=top"
+      - wait: 4000
+      - extract:
+          selector: "[data-testid='tweet']"
+          fields:
+            text: "[data-testid='tweetText']"
+            user: "[data-testid='User-Name']"
+            link:
+              selector: "a[href*='/status/']"
+              attr: href
+            time:
+              selector: time
+              attr: datetime
+
+  like:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 3000
+      - capture:
+          name: already_liked
+          eval: "!!document.querySelector('[data-testid=\"unlike\"]')"
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[data-testid="like"]') || document.querySelector('[data-testid="unlike"]');
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1000
+      - capture:
+          name: is_liked
+          eval: "!!document.querySelector('[data-testid=\"unlike\"]')"
+      - return:
+          - field: 操作
+            value: "{{already_liked == 'true' && '取消点赞' || '点赞成功'}}"
+          - field: 状态
+            value: "{{is_liked}}"
+
+  reply:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 3000
+      - click:
+          selector: "[data-testid='reply']"
+      - wait: 1000
+      - type_rich:
+          selector: "[data-testid='tweetTextarea_0']"
+          value: "{{text}}"
+      - wait: 500
+      - capture:
+          name: input_text
+          eval: "document.querySelector('[data-testid=\"tweetTextarea_0\"]')?.textContent?.trim() || ''"
+      - click:
+          selector: "[data-testid='tweetButtonInline']"
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ 回复成功"
+          - field: 回复内容
+            value: "{{text}}"
+          - field: 输入确认
+            value: "{{input_text}}"
+
+  post:
+    args: [text]
+    steps:
+      - open: "https://x.com/home"
+      - wait: 3000
+      - type_rich:
+          selector: "[data-testid='tweetTextarea_0']"
+          value: "{{text}}"
+      - wait: 500
+      - capture:
+          name: input_text
+          eval: "document.querySelector('[data-testid=\"tweetTextarea_0\"]')?.textContent?.trim() || ''"
+      - click:
+          selector: "[data-testid='tweetButton']"
+      - wait: 2500
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "✅ 发推成功"
+          - field: 内容
+            value: "{{text}}"
+          - field: 输入确认
+            value: "{{input_text}}"
+
+  retweet:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 3000
+      - click:
+          selector: "[data-testid='retweet']"
+      - wait: 800
+      - click:
+          selector: "[data-testid='retweetConfirm']"
+      - wait: 1500
+      - return:
+          - field: 状态
+            value: "✅ 转推成功"
+          - field: URL
+            value: "{{url}}"

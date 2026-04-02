@@ -1,0 +1,289 @@
+platform: bilibili
+login_url: https://www.bilibili.com
+login_check:
+  cookie: SESSDATA
+
+commands:
+
+  # ── 搜索 ──────────────────────────────────────────────────────────────────────
+  search:
+    args: [keyword]
+    steps:
+      - open: "https://search.bilibili.com/all?keyword={{keyword}}&search_source=1"
+      - wait: 4000
+      - extract:
+          selector: ".bili-video-card"
+          fields:
+            link:
+              selector: "a[href*='/video/']"
+              attr: href
+            title: ".bili-video-card__info--tit,h3"
+            up: ".bili-video-card__info--author,.up-name"
+
+  # ── 点赞视频 ──────────────────────────────────────────────────────────────────
+  like:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: before
+          eval: "String(document.querySelectorAll('.video-like.on').length > 0)"
+      - eval: >-
+          (function(){
+            var btn = document.querySelector(".video-like");
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1000
+      - capture:
+          name: after
+          eval: "String(document.querySelectorAll('.video-like.on').length > 0)"
+      - return:
+          - field: 操作
+            value: "{{before === 'true' ? '取消点赞' : '点赞成功'}}"
+          - field: 当前状态
+            value: "{{after === 'true' ? '已点赞' : '未点赞'}}"
+
+  # ── 关注 UP 主 ────────────────────────────────────────────────────────────────
+  follow:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: is_not_follow
+          eval: "String(document.querySelectorAll('.follow-btn.not-follow').length > 0)"
+      # agent-browser click 发送真实鼠标事件（Vue 事件监听器需要）
+      - click: ".follow-btn"
+      - wait: 1500
+      - capture:
+          name: after_class
+          eval: "document.querySelector('.follow-btn') ? document.querySelector('.follow-btn').className : ''"
+      - return:
+          - field: 操作
+            value: "{{is_not_follow === 'true' ? '关注' : '取消关注'}}"
+          - field: 状态
+            value: "{{after_class.includes('not-follow') ? '❌ 未关注' : '✅ 已关注'}}"
+
+  # ── 发表评论 ──────────────────────────────────────────────────────────────────
+  # B站评论区是多层嵌套 shadow DOM：
+  # bili-comments → bili-comments-header-renderer → bili-comment-box
+  # → bili-comment-rich-textarea → div.brt-editor[contenteditable]
+  comment:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      # 滚动触发评论区懒加载（bili-comments 默认 lazy-load）
+      - eval: "window.scrollTo(0, 600)"
+      - wait: 2000
+      # 深度 focus 到 shadow DOM 内 .brt-editor（需要穿透多层 shadow root）
+      - eval: >-
+          (function(){
+            var host = document.querySelector("bili-comments");
+            if(!host) return false;
+            function deepFocus(root){
+              var sr = root.shadowRoot;
+              if(!sr) return null;
+              var editor = sr.querySelector(".brt-editor");
+              if(editor) { editor.click(); editor.focus(); return true; }
+              var els = sr.querySelectorAll("*");
+              for(var i=0; i<els.length; i++){
+                var r = deepFocus(els[i]);
+                if(r) return r;
+              }
+              return null;
+            }
+            return deepFocus(host) || false;
+          })()
+      - wait: 500
+      # CDP Input.insertText 直接插入文本，可穿透 shadow DOM
+      - insert_text: "{{text}}"
+      - wait: 500
+      - capture:
+          name: input_check
+          eval: "document.querySelector('bili-comments').shadowRoot.querySelector('bili-comments-header-renderer').shadowRoot.querySelector('bili-comment-box').shadowRoot.querySelector('bili-comment-rich-textarea').shadowRoot.querySelector('.brt-editor').textContent.trim()"
+      # 点击发布按钮
+      - eval: >-
+          (function(){
+            var btn = document.querySelector("bili-comments")
+              .shadowRoot.querySelector("bili-comments-header-renderer")
+              .shadowRoot.querySelector("bili-comment-box")
+              .shadowRoot.querySelector("#pub button");
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ 评论成功"
+          - field: 评论内容
+            value: "{{text}}"
+          - field: 输入确认
+            value: "{{input_check}}"
+
+  # ── 回复评论 ──────────────────────────────────────────────────────────────────
+  # 点击第一条评论的"回复"按钮，然后输入文字
+  reply:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      # 滚动触发评论区懒加载
+      - eval: "window.scrollTo(0, 600)"
+      - wait: 2000
+      # 点击第一条评论的回复按钮
+      - eval: >-
+          (function(){
+            var cr = document.querySelector("bili-comments").shadowRoot;
+            var thread = cr.querySelector("#feed bili-comment-thread-renderer");
+            if(!thread) return false;
+            var tsr = thread.shadowRoot;
+            var renderer = tsr.querySelector("bili-comment-renderer");
+            if(!renderer) return false;
+            var rsr = renderer.shadowRoot;
+            var actions = rsr.querySelector("bili-comment-action-buttons-renderer");
+            if(!actions) return false;
+            var absr = actions.shadowRoot;
+            var replyBtn = absr.querySelector("#reply button");
+            if(replyBtn) { replyBtn.click(); return true; }
+            return false;
+          })()
+      - wait: 1000
+      # 找到回复输入框并 focus（在 reply-container 下展开的 bili-comment-box）
+      - eval: >-
+          (function(){
+            var cr = document.querySelector("bili-comments").shadowRoot;
+            var thread = cr.querySelector("#feed bili-comment-thread-renderer");
+            var tsr = thread.shadowRoot;
+            var replyContainer = tsr.querySelector("#reply-container");
+            if(!replyContainer) return false;
+            var box = replyContainer.querySelector("bili-comment-box");
+            if(!box) return false;
+            var bsr = box.shadowRoot;
+            var rta = bsr.querySelector("bili-comment-rich-textarea");
+            if(!rta) return false;
+            var editor = rta.shadowRoot.querySelector(".brt-editor");
+            if(!editor) return false;
+            editor.click();
+            editor.focus();
+            return true;
+          })()
+      - wait: 300
+      # CDP Input.insertText 直接插入（穿透 shadow DOM）
+      - insert_text: "{{text}}"
+      - wait: 500
+      # 点击发布
+      - eval: >-
+          (function(){
+            var cr = document.querySelector("bili-comments").shadowRoot;
+            var thread = cr.querySelector("#feed bili-comment-thread-renderer");
+            var tsr = thread.shadowRoot;
+            var replyContainer = tsr.querySelector("#reply-container");
+            if(!replyContainer) return false;
+            var box = replyContainer.querySelector("bili-comment-box");
+            if(!box) return false;
+            var btn = box.shadowRoot.querySelector("#pub button");
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ 回复成功"
+          - field: 回复内容
+            value: "{{text}}"
+
+  # ── 投稿（发布视频）──────────────────────────────────────────────────────────
+  post:
+    args: [video, title, desc]   # video: 本地视频路径（必填）
+    steps:
+      - open: "https://member.bilibili.com/platform/upload/video/frame"
+      - wait: 4000
+      # 关掉"开启通知"弹窗（知道了）
+      - eval: >-
+          (function(){
+            var btn = [...document.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === "知道了"; });
+            if(btn) btn.click();
+            return !!btn;
+          })()
+      - wait: 500
+      # 上传视频
+      - upload:
+          selector: "input[accept*='.mp4']"
+          file: "{{video}}"
+      # 等待编辑器渲染（标题输入框出现）
+      - wait:
+          selector: "input[placeholder='请输入稿件标题']"
+      - wait: 1000
+      # 等待视频上传+转码真正完成
+      # B站上传页：上传中显示进度百分比，完成后显示"上传完成"并且"立即投稿"按钮变为可点击
+      - wait_until:
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              if (body.includes('上传完成') && !body.includes('上传中')) return true;
+              var progress = document.querySelector('.upload-progress, [class*=progress], [class*=uploading]');
+              if (progress) {
+                var text = progress.textContent || '';
+                if (text.includes('100%')) return true;
+              }
+              var btn = document.querySelector('span.submit-add');
+              if (btn) {
+                var parent = btn.closest('button') || btn.parentElement;
+                if (parent && !parent.classList.contains('disabled') && !parent.hasAttribute('disabled')) return true;
+              }
+              return false;
+            })()
+          timeout: 300000
+          interval: 3000
+      # 关掉所有弹窗（二创计划 / 定时发布 / 通知）
+      - eval: >-
+          (function(){
+            ["暂不考虑","知道了"].forEach(function(text){
+              var btn = [...document.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === text; });
+              if(btn) btn.click();
+            });
+            document.querySelectorAll("button").forEach(function(b){
+              if(b.textContent.trim() === "取消") b.click();
+            });
+          })()
+      - wait: 800
+      # 填写标题（覆盖自动填充）
+      - fill:
+          selector: "input[placeholder='请输入稿件标题']"
+          value: "{{title}}"
+      - wait: 300
+      # 填写简介（Quill 富文本编辑器）
+      - eval: >-
+          (function(){
+            var el = document.querySelector(".ql-editor");
+            if(!el) return false;
+            el.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("delete", false, null);
+            document.execCommand("insertText", false, "{{desc}}");
+            return el.textContent.trim().slice(0,30);
+          })()
+      - wait: 500
+      # 点击"立即投稿"（用 agent-browser click 发送真实鼠标事件，JS .click() 在此无效）
+      - eval: "document.querySelector('span.submit-add')?.scrollIntoView({block:'center'})"
+      - wait: 500
+      - click: "span.submit-add"
+      - wait: 5000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - capture:
+          name: success
+          eval: "document.body.innerText.includes('投递成功') || document.body.innerText.includes('投稿成功')"
+      - return:
+          - field: 状态
+            value: "{{success === 'true' ? '✅ 投稿成功' : '⚠️ 请检查页面'}}"
+          - field: 标题
+            value: "{{title}}"
+          - field: 描述
+            value: "{{desc}}"
+          - field: 页面URL
+            value: "{{result_url}}"

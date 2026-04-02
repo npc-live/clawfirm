@@ -4,6 +4,7 @@ package types
 const (
 	ContentTypeText     = "text"
 	ContentTypeImage    = "image"
+	ContentTypeVideo    = "video"
 	ContentTypeAudio    = "audio"
 	ContentTypeToolCall = "toolCall"
 	ContentTypeThinking = "thinking"
@@ -34,6 +35,17 @@ type ImageContent struct {
 
 // ContentType returns the type identifier for ImageContent.
 func (i *ImageContent) ContentType() string { return ContentTypeImage }
+
+// VideoContent holds a video, either as base64 data or a URL.
+type VideoContent struct {
+	Type     string `json:"type"`
+	Data     string `json:"data,omitempty"` // base64-encoded video bytes
+	URL      string `json:"url,omitempty"`
+	MimeType string `json:"mimeType"`
+}
+
+// ContentType returns the type identifier for VideoContent.
+func (v *VideoContent) ContentType() string { return ContentTypeVideo }
 
 // AudioContent holds audio data, either as base64 data or a URL.
 type AudioContent struct {

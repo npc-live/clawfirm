@@ -128,6 +128,15 @@ type CronJobConfig struct {
 	Enabled   bool     `yaml:"enabled" json:"enabled"`
 }
 
+// MediaConfig holds settings for the dedicated multimodal media analysis provider.
+type MediaConfig struct {
+	// Provider references a key in the top-level providers map.
+	Provider string `yaml:"provider" json:"provider"`
+
+	// Model is the model ID to use for media analysis.
+	Model string `yaml:"model" json:"model"`
+}
+
 // Config is the top-level clawfirm configuration structure.
 type Config struct {
 	// Providers maps provider IDs to their connection settings.
@@ -155,6 +164,9 @@ type Config struct {
 
 	// CronJobs defines scheduled jobs that trigger agents on a timer.
 	CronJobs []CronJobConfig `yaml:"cron_jobs" json:"cron_jobs"`
+
+	// Media configures the dedicated multimodal provider for media analysis.
+	Media MediaConfig `yaml:"media" json:"media"`
 }
 
 var envVarRe = regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
@@ -260,6 +272,10 @@ func Load(path string) (*Config, error) {
 	if cfg.Feishu.AppSecret == "" {
 		cfg.Feishu.AppSecret = os.Getenv("FEISHU_APP_SECRET")
 	}
+
+	// Expand env vars in media config.
+	cfg.Media.Provider = expandEnv(cfg.Media.Provider)
+	cfg.Media.Model = expandEnv(cfg.Media.Model)
 
 	// Expand env vars in cron jobs.
 	for i, cj := range cfg.CronJobs {

@@ -95,7 +95,7 @@ func (s *Skill) Execute(ctx context.Context, id string, params map[string]any, o
 		return tool.ToolResult{}, fmt.Errorf("skill: name is required")
 	}
 
-	content, err := s.loadSkill(name)
+	content, err := s.LoadSkill(name)
 	if err != nil {
 		return tool.ToolResult{}, err
 	}
@@ -112,8 +112,8 @@ func (s *Skill) InvalidateCache() {
 	s.mu.Unlock()
 }
 
-// loadSkill returns cached content if fresh, otherwise loads from disk and caches.
-func (s *Skill) loadSkill(name string) (string, error) {
+// LoadSkill returns cached content if fresh, otherwise loads from disk and caches.
+func (s *Skill) LoadSkill(name string) (string, error) {
 	now := time.Now()
 
 	// Fast path: read lock to check cache.

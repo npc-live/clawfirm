@@ -172,14 +172,14 @@ func newNativeProviderFromAgent(ac config.AgentConfig, piCfg *config.Config) (*N
 		return nil, fmt.Errorf("agent %q references unknown provider %q", ac.Name, provID)
 	}
 
-	llmProv, err := buildLLMProvider(pc)
+	llmProv, err := BuildLLMProvider(pc)
 	if err != nil {
 		return nil, fmt.Errorf("agent %q: %w", ac.Name, err)
 	}
 
 	return NewNativeProvider(ac.Name, ac.Model, llmProv,
-		withMaxTokens(ac.MaxTokens),
-		withSystemPromptHint(ac.SystemPrompt),
+		WithMaxTokens(ac.MaxTokens),
+		WithSystemPromptHint(ac.SystemPrompt),
 	)
 }
 
@@ -247,7 +247,8 @@ func WithLLMProvider(p llmprovider.LLMProvider) NativeProviderOption {
 	return func(np *NativeProvider) { np.llmProvider = p }
 }
 
-func withMaxTokens(n int) NativeProviderOption {
+// WithMaxTokens sets the max tokens on the NativeProvider model.
+func WithMaxTokens(n int) NativeProviderOption {
 	return func(np *NativeProvider) {
 		if n > 0 {
 			np.model.MaxTokens = n
@@ -255,7 +256,8 @@ func withMaxTokens(n int) NativeProviderOption {
 	}
 }
 
-func withSystemPromptHint(s string) NativeProviderOption {
+// WithSystemPromptHint sets a default system prompt for the NativeProvider.
+func WithSystemPromptHint(s string) NativeProviderOption {
 	return func(np *NativeProvider) { np.systemPromptHint = s }
 }
 
@@ -283,9 +285,16 @@ func (np *NativeProvider) ProviderName() string { return np.name }
 func (np *NativeProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error) {
 	prompt := buildPrompt(spec, enableTools, allowedTools, skillPrompts, false)
 
+	// Model: prefer the one from the WhipFlow agent definition,
+	// fall back to the one from config.yml agent config.
+	model := np.model
+	if spec.Agent != nil && spec.Agent.Model != "" {
+		model = types.Model{ID: spec.Agent.Model, MaxTokens: np.model.MaxTokens}
+	}
+
 	// Build agent options.
 	agentOpts := []agent.AgentOption{
-		agent.WithModel(np.model),
+		agent.WithModel(model),
 	}
 
 	// System prompt: prefer the one from the WhipFlow agent definition,
@@ -323,7 +332,11 @@ func (np *NativeProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, en
 	if timeout <= 0 {
 		timeout = 300000 // 5 min default
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Millisecond)
+	parentCtx := cfg.Ctx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parentCtx, time.Duration(timeout)*time.Millisecond)
 	defer cancel()
 
 	startTime := time.Now()
@@ -373,7 +386,8 @@ func extractAgentOutput(messages []types.Message) string {
 
 // buildLLMProvider creates an LLMProvider from a clawfirm ProviderConfig.
 // Config values are already env-expanded by config.Load().
-func buildLLMProvider(pc config.ProviderConfig) (llmprovider.LLMProvider, error) {
+// BuildLLMProvider creates an LLMProvider from a clawfirm ProviderConfig.
+func BuildLLMProvider(pc config.ProviderConfig) (llmprovider.LLMProvider, error) {
 	apiKey := pc.APIKey
 	baseURL := pc.BaseURL
 	provType := pc.Type
