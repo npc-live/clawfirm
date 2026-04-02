@@ -131,8 +131,8 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          ls -la cmd/desktop/build/bin/
           cd cmd/desktop/build/bin
+          mv clawfirm clawfirm.exe
           7z a clawfirm-windows-amd64.zip clawfirm.exe
 
       # --- Upload artifact ---
