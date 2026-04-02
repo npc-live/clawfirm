@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.26"
+  GO_VERSION: "stable"
   NODE_VERSION: "20"
   WAILS_VERSION: "v2.12.0"
 
