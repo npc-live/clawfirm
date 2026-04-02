@@ -264,7 +264,7 @@ function SkillsPane() {
         )}
 
         {searchDone && searchResults.length === 0 && (
-          <p className="mt-3 text-[13px] text-[rgba(255,255,255,0.4)] italic">No remote skills found.</p>
+          <p className="mt-3 text-[13px] text-[rgba(61,57,41,0.5)] italic">No remote skills found.</p>
         )}
         {searchResults.length > 0 && (
           <div className="mt-3 space-y-2">
@@ -277,7 +277,7 @@ function SkillsPane() {
                     {r.author && <span className="text-[11px] text-[rgba(61,57,41,0.2)]">by {r.author}</span>}
                   </div>
                   {r.description && (
-                    <p className="text-[12px] text-[rgba(255,255,255,0.4)] mt-0.5 line-clamp-2">{r.description}</p>
+                    <p className="text-[12px] text-[rgba(61,57,41,0.5)] mt-0.5 line-clamp-2">{r.description}</p>
                   )}
                 </div>
                 <button
@@ -297,7 +297,7 @@ function SkillsPane() {
 
       {/* ── Local skills ── */}
       {!loading && skills.length === 0 && !searchDone && (
-        <p className="text-[13px] text-[rgba(255,255,255,0.4)] italic">No skills found.</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.5)] italic">No skills found.</p>
       )}
       <div className="space-y-2 max-w-2xl">
         {skills.map((s) => {
@@ -310,10 +310,10 @@ function SkillsPane() {
                 onClick={() => toggle(s.filePath)}>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[13px] font-medium text-[#3d3929]">{s.name}</p>
-                  <span className="text-[rgba(255,255,255,0.3)] text-[11px] flex-shrink-0">{isOpen ? "▲" : "▼"}</span>
+                  <span className="text-[rgba(61,57,41,0.4)] text-[11px] flex-shrink-0">{isOpen ? "▲" : "▼"}</span>
                 </div>
                 {s.description && (
-                  <p className="text-[12px] text-[rgba(255,255,255,0.4)] mt-0.5 line-clamp-2">{s.description}</p>
+                  <p className="text-[12px] text-[rgba(61,57,41,0.5)] mt-0.5 line-clamp-2">{s.description}</p>
                 )}
                 <p className="text-[11px] text-[rgba(61,57,41,0.3)] font-mono mt-1">{s.filePath}</p>
               </button>
@@ -322,10 +322,10 @@ function SkillsPane() {
                 <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3 space-y-3">
                   {/* URLs */}
                   {content === "" ? (
-                    <p className="text-[12px] text-[rgba(255,255,255,0.3)]">Loading…</p>
+                    <p className="text-[12px] text-[rgba(61,57,41,0.4)]">Loading…</p>
                   ) : urls.length > 0 ? (
                     <div>
-                      <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-2">URLs</p>
+                      <p className="text-[11px] font-semibold text-[rgba(61,57,41,0.5)] uppercase tracking-wider mb-2">URLs</p>
                       <div className="space-y-1">
                         {urls.map((u) => (
                           <p key={u} className="text-[12px] font-mono text-[rgba(200,90,42,0.8)] break-all">{u}</p>
@@ -335,7 +335,7 @@ function SkillsPane() {
                   ) : null}
                   {/* Raw content */}
                   <div>
-                    <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] uppercase tracking-wider mb-2">Content</p>
+                    <p className="text-[11px] font-semibold text-[rgba(61,57,41,0.5)] uppercase tracking-wider mb-2">Content</p>
                     <pre className="text-[11px] text-[rgba(61,57,41,0.5)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
                       {content}
                     </pre>
@@ -668,7 +668,7 @@ function CronJobsPane() {
 
       {/* Job list */}
       {!loading && jobs.length === 0 && editing === null && (
-        <div className="text-center py-24 text-[rgba(255,255,255,0.3)]">
+        <div className="text-center py-24 text-[rgba(61,57,41,0.4)]">
           <div className="text-4xl mb-3">🕐</div>
           <p className="text-[13px]">No cron jobs yet. Click "+ New Job" to create one.</p>
         </div>
@@ -712,7 +712,7 @@ function CronJobsPane() {
                   {triggering === j.id ? "Running…" : "▶ Run"}
                 </button>
                 <button onClick={() => showHistory(j.id)}
-                  className="text-[11px] text-[rgba(255,255,255,0.4)] hover:text-[#3d3929] transition-colors">
+                  className="text-[11px] text-[rgba(61,57,41,0.5)] hover:text-[#3d3929] transition-colors">
                   History
                 </button>
                 <button onClick={() => startEdit(j)}
@@ -780,18 +780,18 @@ function HistoryPanel({ jobId }: { jobId: string }) {
   return (
     <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-semibold text-[rgba(255,255,255,0.4)] uppercase tracking-wider">
+        <p className="text-[11px] font-semibold text-[rgba(61,57,41,0.5)] uppercase tracking-wider">
           Execution History
         </p>
-        <button onClick={load} className="text-[10px] text-[rgba(255,255,255,0.3)] hover:text-[rgba(255,255,255,0.6)] transition-colors">
+        <button onClick={load} className="text-[10px] text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.7)] transition-colors">
           ↻ refresh
         </button>
       </div>
 
       {loading ? (
-        <p className="text-[11px] text-[rgba(255,255,255,0.3)]">Loading…</p>
+        <p className="text-[11px] text-[rgba(61,57,41,0.4)]">Loading…</p>
       ) : entries.length === 0 ? (
-        <p className="text-[11px] text-[rgba(255,255,255,0.3)] italic">No executions yet.</p>
+        <p className="text-[11px] text-[rgba(61,57,41,0.4)] italic">No executions yet.</p>
       ) : (
         <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
           {entries.map((h) => {
@@ -799,7 +799,7 @@ function HistoryPanel({ jobId }: { jobId: string }) {
             const log = h.resultText || h.errorText || "";
             return (
               <div key={h.id}
-                className="rounded-lg border border-[rgba(61,57,41,0.1)] overflow-hidden bg-[rgba(255,255,255,0.02)]">
+                className="rounded-lg border border-[rgba(61,57,41,0.1)] overflow-hidden bg-[rgba(61,57,41,0.02)]">
                 {/* Header row */}
                 <button
                   onClick={() => setExpanded(isExpanded ? null : h.id)}
@@ -828,7 +828,7 @@ function HistoryPanel({ jobId }: { jobId: string }) {
                   <div className="border-t border-[rgba(61,57,41,0.05)]">
                     {log ? (
                       <pre className="px-3 py-2.5 text-[11px] font-mono leading-relaxed
-                        text-[rgba(240,237,229,0.7)] whitespace-pre-wrap break-words
+                        text-[rgba(61,57,41,0.65)] whitespace-pre-wrap break-words
                         max-h-64 overflow-y-auto">
                         {log}
                       </pre>
@@ -881,7 +881,7 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
       <header className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Chats</h2>
-          <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">Your conversation history</p>
+          <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Your conversation history</p>
         </div>
         <button
           onClick={() => {
@@ -895,20 +895,20 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
       </header>
 
       {allSessions.length === 0 ? (
-        <p className="text-[13px] text-[rgba(255,255,255,0.3)]">No conversations yet.</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No conversations yet.</p>
       ) : (
         <div className="space-y-2 max-w-2xl">
           {allSessions.map(({ agentName, session }) => (
             <button
               key={`${agentName}/${session.id}`}
               onClick={() => onOpenChat(agentName, session.id)}
-              className="w-full text-left bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl px-4 py-3 hover:bg-[rgba(61,57,41,0.1)] hover:border-[rgba(255,255,255,0.14)] transition-all group"
+              className="w-full text-left bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl px-4 py-3 hover:bg-[rgba(61,57,41,0.1)] hover:border-[rgba(61,57,41,0.15)] transition-all group"
             >
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[11px] font-medium text-[rgba(200,90,42,0.8)] uppercase tracking-wider">{agentName}</span>
                 <span className="text-[11px] text-[rgba(61,57,41,0.2)]">{formatTime(session.lastMs)}</span>
               </div>
-              <p className="text-[13px] text-[rgba(240,237,229,0.75)] truncate leading-snug group-hover:text-[rgba(240,237,229,0.9)]">
+              <p className="text-[13px] text-[rgba(61,57,41,0.7)] truncate leading-snug group-hover:text-[rgba(61,57,41,0.95)]">
                 {session.preview}
               </p>
             </button>
@@ -924,7 +924,7 @@ function AgentsPane() {
     <div className="p-8">
       <header className="mb-6">
         <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Agents</h2>
-        <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">Edit each agent's provider, model and system prompt</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Edit each agent's provider, model and system prompt</p>
       </header>
       <AgentsEditor />
     </div>
@@ -936,7 +936,7 @@ function ChannelsPane() {
     <div className="p-8">
       <header className="mb-6">
         <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Channels</h2>
-        <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">Messaging integrations</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Messaging integrations</p>
       </header>
       <ChannelsSettings />
     </div>
@@ -991,7 +991,7 @@ function AgentsEditor() {
 
   return (
     <div className="space-y-3 max-w-2xl">
-      {agents.length === 0 && <p className="text-[13px] text-[rgba(255,255,255,0.3)]">No agents configured.</p>}
+      {agents.length === 0 && <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No agents configured.</p>}
       {agents.map(agent => (
         <div key={agent.name} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl">
           {/* Header row */}
@@ -1008,7 +1008,7 @@ function AgentsEditor() {
             </div>
             {editing !== agent.name ? (
               <button onClick={() => startEdit(agent)}
-                className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
+                className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] transition-colors">
                 Edit
               </button>
             ) : (
@@ -1031,20 +1031,20 @@ function AgentsEditor() {
               {error && <p className="text-[12px] text-red-400">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-[rgba(255,255,255,0.4)] mb-1">Provider</label>
+                  <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Provider</label>
                   <select className={selectCls} value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
                     <option value="">— none —</option>
                     {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] text-[rgba(255,255,255,0.4)] mb-1">Model</label>
+                  <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Model</label>
                   <input className={inputCls} placeholder="e.g. claude-sonnet-4-6"
                     value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
                 </div>
               </div>
               <div>
-                <label className="block text-[11px] text-[rgba(255,255,255,0.4)] mb-1">System Prompt</label>
+                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">System Prompt</label>
                 <textarea className={`${inputCls} resize-none`} rows={3}
                   value={form.system_prompt} onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))} />
               </div>
@@ -1075,7 +1075,7 @@ function WhipHighlight({ code }: { code: string }) {
 function WhipLine({ line }: { line: string }) {
   // Comment
   if (/^\s*#/.test(line)) {
-    return <div><span className="text-[rgba(255,255,255,0.3)] italic">{line}</span>{"\n"}</div>;
+    return <div><span className="text-[rgba(61,57,41,0.4)] italic">{line}</span>{"\n"}</div>;
   }
   // Keywords: agent, let, const, session, for, in, if, else, parallel, run
   const tokenized = tokenizeWhip(line);
@@ -1128,7 +1128,7 @@ function tokenizeWhip(line: string): React.ReactNode[] {
       t.type === "str"    ? "text-[#86efac]" :
       t.type === "interp" ? "text-[#fcd34d]" :
       t.type === "num"    ? "text-[#f9a8d4]" :
-                            "text-[rgba(255,255,255,0.75)]";
+                            "text-[rgba(61,57,41,0.7)]";
     return <span key={i} className={cls}>{t.value}</span>;
   });
 }
@@ -1141,7 +1141,7 @@ const inputCls =
 const selectCls =
   "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
   "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
-  "bg-[rgb(40,40,38)] text-[#3d3929]";
+  "bg-[#ece5d8] text-[#3d3929]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vault
@@ -1207,7 +1207,7 @@ function VaultPane() {
     <div className="p-8 max-w-2xl">
       <header className="mb-6">
         <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Vault</h2>
-        <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">
+        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">
           Key-value secrets injected as environment variables when running bash, exec, process and CLI workflows.
         </p>
       </header>
@@ -1217,7 +1217,7 @@ function VaultPane() {
       {/* Entry list */}
       <div className="space-y-2 mb-4">
         {entries.length === 0 && !adding && (
-          <p className="text-[13px] text-[rgba(255,255,255,0.3)]">No secrets stored yet.</p>
+          <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No secrets stored yet.</p>
         )}
         {entries.map(e => (
           <div key={e.key} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl overflow-hidden">
@@ -1233,7 +1233,7 @@ function VaultPane() {
                   onKeyDown={ev => { if (ev.key === "Enter") handleSave(e.key); if (ev.key === "Escape") setEditKey(null); }}
                 />
               ) : (
-                <span className="flex-1 font-mono text-[12px] text-[rgba(255,255,255,0.45)] truncate">
+                <span className="flex-1 font-mono text-[12px] text-[rgba(61,57,41,0.5)] truncate">
                   {revealed.has(e.key) ? e.value : "••••••••••••"}
                 </span>
               )}
@@ -1248,7 +1248,7 @@ function VaultPane() {
                 ) : (
                   <>
                     <button onClick={() => toggleReveal(e.key)}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.4)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] font-mono">
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] font-mono">
                       {revealed.has(e.key) ? "hide" : "show"}
                     </button>
                     <button onClick={() => { setEditKey(e.key); setEditVal(e.value); }}
@@ -1268,12 +1268,12 @@ function VaultPane() {
         <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(200,90,42,0.3)] rounded-2xl p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-[rgba(255,255,255,0.4)] mb-1">Key</label>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Key</label>
               <input autoFocus value={newKey} onChange={e => setNewKey(e.target.value)}
                 placeholder="e.g. GITHUB_TOKEN" className={inputCls + " font-mono"} />
             </div>
             <div>
-              <label className="block text-[11px] text-[rgba(255,255,255,0.4)] mb-1">Value</label>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Value</label>
               <input type="password" value={newVal} onChange={e => setNewVal(e.target.value)}
                 placeholder="secret value" className={inputCls + " font-mono"}
                 onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setAdding(false); }} />
@@ -1292,7 +1292,7 @@ function VaultPane() {
         </div>
       ) : (
         <button onClick={() => setAdding(true)}
-          className="px-4 py-2 text-[13px] bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.6)] rounded-xl hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.9)] transition-colors border border-[rgba(61,57,41,0.08)]">
+          className="px-4 py-2 text-[13px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.7)] rounded-xl hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.9)] transition-colors border border-[rgba(61,57,41,0.08)]">
           + Add Secret
         </button>
       )}
@@ -1364,7 +1364,7 @@ function BrowserPane() {
     <div className="p-8 max-w-3xl">
       <header className="mb-6">
         <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Browser</h2>
-        <p className="text-[13px] text-[rgba(255,255,255,0.4)] mt-1">
+        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">
           Chrome DevTools Protocol (CDP) connection and browser automation shortcuts.
         </p>
       </header>
@@ -1382,11 +1382,11 @@ function BrowserPane() {
           <div className="space-y-1.5 mb-4">
             {status.browser && (
               <p className="text-[12px] text-[rgba(61,57,41,0.5)]">
-                <span className="text-[rgba(255,255,255,0.3)]">Browser:</span> {status.browser}
+                <span className="text-[rgba(61,57,41,0.4)]">Browser:</span> {status.browser}
               </p>
             )}
             <p className="text-[12px] text-[rgba(61,57,41,0.5)] font-mono break-all">
-              <span className="text-[rgba(255,255,255,0.3)]">CDP URL:</span> {status.cdpURL}
+              <span className="text-[rgba(61,57,41,0.4)]">CDP URL:</span> {status.cdpURL}
             </p>
           </div>
         )}
@@ -1415,8 +1415,8 @@ function BrowserPane() {
 
       {/* Shortcuts */}
       <h3 className="text-[15px] font-medium text-[#3d3929] mb-3">Shortcuts</h3>
-      <p className="text-[12px] text-[rgba(255,255,255,0.3)] mb-4">
-        YAML browser automation adapters in <code className="text-[rgba(255,255,255,0.45)]">~/.clawfirm/shortcuts/</code>.
+      <p className="text-[12px] text-[rgba(61,57,41,0.4)] mb-4">
+        YAML browser automation adapters in <code className="text-[rgba(61,57,41,0.5)]">~/.clawfirm/shortcuts/</code>.
         Requires Chrome connected via CDP.
       </p>
 
@@ -1432,7 +1432,7 @@ function BrowserPane() {
       </div>
 
       {shortcuts.length === 0 ? (
-        <p className="text-[13px] text-[rgba(255,255,255,0.3)]">No shortcuts found.</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No shortcuts found.</p>
       ) : (
         <div className="space-y-3">
           {shortcuts.map(sc => (
@@ -1450,7 +1450,7 @@ function BrowserPane() {
                       key={cmd}
                       onClick={() => runCmd(sc.file, cmd)}
                       disabled={!!runningCmd || !status?.connected}
-                      className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.12)] text-[rgba(240,237,229,0.7)] disabled:opacity-30 transition-colors font-mono"
+                      className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.65)] disabled:opacity-30 transition-colors font-mono"
                     >
                       {isRunning ? `${cmd}...` : cmd}
                     </button>
@@ -1470,7 +1470,7 @@ function BrowserPane() {
       )}
       {cmdResult && cmdResult.length > 0 && (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-[12px] text-[rgba(240,237,229,0.7)]">
+          <table className="w-full text-[12px] text-[rgba(61,57,41,0.65)]">
             <thead>
               <tr className="border-b border-[rgba(61,57,41,0.08)]">
                 {Object.keys(cmdResult[0]).map(k => (
@@ -1583,7 +1583,7 @@ function WhipflowPane() {
               className={`w-full text-left px-4 py-2 text-[12.5px] truncate transition-colors ${
                 selectedFile === f
                   ? "bg-[rgba(61,57,41,0.08)] text-[#3d3929]"
-                  : "text-[rgba(255,255,255,0.55)] hover:bg-[rgba(61,57,41,0.04)] hover:text-[#3d3929]"
+                  : "text-[rgba(61,57,41,0.55)] hover:bg-[rgba(61,57,41,0.04)] hover:text-[#3d3929]"
               }`}
             >
               <span className="text-[rgba(61,57,41,0.2)] mr-1">⚡</span>{basename(f)}
@@ -1595,7 +1595,7 @@ function WhipflowPane() {
         <div className="border-t border-[rgba(61,57,41,0.1)]">
           <button
             onClick={() => setCfgOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(255,255,255,0.6)] transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.7)] transition-colors"
           >
             <span className="font-semibold uppercase tracking-wider">Config</span>
             <span>{cfgOpen ? "▲" : "▼"}</span>
@@ -1644,7 +1644,7 @@ function WhipflowPane() {
         {selectedFile ? (
           <>
             <div className="px-5 py-3 border-b border-[rgba(61,57,41,0.1)] flex items-center gap-2">
-              <span className="text-[rgba(255,255,255,0.4)] text-[12px]">⚡</span>
+              <span className="text-[rgba(61,57,41,0.5)] text-[12px]">⚡</span>
               <span className="text-[13px] font-medium text-[#3d3929]">{basename(selectedFile)}</span>
               <span className="text-[11px] text-[rgba(61,57,41,0.2)] ml-1 truncate">{selectedFile}</span>
             </div>
@@ -1652,7 +1652,7 @@ function WhipflowPane() {
               {fileError ? (
                 <p className="text-[12px] text-red-400">{fileError}</p>
               ) : (
-                <div className="bg-[rgba(0,0,0,0.25)] rounded-xl p-4 border border-[rgba(61,57,41,0.08)]">
+                <div className="bg-[rgba(61,57,41,0.06)] rounded-xl p-4 border border-[rgba(61,57,41,0.08)]">
                   <WhipHighlight code={fileContent} />
                 </div>
               )}
@@ -1699,7 +1699,7 @@ function SettingsPane() {
     <div className="p-8 h-full flex flex-col">
       <header className="mb-6 flex-shrink-0">
         <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Settings</h2>
-        <p className="text-[13px] text-[rgba(255,255,255,0.3)] mt-1 font-mono">{filePath}</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.4)] mt-1 font-mono">{filePath}</p>
       </header>
       <textarea
         value={content}
@@ -1756,7 +1756,7 @@ function WhatsAppCard() {
   const waMap: Record<string, { label: string; cls: string }> = {
     connected:    { label: "Connected",    cls: "bg-[rgba(52,199,89,0.15)] text-emerald-400" },
     qr_pending:   { label: "Scan QR",      cls: "bg-[rgba(255,179,64,0.15)] text-amber-400" },
-    disconnected: { label: "Disconnected", cls: "bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.4)]" },
+    disconnected: { label: "Disconnected", cls: "bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)]" },
     logged_out:   { label: "Logged out",   cls: "bg-[rgba(255,69,58,0.15)] text-red-400" },
     disabled:     { label: "Disabled",     cls: "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.2)]" },
   };
@@ -1773,18 +1773,18 @@ function WhatsAppCard() {
           <img src={qrURL} alt="QR" className="w-44 h-44 rounded-xl border border-[rgba(61,57,41,0.12)]" />
         </div>
       )}
-      {status === "qr_pending" && !qrURL && <p className="text-[11px] text-[rgba(255,255,255,0.3)] italic pt-1">Generating QR…</p>}
+      {status === "qr_pending" && !qrURL && <p className="text-[11px] text-[rgba(61,57,41,0.4)] italic pt-1">Generating QR…</p>}
       {status === "disabled" && (
-        <p className="text-[11px] text-[rgba(255,255,255,0.3)] pt-1">
+        <p className="text-[11px] text-[rgba(61,57,41,0.4)] pt-1">
           Set <code className="font-mono bg-[rgba(61,57,41,0.08)] px-1 rounded">whatsapp.enabled: true</code> in config.yml to enable.
         </p>
       )}
       {(status === "disconnected" || status === "logged_out") && (
-        <p className="text-[11px] text-[rgba(255,255,255,0.3)] italic pt-1">
+        <p className="text-[11px] text-[rgba(61,57,41,0.4)] italic pt-1">
           {status === "logged_out" ? "Logged out — restart app to pair again." : "Waiting for gateway…"}
         </p>
       )}
-      {status === "connected" && <p className="text-[11px] text-[rgba(255,255,255,0.3)] pt-1">Connected and receiving messages.</p>}
+      {status === "connected" && <p className="text-[11px] text-[rgba(61,57,41,0.4)] pt-1">Connected and receiving messages.</p>}
     </Card>
   );
 }
@@ -1819,13 +1819,13 @@ function FeishuCard() {
     <Card title="飞书"
       badge={configured
         ? <Badge label="已配置" cls="bg-[rgba(52,199,89,0.15)] text-emerald-400" />
-        : <Badge label="未配置" cls="bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.4)]" />}
+        : <Badge label="未配置" cls="bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)]" />}
       action={configured && !editing
         ? <button onClick={() => setEditing(true)} className="text-[11px] text-[#c85a2a] hover:text-[#5aa3fb]">修改</button>
         : null}>
       {(!configured || editing) ? (
         <div className="space-y-3 pt-1">
-          <p className="text-[11px] text-[rgba(255,255,255,0.3)]">企业自建应用，开启消息事件订阅（长连接）。</p>
+          <p className="text-[11px] text-[rgba(61,57,41,0.4)]">企业自建应用，开启消息事件订阅（长连接）。</p>
           <div>
             <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">App ID</label>
             <input type="text" placeholder="cli_xxxxxxxxxxxx" value={appID} onChange={(e) => setAppID(e.target.value)}
@@ -1853,7 +1853,7 @@ function FeishuCard() {
       ) : (
         <div className="pt-1">
           <p className="text-[13px] text-[rgba(61,57,41,0.5)]">App ID: <span className="font-mono text-[#3d3929] text-[11px]">{appID}</span></p>
-          <p className="mt-1 text-[11px] text-[rgba(255,255,255,0.3)]">通过 WebSocket 长连接接收消息，无需公网地址。</p>
+          <p className="mt-1 text-[11px] text-[rgba(61,57,41,0.4)]">通过 WebSocket 长连接接收消息，无需公网地址。</p>
         </div>
       )}
     </Card>

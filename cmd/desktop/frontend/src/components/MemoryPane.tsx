@@ -38,7 +38,7 @@ export function MemoryPane() {
             className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
               tab === t
                 ? "bg-[rgba(200,90,42,0.15)] text-[#c85a2a]"
-                : "text-[rgba(240,237,229,0.5)] hover:bg-[rgba(61,57,41,0.05)] hover:text-[#3d3929]"
+                : "text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.05)] hover:text-[#3d3929]"
             }`}>
             {t === "files" ? "Files" : "Search"}
           </button>
@@ -185,7 +185,7 @@ function FilesTab() {
                   : "hover:bg-[rgba(61,57,41,0.05)]"
               }`}>
               <div className="min-w-0">
-                <p className={`text-[12px] font-medium truncate ${selected?.path === f.path ? "text-[#c85a2a]" : "text-[rgba(240,237,229,0.8)]"}`}>{f.name}</p>
+                <p className={`text-[12px] font-medium truncate ${selected?.path === f.path ? "text-[#c85a2a]" : "text-[rgba(61,57,41,0.8)]"}`}>{f.name}</p>
                 <p className="text-[10px] text-[rgba(61,57,41,0.2)] mt-0.5">{f.chunkCount} chunk{f.chunkCount !== 1 ? "s" : ""}</p>
               </div>
               <button onClick={(e) => { e.stopPropagation(); handleDelete(f); }}
@@ -294,14 +294,14 @@ function SearchResultCard({ result }: { result: MemorySearchResult }) {
 
   return (
     <div className="rounded-xl bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)] overflow-hidden">
-      <button className="w-full text-left px-4 py-3 hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+      <button className="w-full text-left px-4 py-3 hover:bg-[rgba(61,57,41,0.04)] transition-colors"
         onClick={() => setExpanded(!expanded)}>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[12px] font-mono text-[rgba(255,255,255,0.45)] truncate">
+            <p className="text-[12px] font-mono text-[rgba(61,57,41,0.5)] truncate">
               {result.filePath.split("/").pop()} · lines {result.startLine}–{result.endLine}
             </p>
-            <p className="text-[13px] text-[rgba(240,237,229,0.8)] mt-0.5 line-clamp-2 leading-snug">
+            <p className="text-[13px] text-[rgba(61,57,41,0.8)] mt-0.5 line-clamp-2 leading-snug">
               {result.content.slice(0, 160)}{result.content.length > 160 ? "…" : ""}
             </p>
           </div>

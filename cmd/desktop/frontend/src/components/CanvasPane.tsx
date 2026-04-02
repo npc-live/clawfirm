@@ -226,7 +226,7 @@ export function CanvasPane() {
           title="Bind a cell to ~/.clawfirm/canvas/<name>.html — auto-refreshes when file changes">
           + File Cell
         </button>
-        <span className="text-[rgba(255,255,255,0.18)] text-[11px]">or double-click</span>
+        <span className="text-[rgba(61,57,41,0.25)] text-[11px]">or double-click</span>
         <div className="w-px h-4 bg-[rgba(61,57,41,0.08)]" />
         <span className="text-[11px] text-[rgba(61,57,41,0.3)] tabular-nums">{Math.round(zoom * 100)}%</span>
         <button
@@ -263,7 +263,7 @@ export function CanvasPane() {
             />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setNewFilePrompt(false)}
-                className="px-3 py-1.5 rounded-lg text-[12px] text-[rgba(255,255,255,0.45)] hover:text-[rgba(255,255,255,0.7)] transition-colors">
+                className="px-3 py-1.5 rounded-lg text-[12px] text-[rgba(61,57,41,0.5)] hover:text-[rgba(61,57,41,0.65)] transition-colors">
                 Cancel
               </button>
               <button
@@ -312,7 +312,7 @@ export function CanvasPane() {
             <p className="text-[14px] text-[rgba(61,57,41,0.3)]">
               {ready ? "Double-click to create a cell" : "Loading agents…"}
             </p>
-            <p className="text-[12px] text-[rgba(255,255,255,0.18)]">Scroll to zoom · Drag to pan</p>
+            <p className="text-[12px] text-[rgba(61,57,41,0.25)]">Scroll to zoom · Drag to pan</p>
           </div>
         </div>
       )}
@@ -507,7 +507,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
       className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
         tab === t
           ? "bg-[rgba(200,90,42,0.2)] text-[#c85a2a]"
-          : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(255,255,255,0.7)]"
+          : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.65)]"
       }`}>
       {label}{badge != null && badge > 0 ? ` (${badge})` : ""}
     </button>
@@ -537,7 +537,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
           transformOrigin: "top left",
           border: focused
             ? "1.5px solid rgba(200,90,42,0.45)"
-            : "1.5px solid rgba(255,255,255,0.09)",
+            : "1.5px solid rgba(61,57,41,0.1)",
           background: "rgb(28,28,26)",
         }}
       >
@@ -571,7 +571,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
           <button
             onClick={e => { e.stopPropagation(); onUpdate({ minimized: !node.minimized }); }}
             title={node.minimized ? "Expand" : "Minimize"}
-            className="text-[rgba(61,57,41,0.3)] hover:text-[rgba(255,255,255,0.65)] transition-colors w-5 h-5 flex items-center justify-center text-[11px]">
+            className="text-[rgba(61,57,41,0.3)] hover:text-[rgba(61,57,41,0.6)] transition-colors w-5 h-5 flex items-center justify-center text-[11px]">
             {node.minimized ? "⬜" : "—"}
           </button>
           <button
@@ -634,8 +634,8 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                     onKeyDown={e => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
                     }}
-                    className="flex-1 bg-[rgba(61,57,41,0.05)] border border-[rgba(255,255,255,0.09)] rounded-lg
-                      px-3 py-1.5 text-[12px] text-[#3d3929] placeholder-[rgba(255,255,255,0.22)]
+                    className="flex-1 bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.1)] rounded-lg
+                      px-3 py-1.5 text-[12px] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]
                       focus:outline-none focus:border-[rgba(200,90,42,0.4)] resize-none overflow-y-auto"
                     style={{ minHeight: "32px", maxHeight: "100px" }}
                   />

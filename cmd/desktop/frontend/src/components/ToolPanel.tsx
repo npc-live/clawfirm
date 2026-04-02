@@ -72,13 +72,13 @@ function CollapsibleJSON({ label, data }: { label: string; data: any }) {
     <div className="mt-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(255,255,255,0.6)] flex items-center gap-1 transition-colors"
+        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.55)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         {label}
       </button>
       {open && (
-        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(255,255,255,0.03)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono">
+        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono">
           {text}
         </pre>
       )}
@@ -131,13 +131,13 @@ function WhipflowSource({ exec }: { exec: ToolExecution }) {
     <div className="mt-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(255,255,255,0.6)] flex items-center gap-1 transition-colors"
+        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.55)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         {label}
       </button>
       {open && content && (
-        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(255,255,255,0.03)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
+        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
           {content}
         </pre>
       )}
@@ -186,7 +186,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
     ? "border-[rgba(200,90,42,0.3)] bg-[rgba(200,90,42,0.04)]"
     : isError
     ? "border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.04)]"
-    : "border-[rgba(61,57,41,0.08)] bg-[rgba(255,255,255,0.03)]";
+    : "border-[rgba(61,57,41,0.08)] bg-[rgba(61,57,41,0.04)]";
 
   const label = step.name
     ? `#${step.index + 1} · ${step.name}`
@@ -195,7 +195,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
   return (
     <div className={`rounded-lg border overflow-hidden ${borderCls}`}>
       <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[rgba(61,57,41,0.04)] transition-colors"
         onClick={() => setOpen((o) => !o)}
       >
         {/* Status dot */}
@@ -207,7 +207,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
           <span className="text-red-400 text-[12px] flex-shrink-0">✗</span>
         )}
         {/* Label */}
-        <span className="flex-1 text-[12px] text-[rgba(240,237,229,0.8)] font-medium truncate">
+        <span className="flex-1 text-[12px] text-[rgba(61,57,41,0.8)] font-medium truncate">
           {label}
         </span>
         {/* Provider badge */}
@@ -240,7 +240,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
           {/* Prompt */}
           <div>
             <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Prompt</p>
-            <pre className="text-[11px] text-[rgba(240,237,229,0.6)] bg-[rgba(255,255,255,0.03)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto font-mono leading-relaxed">
+            <pre className="text-[11px] text-[rgba(61,57,41,0.55)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto font-mono leading-relaxed">
               {step.prompt}
             </pre>
           </div>
@@ -248,7 +248,7 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
           {step.output && (
             <div>
               <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Output</p>
-              <pre className="text-[11px] text-[rgba(240,237,229,0.75)] bg-[rgba(255,255,255,0.03)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
+              <pre className="text-[11px] text-[rgba(61,57,41,0.7)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
                 {step.output}
               </pre>
             </div>
@@ -294,7 +294,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
     <div className="flex-shrink-0 border-b border-[rgba(61,57,41,0.08)]">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(255,255,255,0.03)] transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(61,57,41,0.04)] transition-colors"
       >
         {/* Status icon */}
         {hasRunning ? (
@@ -327,7 +327,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 
 export function ToolPanel({ executions, onRetryFromSession, whipflowArgs }: Props) {
   return (
-    <div className="flex flex-col h-full bg-[rgb(26,26,24)] text-[#3d3929]">
+    <div className="flex flex-col h-full bg-[#ece5d8] text-[#3d3929]">
       {/* Task summary bar */}
       <TaskSummaryBar executions={executions} />
 
