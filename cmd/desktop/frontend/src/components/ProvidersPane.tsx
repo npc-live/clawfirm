@@ -242,7 +242,7 @@ export function ProvidersPane() {
               {saving ? "Saving…" : "Save"}
             </button>
             <button onClick={cancelEdit}
-              className="px-4 py-2 bg-[rgba(61,57,41,0.08)] text-[rgba(255,255,255,0.6)] text-[13px] rounded-xl hover:bg-[rgba(61,57,41,0.12)] transition-colors">
+              className="px-4 py-2 bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.55)] text-[13px] rounded-xl hover:bg-[rgba(61,57,41,0.12)] transition-colors">
               Cancel
             </button>
           </div>
@@ -288,12 +288,12 @@ export function ProvidersPane() {
                 <button
                   onClick={() => handleTest(p.id)}
                   disabled={testing === p.id}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.8)] disabled:opacity-50 transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] disabled:opacity-50 transition-colors">
                   {testing === p.id ? "…" : "Test"}
                 </button>
                 <button
                   onClick={() => { startEdit(p); }}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(255,255,255,0.8)] transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] transition-colors">
                   Edit
                 </button>
                 {deleteConfirm === p.id ? (

@@ -587,7 +587,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                     />
                     <button
                       onClick={() => removeFile(i)}
-                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[rgba(0,0,0,0.7)] text-white text-[11px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[rgba(255,69,58,0.8)]"
+                      className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[rgba(61,57,41,0.7)] text-white text-[11px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-[rgba(220,50,40,0.8)]"
                     >
                       &times;
                     </button>
@@ -653,7 +653,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
               className={`px-4 py-2.5 text-[13px] font-medium transition-colors ${
                 activeTab === "tools"
                   ? "text-[#3d3929] border-b-2 border-[#c85a2a]"
-                  : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(255,255,255,0.6)]"
+                  : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.55)]"
               }`}
             >
               Tool Activity
@@ -664,7 +664,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                 activeTab === "preview"
                   ? "text-[#3d3929] border-b-2 border-[#c85a2a]"
                   : previewHtml
-                  ? "text-[rgba(61,57,41,0.4)] hover:text-[rgba(255,255,255,0.6)]"
+                  ? "text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.55)]"
                   : "text-[rgba(61,57,41,0.3)] cursor-not-allowed"
               }`}
             >
