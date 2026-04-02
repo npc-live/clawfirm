@@ -129,10 +129,11 @@ jobs:
 
       - name: Package (Windows → .zip)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
+          ls -la cmd/desktop/build/bin/
           cd cmd/desktop/build/bin
-          Compress-Archive -Path clawfirm.exe -DestinationPath clawfirm-windows-amd64.zip
+          7z a clawfirm-windows-amd64.zip clawfirm.exe
 
       # --- Upload artifact ---
       - name: Upload artifact
