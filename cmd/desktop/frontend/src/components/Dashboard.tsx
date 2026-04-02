@@ -1124,11 +1124,11 @@ function tokenizeWhip(line: string): React.ReactNode[] {
 
   return tokens.map((t, i) => {
     const cls =
-      t.type === "kw"     ? "text-[#7dd3fc] font-semibold" :
-      t.type === "str"    ? "text-[#86efac]" :
-      t.type === "interp" ? "text-[#fcd34d]" :
-      t.type === "num"    ? "text-[#f9a8d4]" :
-                            "text-[rgba(61,57,41,0.7)]";
+      t.type === "kw"     ? "text-[#9333ea] font-semibold" :
+      t.type === "str"    ? "text-[#16a34a]" :
+      t.type === "interp" ? "text-[#c85a2a]" :
+      t.type === "num"    ? "text-[#0284c7]" :
+                            "text-[#3d3929]";
     return <span key={i} className={cls}>{t.value}</span>;
   });
 }
