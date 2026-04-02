@@ -68,6 +68,8 @@ jobs:
       - name: Build func (macOS universal)
         if: runner.os == 'macOS'
         run: |
+          rm -f app/assets/func
+          mkdir -p bin
           GOOS=darwin GOARCH=arm64 go build -o bin/func-arm64 ./cmd/func
           GOOS=darwin GOARCH=amd64 go build -o bin/func-amd64 ./cmd/func
           lipo -create -output app/assets/func bin/func-arm64 bin/func-amd64
@@ -75,11 +77,16 @@ jobs:
 
       - name: Build func (Linux)
         if: runner.os == 'Linux'
-        run: go build -o app/assets/func ./cmd/func
+        run: |
+          rm -f app/assets/func
+          go build -o app/assets/func ./cmd/func
 
       - name: Build func (Windows)
         if: runner.os == 'Windows'
-        run: go build -o app/assets/func ./cmd/func
+        run: |
+          Remove-Item -Force app/assets/func -ErrorAction SilentlyContinue
+          go build -o app/assets/func.exe ./cmd/func
+          Move-Item -Force app/assets/func.exe app/assets/func
 
       # --- Wails build ---
       - name: Set version
