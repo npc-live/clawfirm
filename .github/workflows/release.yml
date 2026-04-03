@@ -198,6 +198,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -208,15 +212,9 @@ jobs:
         run: find artifacts -type f | sort
 
       - name: Move latest tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Update (or create) the latest tag via GitHub API
-          SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.ref_name }} --jq '.object.sha')
-          gh api repos/${{ github.repository }}/git/refs/tags/latest \
-            -X PATCH -f sha="$SHA" -F force=true 2>/dev/null || \
-          gh api repos/${{ github.repository }}/git/refs \
-            -X POST -f ref="refs/tags/latest" -f sha="$SHA"
+          git tag -f latest ${{ github.ref_name }}
+          git push origin latest --force
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
