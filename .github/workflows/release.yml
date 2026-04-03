@@ -207,6 +207,13 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f | sort
 
+      - uses: actions/checkout@v4
+
+      - name: Move latest tag
+        run: |
+          git tag -f latest
+          git push origin latest --force
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
