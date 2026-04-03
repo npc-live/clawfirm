@@ -214,7 +214,7 @@ jobs:
           # Update (or create) the latest tag via GitHub API
           SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.ref_name }} --jq '.object.sha')
           gh api repos/${{ github.repository }}/git/refs/tags/latest \
-            -X PATCH -f sha="$SHA" -f force=true 2>/dev/null || \
+            -X PATCH -f sha="$SHA" -F force=true 2>/dev/null || \
           gh api repos/${{ github.repository }}/git/refs \
             -X POST -f ref="refs/tags/latest" -f sha="$SHA"
 
