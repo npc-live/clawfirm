@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ai-gateway/clawfirm/app"
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/whipflow"
 )
@@ -42,7 +43,7 @@ func main() {
 			log.Fatalf("install-skills: %v", err)
 		}
 	case "version":
-		fmt.Println("clawfirm dev")
+		fmt.Println("clawfirm", app.Version)
 	case "help", "-h", "--help":
 		printUsage()
 	default:

@@ -114,6 +114,28 @@ jobs:
             -o clawfirm
         working-directory: cmd/desktop
 
+      # --- Build standalone CLI binary ---
+      - name: Build CLI (macOS universal)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p cli-out
+          GOOS=darwin GOARCH=arm64 go build -ldflags "-X github.com/ai-gateway/clawfirm/app.Version=${{ steps.version.outputs.version }}" -o cli-out/clawfirm-arm64 ./cmd/clawfirm
+          GOOS=darwin GOARCH=amd64 go build -ldflags "-X github.com/ai-gateway/clawfirm/app.Version=${{ steps.version.outputs.version }}" -o cli-out/clawfirm-amd64 ./cmd/clawfirm
+          lipo -create -output cli-out/clawfirm cli-out/clawfirm-arm64 cli-out/clawfirm-amd64
+          rm cli-out/clawfirm-arm64 cli-out/clawfirm-amd64
+
+      - name: Build CLI (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p cli-out
+          go build -ldflags "-X github.com/ai-gateway/clawfirm/app.Version=${{ steps.version.outputs.version }}" -o cli-out/clawfirm ./cmd/clawfirm
+
+      - name: Build CLI (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p cli-out
+          go build -ldflags "-X github.com/ai-gateway/clawfirm/app.Version=${{ steps.version.outputs.version }}" -o cli-out/clawfirm.exe ./cmd/clawfirm
+
       # --- Package ---
       - name: Package (macOS .app → .zip)
         if: runner.os == 'macOS'
@@ -121,11 +143,23 @@ jobs:
           cd cmd/desktop/build/bin
           ditto -c -k --keepParent clawfirm.app clawfirm-macos-universal.zip
 
+      - name: Package CLI (macOS → .tar.gz)
+        if: runner.os == 'macOS'
+        run: |
+          cd cli-out
+          tar czf clawfirm-cli-macos-universal.tar.gz clawfirm
+
       - name: Package (Linux → .tar.gz)
         if: runner.os == 'Linux'
         run: |
           cd cmd/desktop/build/bin
           tar czf clawfirm-linux-amd64.tar.gz clawfirm
+
+      - name: Package CLI (Linux → .tar.gz)
+        if: runner.os == 'Linux'
+        run: |
+          cd cli-out
+          tar czf clawfirm-cli-linux-amd64.tar.gz clawfirm
 
       - name: Package (Windows → .zip)
         if: runner.os == 'Windows'
@@ -135,14 +169,29 @@ jobs:
           mv clawfirm clawfirm.exe
           7z a clawfirm-windows-amd64.zip clawfirm.exe
 
-      # --- Upload artifact ---
-      - name: Upload artifact
+      - name: Package CLI (Windows → .zip)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd cli-out
+          7z a clawfirm-cli-windows-amd64.zip clawfirm.exe
+
+      # --- Upload artifacts ---
+      - name: Upload desktop artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             cmd/desktop/build/bin/*.zip
             cmd/desktop/build/bin/*.tar.gz
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}-cli
+          path: |
+            cli-out/*.zip
+            cli-out/*.tar.gz
 
   release:
     needs: build
@@ -169,26 +218,103 @@ jobs:
           body: |
             ## Clawfirm ${{ github.ref_name }}
 
-            Clawfirm - AI Gateway Desktop App
+            Clawfirm - AI Gateway Desktop App & CLI
 
             ### Downloads
 
-            Please select the appropriate package for your operating system:
+            #### Desktop App (GUI)
 
-            #### macOS
-            - **Universal (Apple Silicon + Intel)**: `clawfirm-macos-universal.zip`
+            | OS | Package |
+            |----|---------|
+            | macOS (Apple Silicon + Intel) | `clawfirm-macos-universal.zip` |
+            | Windows x64 | `clawfirm-windows-amd64.zip` |
+            | Linux x64 | `clawfirm-linux-amd64.tar.gz` |
 
-            #### Windows
-            - **x64**: `clawfirm-windows-amd64.zip`
+            #### CLI (command-line only)
 
-            #### Linux
-            - **x64**: `clawfirm-linux-amd64.tar.gz`
+            | OS | Package |
+            |----|---------|
+            | macOS (Apple Silicon + Intel) | `clawfirm-cli-macos-universal.tar.gz` |
+            | Windows x64 | `clawfirm-cli-windows-amd64.zip` |
+            | Linux x64 | `clawfirm-cli-linux-amd64.tar.gz` |
 
-            ### Installation Notes
+            ### Installation
 
-            - **macOS**: Unzip, drag to Applications. On first launch you may need to go to System Settings → Privacy & Security to allow the app
-            - **Windows**: Unzip and run `clawfirm.exe`. SmartScreen may block it — click "More info" → "Run anyway"
-            - **Linux**: Extract with `tar xzf clawfirm-linux-amd64.tar.gz` and run `./clawfirm`
+            #### Desktop App
+            - **macOS**: Unzip, drag to Applications. On first launch: System Settings → Privacy & Security → Allow
+            - **Windows**: Unzip and run `clawfirm.exe`. SmartScreen → "More info" → "Run anyway"
+            - **Linux**: `tar xzf clawfirm-linux-amd64.tar.gz && ./clawfirm`
+
+            #### CLI
+            ```bash
+            # macOS / Linux
+            tar xzf clawfirm-cli-*.tar.gz
+            sudo mv clawfirm /usr/local/bin/
+
+            # Windows: unzip and add clawfirm.exe to your PATH
+            ```
+
+            ---
+
+            ### WhipFlow — Running `.whip` Workflows
+
+            Clawfirm includes **WhipFlow**, an AI workflow engine using the OpenProse DSL.
+            Use `.whip` files to define multi-step, multi-agent tasks.
+
+            #### Quick Start
+
+            ```bash
+            # Run a workflow file
+            clawfirm run my-workflow.whip
+
+            # Run with a custom config
+            clawfirm run -config ./config.yml my-workflow.whip
+
+            # Install the WhipFlow skill for Claude Code
+            clawfirm install-skills
+            ```
+
+            #### Example: `hello.whip`
+
+            ```
+            agent worker:
+              provider: "claude-code"
+              model: sonnet
+              tools: ["bash", "read", "write"]
+              prompt: "You are a helpful assistant."
+
+            ask task: "What would you like me to do?"
+
+            let result = session: worker
+              prompt: "{task}"
+            ```
+
+            #### Key Concepts
+
+            | Concept | Syntax | Description |
+            |---------|--------|-------------|
+            | Agent | `agent name:` | Define an AI agent with provider, model, tools |
+            | Session | `session: agentName` | Spawn a subagent to execute a task |
+            | Variable | `let x = session ...` | Capture session output for later use |
+            | User Input | `ask key: "question?"` | Prompt user for input at runtime |
+            | Parallel | `parallel:` | Run multiple sessions concurrently |
+            | Loop | `loop until **condition** (max: N):` | AI-evaluated loop with safety limit |
+            | Choice | `choice **criteria**:` | AI-driven branching |
+            | Pipeline | `items \| map:` / `filter:` / `reduce:` | Functional data transformations |
+            | Error Handling | `try: ... catch: ... finally:` | Graceful error recovery |
+            | Skill | `skill commit` | Invoke a Claude Code skill |
+
+            #### Other CLI Commands
+
+            ```bash
+            clawfirm vault init              # Initialize encrypted secret vault
+            clawfirm vault set KEY=VALUE     # Store a secret
+            clawfirm skill search <query>    # Search the skill registry
+            clawfirm skill install <name>    # Install a skill
+            clawfirm version                 # Print version
+            ```
+
+            > Full language reference: see [SKILL.md](https://github.com/${{ github.repository }}/blob/main/cmd/clawfirm/SKILL.md)
 
             ---
 
