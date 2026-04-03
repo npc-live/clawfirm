@@ -216,6 +216,116 @@ jobs:
           git tag -f latest ${{ github.ref_name }}
           git push origin latest --force
 
+      - name: Write release body
+        run: |
+          cat > /tmp/release-body.md <<'BODY_EOF'
+          ## Clawfirm ${{ github.ref_name }}
+
+          Clawfirm - AI Gateway Desktop App & CLI
+
+          ### Downloads
+
+          #### Desktop App (GUI)
+
+          | OS | Package |
+          |----|---------|
+          | macOS (Apple Silicon + Intel) | `clawfirm-macos-universal.zip` |
+          | Windows x64 | `clawfirm-windows-amd64.zip` |
+          | Linux x64 | `clawfirm-linux-amd64.tar.gz` |
+
+          #### CLI (command-line only)
+
+          | OS | Package |
+          |----|---------|
+          | macOS (Apple Silicon + Intel) | `clawfirm-cli-macos-universal.tar.gz` |
+          | Windows x64 | `clawfirm-cli-windows-amd64.zip` |
+          | Linux x64 | `clawfirm-cli-linux-amd64.tar.gz` |
+
+          ### Installation
+
+          #### Desktop App
+          - **macOS**: Unzip, drag to Applications. On first launch: System Settings → Privacy & Security → Allow
+          - **Windows**: Unzip and run `clawfirm.exe`. SmartScreen → "More info" → "Run anyway"
+          - **Linux**: `tar xzf clawfirm-linux-amd64.tar.gz && ./clawfirm`
+
+          #### CLI
+          ```bash
+          # macOS / Linux
+          tar xzf clawfirm-cli-*.tar.gz
+          sudo mv clawfirm /usr/local/bin/
+
+          # Windows: unzip and add clawfirm.exe to your PATH
+          ```
+
+          ---
+
+          ### WhipFlow — Running `.whip` Workflows
+
+          Clawfirm includes **WhipFlow**, an AI workflow engine using the OpenProse DSL.
+          Use `.whip` files to define multi-step, multi-agent tasks.
+
+          #### Quick Start
+
+          ```bash
+          # Run a workflow file
+          clawfirm run my-workflow.whip
+
+          # Run with a custom config
+          clawfirm run -config ./config.yml my-workflow.whip
+
+          # Install the WhipFlow skill for Claude Code
+          clawfirm install-skills
+          ```
+
+          #### Example: `hello.whip`
+
+          ```
+          agent worker:
+            provider: "claude-code"
+            model: sonnet
+            tools: ["bash", "read", "write"]
+            prompt: "You are a helpful assistant."
+
+          ask task: "What would you like me to do?"
+
+          let result = session: worker
+            prompt: "{task}"
+          ```
+
+          #### Key Concepts
+
+          | Concept | Syntax | Description |
+          |---------|--------|-------------|
+          | Agent | `agent name:` | Define an AI agent with provider, model, tools |
+          | Session | `session: agentName` | Spawn a subagent to execute a task |
+          | Variable | `let x = session ...` | Capture session output for later use |
+          | User Input | `ask key: "question?"` | Prompt user for input at runtime |
+          | Parallel | `parallel:` | Run multiple sessions concurrently |
+          | Loop | `loop until **condition** (max: N):` | AI-evaluated loop with safety limit |
+          | Choice | `choice **criteria**:` | AI-driven branching |
+          | Pipeline | `items \| map:` / `filter:` / `reduce:` | Functional data transformations |
+          | Error Handling | `try: ... catch: ... finally:` | Graceful error recovery |
+          | Skill | `skill commit` | Invoke a Claude Code skill |
+
+          #### Other CLI Commands
+
+          ```bash
+          clawfirm vault init              # Initialize encrypted secret vault
+          clawfirm vault set KEY=VALUE     # Store a secret
+          clawfirm skill search <query>    # Search the skill registry
+          clawfirm skill install <name>    # Install a skill
+          clawfirm version                 # Print version
+          ```
+
+          > Full language reference: see [SKILL.md](https://github.com/${{ github.repository }}/blob/main/cmd/clawfirm/SKILL.md)
+
+          ---
+
+          Found an issue? Please submit an [Issue](https://github.com/${{ github.repository }}/issues)
+          BODY_EOF
+          # Strip leading whitespace from heredoc
+          sed -i 's/^          //' /tmp/release-body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -224,110 +334,7 @@ jobs:
           files: |
             artifacts/**/*.zip
             artifacts/**/*.tar.gz
-          body: |
-            ## Clawfirm ${{ github.ref_name }}
-
-            Clawfirm - AI Gateway Desktop App & CLI
-
-            ### Downloads
-
-            #### Desktop App (GUI)
-
-            | OS | Package |
-            |----|---------|
-            | macOS (Apple Silicon + Intel) | `clawfirm-macos-universal.zip` |
-            | Windows x64 | `clawfirm-windows-amd64.zip` |
-            | Linux x64 | `clawfirm-linux-amd64.tar.gz` |
-
-            #### CLI (command-line only)
-
-            | OS | Package |
-            |----|---------|
-            | macOS (Apple Silicon + Intel) | `clawfirm-cli-macos-universal.tar.gz` |
-            | Windows x64 | `clawfirm-cli-windows-amd64.zip` |
-            | Linux x64 | `clawfirm-cli-linux-amd64.tar.gz` |
-
-            ### Installation
-
-            #### Desktop App
-            - **macOS**: Unzip, drag to Applications. On first launch: System Settings → Privacy & Security → Allow
-            - **Windows**: Unzip and run `clawfirm.exe`. SmartScreen → "More info" → "Run anyway"
-            - **Linux**: `tar xzf clawfirm-linux-amd64.tar.gz && ./clawfirm`
-
-            #### CLI
-            ```bash
-            # macOS / Linux
-            tar xzf clawfirm-cli-*.tar.gz
-            sudo mv clawfirm /usr/local/bin/
-
-            # Windows: unzip and add clawfirm.exe to your PATH
-            ```
-
-            ---
-
-            ### WhipFlow — Running `.whip` Workflows
-
-            Clawfirm includes **WhipFlow**, an AI workflow engine using the OpenProse DSL.
-            Use `.whip` files to define multi-step, multi-agent tasks.
-
-            #### Quick Start
-
-            ```bash
-            # Run a workflow file
-            clawfirm run my-workflow.whip
-
-            # Run with a custom config
-            clawfirm run -config ./config.yml my-workflow.whip
-
-            # Install the WhipFlow skill for Claude Code
-            clawfirm install-skills
-            ```
-
-            #### Example: `hello.whip`
-
-            ```
-            agent worker:
-              provider: "claude-code"
-              model: sonnet
-              tools: ["bash", "read", "write"]
-              prompt: "You are a helpful assistant."
-
-            ask task: "What would you like me to do?"
-
-            let result = session: worker
-              prompt: "{task}"
-            ```
-
-            #### Key Concepts
-
-            | Concept | Syntax | Description |
-            |---------|--------|-------------|
-            | Agent | `agent name:` | Define an AI agent with provider, model, tools |
-            | Session | `session: agentName` | Spawn a subagent to execute a task |
-            | Variable | `let x = session ...` | Capture session output for later use |
-            | User Input | `ask key: "question?"` | Prompt user for input at runtime |
-            | Parallel | `parallel:` | Run multiple sessions concurrently |
-            | Loop | `loop until **condition** (max: N):` | AI-evaluated loop with safety limit |
-            | Choice | `choice **criteria**:` | AI-driven branching |
-            | Pipeline | `items \| map:` / `filter:` / `reduce:` | Functional data transformations |
-            | Error Handling | `try: ... catch: ... finally:` | Graceful error recovery |
-            | Skill | `skill commit` | Invoke a Claude Code skill |
-
-            #### Other CLI Commands
-
-            ```bash
-            clawfirm vault init              # Initialize encrypted secret vault
-            clawfirm vault set KEY=VALUE     # Store a secret
-            clawfirm skill search <query>    # Search the skill registry
-            clawfirm skill install <name>    # Install a skill
-            clawfirm version                 # Print version
-            ```
-
-            > Full language reference: see [SKILL.md](https://github.com/${{ github.repository }}/blob/main/cmd/clawfirm/SKILL.md)
-
-            ---
-
-            Found an issue? Please submit an [Issue](https://github.com/${{ github.repository }}/issues)
+          body_path: /tmp/release-body.md
 
       - name: Recreate latest release with assets
         env:
@@ -342,8 +349,6 @@ jobs:
           # Create new latest release with assets
           gh release create latest \
             --title "Latest Release (${{ github.ref_name }})" \
-            --notes "This release always points to the latest version: **${{ github.ref_name }}**
-
-          See full release notes: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" \
+            --notes-file /tmp/release-body.md \
             --latest=false \
             $FILES
