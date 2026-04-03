@@ -211,7 +211,7 @@ jobs:
 
       - name: Move latest tag
         run: |
-          git tag -f latest
+          git tag -f latest ${{ github.ref_name }}
           git push origin latest --force
 
       - name: Create GitHub Release
@@ -326,3 +326,24 @@ jobs:
             ---
 
             Found an issue? Please submit an [Issue](https://github.com/${{ github.repository }}/issues)
+
+      - name: Delete existing latest release
+        run: gh release delete latest --yes 2>/dev/null || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Latest Release (${{ github.ref_name }})"
+          draft: false
+          prerelease: false
+          make_latest: false
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.tar.gz
+          body: |
+            This release always points to the latest version: **${{ github.ref_name }}**
+
+            See full release notes: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
