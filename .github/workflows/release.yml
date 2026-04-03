@@ -207,12 +207,16 @@ jobs:
       - name: List artifacts
         run: find artifacts -type f | sort
 
-      - uses: actions/checkout@v4
-
       - name: Move latest tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git tag -f latest ${{ github.ref_name }}
-          git push origin latest --force
+          # Update (or create) the latest tag via GitHub API
+          SHA=$(gh api repos/${{ github.repository }}/git/ref/tags/${{ github.ref_name }} --jq '.object.sha')
+          gh api repos/${{ github.repository }}/git/refs/tags/latest \
+            -X PATCH -f sha="$SHA" -f force=true 2>/dev/null || \
+          gh api repos/${{ github.repository }}/git/refs \
+            -X POST -f ref="refs/tags/latest" -f sha="$SHA"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -334,15 +338,14 @@ jobs:
           # Delete old latest release (if any)
           gh release delete latest --yes 2>/dev/null || true
 
-          # Create new latest release
+          # Collect all asset files
+          FILES=$(find artifacts -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+
+          # Create new latest release with assets
           gh release create latest \
             --title "Latest Release (${{ github.ref_name }})" \
             --notes "This release always points to the latest version: **${{ github.ref_name }}**
 
           See full release notes: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}" \
-            --latest=false
-
-          # Download assets from versioned release, then upload to latest
-          mkdir -p /tmp/latest-assets
-          gh release download ${{ github.ref_name }} --dir /tmp/latest-assets
-          gh release upload latest /tmp/latest-assets/* --clobber
+            --latest=false \
+            $FILES
