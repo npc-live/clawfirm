@@ -18,6 +18,7 @@ func (n *Noop) ConcurrencySafe() bool            { return true }
 func (w *WebSearch) ConcurrencySafe() bool        { return true }
 func (s *SubAgent) ConcurrencySafe() bool         { return true }
 func (m *MediaUnderstand) ConcurrencySafe() bool  { return true }
+func (m *MediaGen) ConcurrencySafe() bool         { return true }
 
 // --- Unsafe tools ---
 
@@ -60,3 +61,4 @@ func (w *WebSearch) ShouldDefer() bool     { return true }
 func (a *AskUser) ShouldDefer() bool       { return true }
 func (s *SubAgent) ShouldDefer() bool      { return true }
 func (m *MediaUnderstand) ShouldDefer() bool { return true }
+func (m *MediaGen) ShouldDefer() bool        { return true }

@@ -50,8 +50,24 @@ export function DeleteVaultEntry(arg1) {
   return window['go']['app']['App']['DeleteVaultEntry'](arg1);
 }
 
+export function DisableNgrok() {
+  return window['go']['app']['App']['DisableNgrok']();
+}
+
+export function DisableRemote() {
+  return window['go']['app']['App']['DisableRemote']();
+}
+
 export function EmitChannelStatus(arg1, arg2) {
   return window['go']['app']['App']['EmitChannelStatus'](arg1, arg2);
+}
+
+export function EnableNgrok(arg1) {
+  return window['go']['app']['App']['EnableNgrok'](arg1);
+}
+
+export function EnableRemote() {
+  return window['go']['app']['App']['EnableRemote']();
 }
 
 export function GetAgentSkills(arg1) {
@@ -108,6 +124,10 @@ export function GetModels(arg1) {
 
 export function GetProviders() {
   return window['go']['app']['App']['GetProviders']();
+}
+
+export function GetRemoteStatus() {
+  return window['go']['app']['App']['GetRemoteStatus']();
 }
 
 export function GetSessions() {

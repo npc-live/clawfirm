@@ -1,0 +1,399 @@
+:root {
+  --bg: #0a0a0a;
+  --bg-card: #1a1a1a;
+  --bg-input: #2a2a2a;
+  --text: #e5e5e5;
+  --text-dim: #888;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --green: #22c55e;
+  --red: #ef4444;
+  --border: #333;
+  --radius: 12px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100dvh;
+  height: 100vh; /* fallback for older WebViews */
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ─── Bottom Nav ─────────────────────────────────────────────────────────── */
+
+.bottom-nav {
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  flex-shrink: 0;
+}
+
+.bottom-nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 11px;
+  gap: 2px;
+  transition: color 0.15s;
+}
+
+.bottom-nav a.active {
+  color: var(--accent);
+}
+
+.bottom-nav a svg {
+  width: 22px;
+  height: 22px;
+}
+
+/* ─── Cards ──────────────────────────────────────────────────────────────── */
+
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.card-subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-primary:active {
+  background: var(--accent-hover);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: white;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-full {
+  width: 100%;
+}
+
+/* ─── Input ──────────────────────────────────────────────────────────────── */
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+/* ─── Page Headers ───────────────────────────────────────────────────────── */
+
+.page-header {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-size: 15px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+/* ─── Status Dot ─────────────────────────────────────────────────────────── */
+
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-dot.online { background: var(--green); }
+.status-dot.offline { background: var(--red); }
+
+/* ─── Chat (full-screen, no bottom nav) ──────────────────────────────────── */
+
+.chat-fullscreen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  min-height: 0;
+}
+
+.message {
+  margin-bottom: 12px;
+  max-width: 85%;
+}
+
+.message.user {
+  margin-left: auto;
+}
+
+.message-bubble {
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message.user .message-bubble {
+  background: var(--accent);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message.assistant .message-bubble {
+  background: var(--bg-card);
+  border-bottom-left-radius: 4px;
+}
+
+.message-role {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  padding: 0 4px;
+}
+
+.chat-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.chat-input-bar .input {
+  flex: 1;
+}
+
+.chat-input-bar .btn {
+  padding: 10px 16px;
+}
+
+/* ─── Tool Events ────────────────────────────────────────────────────────── */
+
+.tool-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.tool-event .tool-name {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.tool-event.tool-running {
+  border-left: 3px solid var(--accent);
+}
+
+.tool-event.tool-done {
+  border-left: 3px solid var(--green);
+  opacity: 0.7;
+}
+
+.tool-event.tool-failed {
+  border-left: 3px solid var(--red);
+}
+
+.tool-status-done { color: var(--green); }
+.tool-status-failed { color: var(--red); }
+
+.tool-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.cursor-blink {
+  opacity: 0.5;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* ─── Scanner Active (transparent for camera) ───────────────────────────── */
+
+html.scanner-active,
+html.scanner-active body,
+html.scanner-active #root,
+html.scanner-active .app-layout,
+html.scanner-active .page,
+html.scanner-active .scan-area,
+html.scanner-active .bottom-nav {
+  background: transparent !important;
+}
+
+/* ─── Scan Page ──────────────────────────────────────────────────────────── */
+
+.scan-area {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: 40px 20px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.scan-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.device-list {
+  margin-top: 16px;
+}
+
+.device-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+}
+
+.device-item .device-info {
+  flex: 1;
+}
+
+.device-item .device-name {
+  font-weight: 500;
+}
+
+.device-item .device-url {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+
+/* ─── Canvas ─────────────────────────────────────────────────────────────── */
+
+.canvas-viewer {
+  width: 100%;
+  height: calc(100vh - 120px);
+  border: none;
+  border-radius: var(--radius);
+  background: white;
+}
+
+/* ─── Empty State ────────────────────────────────────────────────────────── */
+
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}

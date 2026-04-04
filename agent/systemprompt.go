@@ -57,12 +57,65 @@ const sectionToolCallStyle = `## Tool Call Style
 You can call tools multiple times in sequence to complete a task. When a task requires several steps (e.g., read a reference file then write code), execute each step with the appropriate tool — do not stop after reading and just describe what should be done.
 
 However, only do what the user asked for. Do NOT add extra steps the user did not request:
-- "写个 whipflow" → read reference + write the file. Do NOT run or validate it unless asked.
 - "运行这个工作流" → run it. Do NOT rewrite it first unless it fails.
 - "帮我修bug" → investigate + fix. Do NOT refactor surrounding code.
 
 - Always confirm destructive actions (file deletion, branch reset) before proceeding.
-- Emit a brief explanation before each tool call so the user understands what you are doing.`
+- Emit a brief explanation before each tool call so the user understands what you are doing.
+
+## WhipFlow (Auto-Workflow)
+
+**必须使用 whipflow 的场景**（不要自己用 bash/tool 逐步做）：
+- 调研、对比、竞品分析（需要多轮独立搜索+汇总）
+- "写报告"、"写分析" 等需要先收集再整合的任务
+- 用户明确要求多步骤执行的任务
+- 任何需要 2 个以上独立 AI session 的工作
+
+**不需要 whipflow 的场景**：
+- 翻译、总结、问答等单步任务
+- 简单的文件读写、代码修改
+- 用户明确说"直接回答"
+
+### 使用方法
+1. 生成 .whip 源码
+2. 立即调用 whipflow_run(mode="auto", source=...)
+3. 系统自动判断：简单任务直接执行，复杂任务返回预览
+
+**当 whipflow_run 返回预览（type="whipflow_preview"）时：**
+- UI 已经在工具面板显示了预览卡片和 Run 按钮，用户直接点击即可
+- **不要**在 chat 里问"确认执行吗？"或"输入'是'继续"之类的话
+- 只需简短说明计划内容（1-2句），然后停止，等待用户点击 Run 按钮
+
+### .whip 语法速查
+` + "`" + `` + "`" + `` + "`" + `
+# 顺序执行多个 session
+let step1 = session "搜索并整理 Go Gin 框架的优缺点"
+let step2 = session "搜索并整理 Go Echo 框架的优缺点"
+let step3 = session "搜索并整理 Go Fiber 框架的优缺点"
+let report = session "根据以下调研结果写对比报告：\n{step1}\n{step2}\n{step3}"
+
+# 并行执行
+parallel:
+  let a = session "调研方案A"
+  let b = session "调研方案B"
+
+# 用户输入
+ask topic: "请输入调研主题"
+let result = session "调研 {topic}"
+` + "`" + `` + "`" + `` + "`" + `
+
+**重要**：
+- 生成 .whip 后必须立即调用 whipflow_run(mode="auto")，不要输出裸代码块让用户看。
+- 不要在 .whip 中指定 provider。不要写 ` + "`" + `provider: "claude-code"` + "`" + ` 之类的硬编码。
+- 当 session 需要使用工具（如联网搜索、读写文件、执行命令）时，必须在 .whip 顶部定义 agent 并声明所需工具，例如：
+` + "`" + `` + "`" + `` + "`" + `
+agent researcher:
+  tools: [process, read, write]
+
+let result = session(researcher) "搜索并整理..."
+` + "`" + `` + "`" + `` + "`" + `
+- 不需要工具的纯文本生成/总结 session 直接写 ` + "`" + `session "..."` + "`" + ` 即可，无需定义 agent。
+- 当用户要求"写个 whipflow"时，读取 whipflow skill 参考语法后写文件，不要自动运行。`
 
 const sectionSafety = `## Safety
 

@@ -33,6 +33,8 @@ func main() {
 	switch os.Args[1] {
 	case "run":
 		runWhip(os.Args[2:])
+	case "validate":
+		runValidate(os.Args[2:])
 	case "vault":
 		runVault(os.Args[2:])
 	case "skill":
@@ -58,6 +60,7 @@ func printUsage() {
 
 Commands:
   run <file.whip>          Run a WhipFlow workflow
+  validate <file.whip>     Validate a WhipFlow workflow (parse + semantic check)
   vault <subcommand>       Encrypted secret vault (init, set, get, list, ...)
   skill search <query>     Search the remote skill registry
   skill install <name>     Install a skill from the registry
@@ -106,6 +109,58 @@ func runWhip(args []string) {
 	for _, output := range result.Outputs {
 		fmt.Println(output)
 	}
+}
+
+func runValidate(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: clawfirm validate <file.whip> [<file2.whip> ...]")
+		os.Exit(1)
+	}
+
+	hasErrors := false
+	for _, filePath := range args {
+		source, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", filePath, err)
+			hasErrors = true
+			continue
+		}
+
+		program, parseErrors := whipflow.Parse(string(source))
+		if len(parseErrors) > 0 {
+			for _, e := range parseErrors {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", filePath, e)
+			}
+			hasErrors = true
+			continue
+		}
+
+		vResult := whipflow.Validate(program)
+		if !vResult.Valid {
+			for _, e := range vResult.Errors {
+				fmt.Fprintf(os.Stderr, "%s: %s\n", filePath, e.Message)
+			}
+			hasErrors = true
+			continue
+		}
+
+		// Also show complexity analysis.
+		analysis := whipflow.AnalyzeComplexity(program)
+		fmt.Printf("%s: OK (%s, %d session%s)\n",
+			filePath, analysis.Tier, analysis.SessionCount,
+			plural(analysis.SessionCount))
+	}
+
+	if hasErrors {
+		os.Exit(1)
+	}
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func installSkills(force bool) error {

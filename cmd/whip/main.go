@@ -29,6 +29,7 @@ func main() {
 	args := flag.Args()
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: whip [flags] <file.whip>")
+		fmt.Fprintln(os.Stderr, "       whip validate <file.whip> [...]")
 		fmt.Fprintln(os.Stderr, "       whip install-skills [--force]")
 		os.Exit(1)
 	}
@@ -38,6 +39,11 @@ func main() {
 		if err := installSkills(force); err != nil {
 			log.Fatalf("install-skills: %v", err)
 		}
+		return
+	}
+
+	if args[0] == "validate" {
+		runValidate(args[1:])
 		return
 	}
 
@@ -56,6 +62,57 @@ func main() {
 	for _, output := range result.Outputs {
 		fmt.Println(output)
 	}
+}
+
+func runValidate(args []string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: whip validate <file.whip> [<file2.whip> ...]")
+		os.Exit(1)
+	}
+
+	hasErrors := false
+	for _, filePath := range args {
+		source, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", filePath, err)
+			hasErrors = true
+			continue
+		}
+
+		program, parseErrors := whipflow.Parse(string(source))
+		if len(parseErrors) > 0 {
+			for _, e := range parseErrors {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", filePath, e)
+			}
+			hasErrors = true
+			continue
+		}
+
+		vResult := whipflow.Validate(program)
+		if !vResult.Valid {
+			for _, e := range vResult.Errors {
+				fmt.Fprintf(os.Stderr, "%s: %s\n", filePath, e.Message)
+			}
+			hasErrors = true
+			continue
+		}
+
+		analysis := whipflow.AnalyzeComplexity(program)
+		fmt.Printf("%s: OK (%s, %d session%s)\n",
+			filePath, analysis.Tier, analysis.SessionCount,
+			plural(analysis.SessionCount))
+	}
+
+	if hasErrors {
+		os.Exit(1)
+	}
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func installSkills(force bool) error {

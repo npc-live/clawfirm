@@ -13,6 +13,7 @@ require (
 	github.com/wailsapp/wails/v2 v2.12.0
 	go.etcd.io/bbolt v1.4.3
 	go.mau.fi/whatsmeow v0.0.0-20260322133016-ce4daa5e5a86
+	golang.ngrok.com/ngrok/v2 v2.1.2
 	golang.org/x/term v0.41.0
 	gonum.org/v1/gonum v0.13.0
 	google.golang.org/protobuf v1.36.11
@@ -32,6 +33,7 @@ require (
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/jchv/go-winloader v0.0.0-20210711035445-715c2860da7e // indirect
+	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/labstack/echo/v4 v4.13.3 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/leaanthony/go-ansi-parser v1.6.1 // indirect
@@ -55,6 +57,8 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	go.mau.fi/libsignal v0.2.1 // indirect
 	go.mau.fi/util v0.9.6 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
+	golang.ngrok.com/muxado/v2 v2.0.1 // indirect
 	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect

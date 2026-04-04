@@ -1,0 +1,119 @@
+platform: channels
+login_url: https://channels.weixin.qq.com
+login_check:
+  cookie: myuin
+
+# 视频号助手使用无界微前端（wujie-app），所有 DOM 在 shadow root 内。
+# 选择器统一通过 eval 操作 document.querySelector("wujie-app").shadowRoot。
+# 上传文件：先将 shadow root 内的 file input 移至顶层 document，再用 upload 步骤。
+
+commands:
+
+  post:
+    args: [video, title, desc]   # video: 本地视频路径（必填）
+    steps:
+      - open: "https://channels.weixin.qq.com/platform/post/create"
+      - wait: 3000
+      # 关闭可能出现的弹窗
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            ["我知道了","不保存","取消"].forEach(function(t){
+              var btn = [...sr.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === t; });
+              if(btn) btn.click();
+            });
+          })()
+      - wait: 1000
+      # 将 shadow root 内的 file input 暴露到顶层 document，以便 upload 步骤访问
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var fi = sr.querySelector("input[type=file][accept*=video]");
+            if(!fi) return "no file input";
+            fi.id = "__upload_input";
+            document.body.appendChild(fi);
+            return "ok";
+          })()
+      # 上传视频
+      - upload:
+          selector: "#__upload_input"
+          file: "{{video}}"
+      # 等待上传完成（发表按钮可用）
+      - wait_until:
+          eval: >-
+            (function(){
+              var sr = document.querySelector("wujie-app").shadowRoot;
+              var btn = [...sr.querySelectorAll("button")].find(function(b){
+                return b.textContent.trim() === "发表" && !b.disabled;
+              });
+              return !!btn;
+            })()
+          timeout: 600000
+          interval: 5000
+      - wait: 1500
+      # 填写视频描述（div.input-editor，contenteditable）
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var el = sr.querySelector(".input-editor");
+            if(!el) return "no desc editor";
+            el.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("insertText", false, "{{desc}}");
+            return "ok";
+          })()
+      - wait: 500
+      # 填写短标题（不超过16字符）
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var el = sr.querySelector("input[placeholder*=6-16]");
+            if(!el) return "no title input";
+            el.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            setter.call(el, "{{title}}");
+            el.dispatchEvent(new Event("input", {bubbles:true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 点击发表（用 accessibility ref @e20）
+      - click: "@e20"
+      - wait: 5000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - capture:
+          name: success
+          eval: >-
+            (function(){
+              return location.href.includes("/post/list") || location.href.includes("/platform/post");
+            })()
+      - return:
+          - field: 状态
+            value: "{{success === 'true' ? '✅ 发表成功' : '⚠️ 请检查页面'}}"
+          - field: 标题
+            value: "{{title}}"
+          - field: 描述
+            value: "{{desc}}"
+          - field: 跳转URL
+            value: "{{result_url}}"
+
+  list:
+    args: []
+    steps:
+      - open: "https://channels.weixin.qq.com/platform/post/list"
+      - wait: 4000
+      - capture:
+          name: items
+          eval: >-
+            (function(){
+              var sr = document.querySelector("wujie-app").shadowRoot;
+              var rows = [...sr.querySelectorAll(".finder-content-item, [class*=post-item]")];
+              return JSON.stringify(rows.slice(0,10).map(function(r){
+                var title = r.querySelector("[class*=title], h3, h4");
+                return {title: title ? title.textContent.trim().slice(0,50) : r.textContent.trim().slice(0,50)};
+              }));
+            })()
+      - return:
+          - field: 内容列表
+            value: "{{items}}"

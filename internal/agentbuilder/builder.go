@@ -375,6 +375,12 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 			Provider: mediaProvider,
 			Model:    cfg.Media.Model,
 		},
+		// Image generation — shares API key with media_understand.
+		"media_gen": &builtin.MediaGen{
+			Provider: resolveMediaProviderType(cfg),
+			Model:    cfg.ImageGen.Model,
+			APIKey:   resolveMediaAPIKey(cfg),
+		},
 	}
 
 	out := make([]tool.AgentTool, 0, len(names)+1)
@@ -409,6 +415,32 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 	})
 
 	return out
+}
+
+// resolveMediaAPIKey returns the API key for the media provider (used by both
+// media_understand and media_gen so they share the same credential).
+func resolveMediaAPIKey(cfg *config.Config) string {
+	if cfg == nil || cfg.Media.Provider == "" {
+		return ""
+	}
+	if pc, ok := cfg.Providers[cfg.Media.Provider]; ok {
+		if pc.APIKey != "" {
+			return pc.APIKey
+		}
+	}
+	return os.Getenv(ProviderEnvVar(cfg.Media.Provider))
+}
+
+// resolveMediaProviderType returns the provider type string (e.g. "gemini", "openai")
+// for the media provider, falling back to the provider ID if Type is unset.
+func resolveMediaProviderType(cfg *config.Config) string {
+	if cfg == nil || cfg.Media.Provider == "" {
+		return ""
+	}
+	if pc, ok := cfg.Providers[cfg.Media.Provider]; ok && pc.Type != "" {
+		return pc.Type
+	}
+	return cfg.Media.Provider
 }
 
 // ProviderEnvVar returns the conventional env var name for a provider ID.

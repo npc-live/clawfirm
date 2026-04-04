@@ -25,6 +25,7 @@ import (
 	"github.com/ai-gateway/clawfirm/browser"
 	"github.com/ai-gateway/clawfirm/auth"
 	"github.com/ai-gateway/clawfirm/channel/feishu"
+	"github.com/ai-gateway/clawfirm/channel/remote"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
 	"github.com/ai-gateway/clawfirm/channel/whatsapp"
 	"github.com/ai-gateway/clawfirm/config"
@@ -87,6 +88,8 @@ type App struct {
 	cronScheduler  *picron.Scheduler
 	memoryMgr      *memory.Manager
 	vault          *vault.Vault
+	remoteSrv      *remote.Server
+	remoteCancel   context.CancelFunc
 }
 
 // New creates the App. Call wails.Run with a.OnStartup / a.OnShutdown.
@@ -246,6 +249,24 @@ func migrateVault(db *store.DB) {
 	log.Printf("app: vault migrate: migrated %d entries to encrypted vault", len(entries))
 }
 
+// initAppLog redirects the default logger to ~/.clawfirm/app.log (append mode).
+// Output is also mirrored to stderr so `wails dev` / terminal runs still show logs.
+func initAppLog() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	logPath := filepath.Join(home, ".clawfirm", "app.log")
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return
+	}
+	w := io.MultiWriter(f, os.Stderr)
+	log.SetOutput(w)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+	log.Printf("app: log started → %s", logPath)
+}
+
 // initUserDirs creates ~/.clawfirm and its subdirectories on first run,
 // and writes a minimal default config.yml if one does not exist yet.
 // It also extracts bundled binaries (e.g. func) to ~/.clawfirm/bin/.
@@ -369,6 +390,7 @@ func extractBuiltinAssets(src embed.FS, prefix, destDir string) {
 // OnStartup is called by Wails once the frontend webview is ready.
 func (a *App) OnStartup(ctx context.Context) {
 	initUserDirs()
+	initAppLog()
 	applySystemProxy()
 	a.ctx, a.cancelFn = context.WithCancel(ctx)
 
@@ -447,6 +469,14 @@ func (a *App) OnDomReady(_ context.Context) {}
 // OnShutdown is called when the application is shutting down.
 func (a *App) OnShutdown(_ context.Context) {
 	a.mu.Lock()
+	if a.remoteSrv != nil {
+		_ = a.remoteSrv.Stop()
+		a.remoteSrv = nil
+	}
+	if a.remoteCancel != nil {
+		a.remoteCancel()
+		a.remoteCancel = nil
+	}
 	if a.whatsappCancel != nil {
 		a.whatsappCancel()
 		a.whatsappCancel = nil
@@ -704,7 +734,17 @@ func (a *App) stopGateway() {
 	fsCancel := a.feishuCancel
 	a.feishuCh = nil
 	a.feishuCancel = nil
+	remoteSrv := a.remoteSrv
+	a.remoteSrv = nil
+	remoteCancel := a.remoteCancel
+	a.remoteCancel = nil
 	a.mu.Unlock()
+	if remoteSrv != nil {
+		_ = remoteSrv.Stop()
+	}
+	if remoteCancel != nil {
+		remoteCancel()
+	}
 	if waCancel != nil {
 		waCancel()
 	}
@@ -1521,6 +1561,174 @@ func (a *App) LogoutWhatsApp() error {
 		return nil
 	}
 	return ch.Logout(context.Background())
+}
+
+// ─── Remote Control ───────────────────────────────────────────────────────────
+
+// remoteLog writes a line to ~/.clawfirm/remote.log for debugging.
+func remoteLog(format string, args ...any) {
+	home, _ := os.UserHomeDir()
+	f, err := os.OpenFile(filepath.Join(home, ".clawfirm", "remote.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, time.Now().Format("15:04:05")+" "+format+"\n", args...)
+}
+
+// EnableRemote starts the remote-control server (LAN mode).
+func (a *App) EnableRemote() (remote.RemoteStatus, error) {
+	remoteLog("EnableRemote called")
+
+	a.mu.Lock()
+	if a.remoteSrv != nil {
+		st := a.remoteSrv.Status()
+		a.mu.Unlock()
+		remoteLog("already running, returning status")
+		return st, nil
+	}
+	registry := a.registry
+	db := a.db
+	cfg := a.cfg
+	a.mu.Unlock()
+
+	if registry == nil {
+		remoteLog("ERROR: registry is nil")
+		return remote.RemoteStatus{}, fmt.Errorf("gateway not running — configure agents first")
+	}
+
+	home, _ := os.UserHomeDir()
+	canvasDir := filepath.Join(home, ".clawfirm", "canvas")
+
+	remoteLog("creating server...")
+	srv := remote.NewServer(remote.Config{
+		Registry:        registry,
+		DB:              db,
+		Cfg:             cfg,
+		CanvasDir:       canvasDir,
+		ChannelStatusFn: a.channelStatusFunc(),
+	})
+
+	ctx, cancel := context.WithCancel(a.ctx)
+	remoteLog("starting server...")
+	if err := srv.Start(ctx); err != nil {
+		cancel()
+		remoteLog("ERROR start: %v", err)
+		return remote.RemoteStatus{}, err
+	}
+	remoteLog("Start() returned OK")
+
+	a.mu.Lock()
+	a.remoteSrv = srv
+	a.remoteCancel = cancel
+	a.mu.Unlock()
+	remoteLog("saved to app struct")
+
+	st := srv.Status()
+	remoteLog("Status() returned: enabled=%v LAN=%s port=%d QR=%d bytes", st.Enabled, st.LanURL, st.Port, len(st.QRCode))
+
+	// Serialize to JSON to verify it can be marshaled.
+	if data, err := json.Marshal(st); err != nil {
+		remoteLog("ERROR json.Marshal: %v", err)
+	} else {
+		remoteLog("JSON OK: %d bytes", len(data))
+	}
+
+	remoteLog("returning status to Wails")
+	return st, nil
+}
+
+// DisableRemote stops the remote-control server (including any ngrok tunnel).
+func (a *App) DisableRemote() error {
+	a.mu.Lock()
+	srv := a.remoteSrv
+	a.remoteSrv = nil
+	cancel := a.remoteCancel
+	a.remoteCancel = nil
+	a.mu.Unlock()
+
+	if srv != nil {
+		_ = srv.Stop()
+	}
+	if cancel != nil {
+		cancel()
+	}
+	return nil
+}
+
+// EnableNgrok starts an ngrok tunnel for cross-network access.
+// If the remote server is not running, it starts it first.
+func (a *App) EnableNgrok(authToken string) (remote.RemoteStatus, error) {
+	remoteLog("EnableNgrok called with token len=%d", len(authToken))
+
+	// Ensure the remote server is running first.
+	a.mu.RLock()
+	srv := a.remoteSrv
+	a.mu.RUnlock()
+
+	if srv == nil {
+		remoteLog("remote server not running, starting it first...")
+		st, err := a.EnableRemote()
+		if err != nil {
+			return st, err
+		}
+		a.mu.RLock()
+		srv = a.remoteSrv
+		a.mu.RUnlock()
+	}
+
+	remoteLog("starting ngrok tunnel...")
+	if err := srv.StartTunnel(a.ctx, authToken); err != nil {
+		remoteLog("ERROR ngrok: %v", err)
+		return remote.RemoteStatus{}, err
+	}
+	st := srv.Status()
+	remoteLog("ngrok OK: %s", st.NgrokURL)
+	return st, nil
+}
+
+// DisableNgrok stops the ngrok tunnel without affecting the LAN server.
+func (a *App) DisableNgrok() error {
+	a.mu.RLock()
+	srv := a.remoteSrv
+	a.mu.RUnlock()
+
+	if srv != nil {
+		srv.StopTunnel()
+	}
+	return nil
+}
+
+// GetRemoteStatus returns the current remote server status.
+func (a *App) GetRemoteStatus() remote.RemoteStatus {
+	a.mu.RLock()
+	srv := a.remoteSrv
+	a.mu.RUnlock()
+
+	if srv == nil {
+		return remote.RemoteStatus{}
+	}
+	return srv.Status()
+}
+
+// channelStatusFunc returns a callback that reports channel statuses
+// without creating a circular dependency on the channel packages.
+func (a *App) channelStatusFunc() func() []remote.ChannelStatus {
+	return func() []remote.ChannelStatus {
+		a.mu.RLock()
+		waCh := a.whatsappCh
+		fsCh := a.feishuCh
+		a.mu.RUnlock()
+
+		var out []remote.ChannelStatus
+		if waCh != nil {
+			out = append(out, remote.ChannelStatus{Name: "whatsapp", Status: waCh.GetStatus()})
+		}
+		if fsCh != nil {
+			out = append(out, remote.ChannelStatus{Name: "feishu", Status: "connected"})
+		}
+		return out
+	}
 }
 
 // ─── Skills RPC ───────────────────────────────────────────────────────────────

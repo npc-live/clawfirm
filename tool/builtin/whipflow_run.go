@@ -2,8 +2,10 @@ package builtin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/ai-gateway/clawfirm/config"
@@ -41,6 +43,11 @@ func (w *WhipflowRun) Schema() map[string]any {
 				"type":        "string",
 				"description": "Path to a .whip file to execute.",
 			},
+			"mode": map[string]any{
+				"type":        "string",
+				"enum":        []string{"auto", "execute", "preview"},
+				"description": "Execution mode. 'auto' (default): analyze complexity and auto-decide — simple tasks execute immediately, others return a preview. 'execute': run the workflow immediately (backward-compatible). 'preview': parse, validate, and return complexity analysis without executing.",
+			},
 			"user_inputs": map[string]any{
 				"type":        "object",
 				"description": "Required when the workflow has `ask` statements. Map of variable name → value. Example: if the whip has `ask asset_class: \"What asset class?\"`, pass {\"asset_class\": \"Real Estate\"}. Ask the user for these values before running.",
@@ -68,9 +75,21 @@ type WhipflowSessionStep struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// WhipflowPreview is the structured result returned when mode is "preview" or
+// "auto" for non-simple workflows. The frontend renders a StepPreviewCard.
+type WhipflowPreview struct {
+	Type     string                      `json:"type"` // always "whipflow_preview"
+	Analysis *whipflow.ComplexityAnalysis `json:"analysis"`
+	Source   string                      `json:"source"`
+}
+
 func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]any, onUpdate func(tool.ToolUpdate)) (tool.ToolResult, error) {
 	source, _ := params["source"].(string)
 	filePath, _ := params["file"].(string)
+	mode, _ := params["mode"].(string)
+	if mode == "" {
+		mode = "auto"
+	}
 
 	// Extract user_inputs (map[string]string) from params.
 	var userInputs map[string]string
@@ -190,6 +209,39 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 	}
 
 	if filePath != "" {
+		// For file mode, read & parse so we can analyze complexity when needed.
+		if mode == "preview" || mode == "auto" {
+			fileSource, readErr := readWhipFile(filePath)
+			if readErr != nil {
+				return tool.ToolResult{
+					Content: []types.ContentBlock{&types.TextContent{Text: fmt.Sprintf("Error reading file: %v", readErr)}},
+				}, nil
+			}
+			program, parseErrors := whipflow.Parse(fileSource)
+			if len(parseErrors) > 0 {
+				msgs := make([]string, len(parseErrors))
+				for i, e := range parseErrors {
+					msgs[i] = e.Error()
+				}
+				return tool.ToolResult{
+					Content: []types.ContentBlock{&types.TextContent{Text: "Parse errors:\n" + strings.Join(msgs, "\n")}},
+				}, nil
+			}
+			vResult := whipflow.Validate(program)
+			if !vResult.Valid {
+				msgs := make([]string, len(vResult.Errors))
+				for i, e := range vResult.Errors {
+					msgs[i] = e.Message
+				}
+				return tool.ToolResult{
+					Content: []types.ContentBlock{&types.TextContent{Text: "Validation errors:\n" + strings.Join(msgs, "\n")}},
+				}, nil
+			}
+			analysis := whipflow.AnalyzeComplexity(program)
+			if mode == "preview" || (mode == "auto" && shouldPreview(analysis)) {
+				return makePreviewResult(analysis, fileSource)
+			}
+		}
 		result, err = whipflow.RunFile(filePath, execOpts...)
 	} else {
 		program, parseErrors := whipflow.Parse(source)
@@ -212,6 +264,14 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 			return tool.ToolResult{
 				Content: []types.ContentBlock{&types.TextContent{Text: "Validation errors:\n" + strings.Join(msgs, "\n")}},
 			}, nil
+		}
+
+		// For auto/preview modes, analyze complexity before executing.
+		if mode == "preview" || mode == "auto" {
+			analysis := whipflow.AnalyzeComplexity(program)
+			if mode == "preview" || (mode == "auto" && shouldPreview(analysis)) {
+				return makePreviewResult(analysis, source)
+			}
 		}
 
 		result, err = whipflow.Execute(program, execOpts...)
@@ -247,4 +307,42 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 	return tool.ToolResult{
 		Content: []types.ContentBlock{&types.TextContent{Text: sb.String()}},
 	}, nil
+}
+
+// shouldPreview returns true when auto mode should return a preview instead of executing.
+func shouldPreview(a *whipflow.ComplexityAnalysis) bool {
+	if a.HasAsk {
+		return true
+	}
+	return a.Tier != whipflow.TierSimple
+}
+
+// makePreviewResult serialises a WhipflowPreview as the tool result.
+// Details is set to the preview struct (sent to frontend via tool_end event);
+// Content holds the JSON text (used by the agent loop as the tool response).
+func makePreviewResult(a *whipflow.ComplexityAnalysis, source string) (tool.ToolResult, error) {
+	preview := WhipflowPreview{
+		Type:     "whipflow_preview",
+		Analysis: a,
+		Source:   source,
+	}
+	data, err := json.Marshal(preview)
+	if err != nil {
+		return tool.ToolResult{
+			Content: []types.ContentBlock{&types.TextContent{Text: fmt.Sprintf("Failed to serialize preview: %v", err)}},
+		}, nil
+	}
+	return tool.ToolResult{
+		Content: []types.ContentBlock{&types.TextContent{Text: string(data)}},
+		Details: preview,
+	}, nil
+}
+
+// readWhipFile reads a .whip file and returns its content as a string.
+func readWhipFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

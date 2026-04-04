@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutions, type SkillInfo } from "../wailsjs/go/app/App";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
-import { ToolPanel, type ToolExecution, type WhipflowArgs } from "./ToolPanel";
+import { ToolPanel, type ToolExecution, type WhipflowArgs, isWhipflowPreview } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";
 
 interface AttachedFile {
@@ -205,6 +205,15 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
         return { ...t, partialResult: msg.partial_result };
       }));
     } else if (msg.type === "tool_end") {
+      // If the result is a whipflow_preview, apply the plan UI for ask handling.
+      if (msg.tool_result && typeof msg.tool_result === "string") {
+        try {
+          const parsed = JSON.parse(msg.tool_result);
+          if (isWhipflowPreview(parsed) && parsed.analysis.has_ask) {
+            applyWhipPlan(parsed.source);
+          }
+        } catch { /* not JSON, ignore */ }
+      }
       setToolExecutions((prev) => prev.map((t) =>
         t.id === msg.tool_call_id ? {
           ...t,
@@ -385,9 +394,31 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
         file: args.file,
         source: args.source,
         user_inputs: args.user_inputs,
+        mode: "execute",
         retry_from_session: sessionIndex,
       },
     }));
+  }
+
+  function handleConfirmWhipflow(source: string, userInputs?: Record<string, string>) {
+    if (wsStatus !== "open") return;
+    const callID = "confirm-preview-" + Date.now();
+    setIsStreaming(true);
+    setActiveTab("tools");
+    send(JSON.stringify({
+      type: "run_tool",
+      tool_name: "whipflow_run",
+      tool_id: callID,
+      tool_args: {
+        source,
+        mode: "execute",
+        ...(userInputs && Object.keys(userInputs).length > 0 ? { user_inputs: userInputs } : {}),
+      },
+    }));
+  }
+
+  function handleEditPreview(source: string) {
+    applyWhipPlan(source);
   }
 
   const statusColor =
@@ -467,7 +498,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                       const callID = "plan-" + Date.now();
                       setIsStreaming(true);
                       setActiveTab("tools");
-                      send(JSON.stringify({ type: "run_tool", tool_name: "whipflow_run", tool_id: callID, tool_args: { source: code, user_inputs: whipAskValues } }));
+                      send(JSON.stringify({ type: "run_tool", tool_name: "whipflow_run", tool_id: callID, tool_args: { source: code, mode: "execute", user_inputs: whipAskValues } }));
                     }}
                     disabled={isStreaming || wsStatus !== "open" || !whipAskReady}
                     className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#c85a2a] text-white hover:bg-[#a84a22] disabled:opacity-40 transition-colors"
@@ -674,7 +705,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           {/* Tab content */}
           <div className="flex-1 min-h-0">
             {activeTab === "tools" ? (
-              <ToolPanel executions={toolExecutions} onRetryFromSession={handleRetryFromSession} whipflowArgs={lastWhipflowArgs} />
+              <ToolPanel executions={toolExecutions} onRetryFromSession={handleRetryFromSession} onConfirmPreview={handleConfirmWhipflow} onEditPreview={handleEditPreview} whipflowArgs={lastWhipflowArgs} />
             ) : previewHtml ? (
               <div className="h-full p-3">
                 <HtmlPreview html={previewHtml} />

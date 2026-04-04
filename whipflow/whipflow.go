@@ -207,9 +207,9 @@ func RunFile(path string, opts ...Option) (*runtime.ExecutionResult, error) {
 		return nil, fmt.Errorf("whipflow: validation error: %s", vResult.Errors[0].Message)
 	}
 
-	// Default state store in ~/.whipflow/state.db
+	// Default state store in ~/.clawfirm/whipflow-state.db
 	homeDir, _ := os.UserHomeDir()
-	defaultStorePath := filepath.Join(homeDir, ".whipflow", "state.db")
+	defaultStorePath := filepath.Join(homeDir, ".clawfirm", "whipflow-state.db")
 
 	allOpts := []Option{
 		WithFileName(absPath),

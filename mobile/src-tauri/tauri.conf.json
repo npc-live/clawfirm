@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui-demo/tauri/refs/heads/dev/crates/tauri-cli/schema.json",
+  "productName": "clawfirm",
+  "identifier": "com.clawfirm.mobile",
+  "version": "0.1.0",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "title": "clawfirm",
+        "width": 390,
+        "height": 844,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

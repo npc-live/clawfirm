@@ -515,6 +515,39 @@ export namespace config {
 
 }
 
+export namespace remote {
+	
+	export class RemoteStatus {
+	    enabled: boolean;
+	    lanUrl: string;
+	    ngrokUrl: string;
+	    qrCode: string;
+	    token: string;
+	    port: number;
+	    lanIP: string;
+	    ngrokOn: boolean;
+	    clients: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemoteStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.lanUrl = source["lanUrl"];
+	        this.ngrokUrl = source["ngrokUrl"];
+	        this.qrCode = source["qrCode"];
+	        this.token = source["token"];
+	        this.port = source["port"];
+	        this.lanIP = source["lanIP"];
+	        this.ngrokOn = source["ngrokOn"];
+	        this.clients = source["clients"];
+	    }
+	}
+
+}
+
 export namespace store {
 	
 	export class ScheduleData {

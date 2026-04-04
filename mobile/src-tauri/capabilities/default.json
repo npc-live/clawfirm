@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui-demo/tauri/refs/heads/dev/crates/tauri-utils/schema.json",
+  "identifier": "default",
+  "description": "Default capabilities for clawfirm mobile",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "barcode-scanner:allow-scan",
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-check-permissions",
+    "barcode-scanner:allow-request-permissions",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "http://*" },
+        { "url": "https://*" }
+      ]
+    },
+    "websocket:default",
+    "store:default"
+  ]
+}

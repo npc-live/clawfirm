@@ -382,9 +382,14 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   const resizing = useRef(false);
   const resizeStart = useRef({ mx: 0, my: 0, w: 0, h: 0 });
 
-  function extractHtmlBlock(text: string): string | null {
-    const matches = [...text.matchAll(/```html\n([\s\S]*?)```/g)];
-    return matches.length > 0 ? matches[matches.length - 1][1] : null;
+  function extractPreviewContent(text: string): string | null {
+    // Prefer ```html blocks
+    const htmlMatches = [...text.matchAll(/```html\n([\s\S]*?)```/g)];
+    if (htmlMatches.length > 0) return htmlMatches[htmlMatches.length - 1][1];
+    // Fallback: ```markdown blocks
+    const mdMatches = [...text.matchAll(/```markdown\n([\s\S]*?)```/g)];
+    if (mdMatches.length > 0) return mdMatches[mdMatches.length - 1][1];
+    return null;
   }
 
   const handleMessage = useCallback((msg: WSMessage) => {
@@ -397,8 +402,8 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
         } else {
           updated = { role: "assistant", content: msg.content!, streaming: true };
         }
-        const html = extractHtmlBlock(updated.content);
-        if (html) { setPreviewHtml(html); setTab("preview"); }
+        const preview = extractPreviewContent(updated.content);
+        if (preview) { setPreviewHtml(preview); setTab("preview"); }
         return last?.role === "assistant" && last.streaming
           ? [...prev.slice(0, -1), updated]
           : [...prev, updated];

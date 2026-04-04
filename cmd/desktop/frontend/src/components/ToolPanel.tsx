@@ -17,9 +17,42 @@ export interface WhipflowArgs {
   user_inputs?: Record<string, string>;
 }
 
+// ---------------------------------------------------------------------------
+// WhipFlow preview types (returned by mode="auto" / "preview")
+// ---------------------------------------------------------------------------
+
+interface WhipflowStepPreview {
+  index: number;
+  name?: string;
+  agent?: string;
+  prompt: string;
+}
+
+interface WhipflowComplexityAnalysis {
+  tier: "simple" | "medium" | "complex";
+  session_count: number;
+  has_parallel: boolean;
+  has_loops: boolean;
+  has_choice: boolean;
+  has_ask: boolean;
+  steps: WhipflowStepPreview[];
+}
+
+export interface WhipflowPreview {
+  type: "whipflow_preview";
+  analysis: WhipflowComplexityAnalysis;
+  source: string;
+}
+
+export function isWhipflowPreview(v: any): v is WhipflowPreview {
+  return v !== null && typeof v === "object" && v.type === "whipflow_preview" && v.analysis;
+}
+
 interface Props {
   executions: ToolExecution[];
   onRetryFromSession?: (sessionIndex: number, args: WhipflowArgs) => void;
+  onConfirmPreview?: (source: string, userInputs?: Record<string, string>) => void;
+  onEditPreview?: (source: string) => void;
   whipflowArgs?: WhipflowArgs;
 }
 
@@ -56,6 +89,16 @@ function mergeSessionSteps(partial: any): Map<number, WhipflowSessionStep> {
     map.set(item.index, existing ? { ...existing, ...item } : item);
   }
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+// Try to parse a tool result string as JSON; return the parsed object or the original value.
+function tryParseJSON(v: any): any {
+  if (typeof v !== "string") return v;
+  try { return JSON.parse(v); } catch { return v; }
 }
 
 // ---------------------------------------------------------------------------
@@ -269,6 +312,112 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
 }
 
 // ---------------------------------------------------------------------------
+// WhipFlow step preview card (shown for auto/preview mode results)
+// ---------------------------------------------------------------------------
+
+function StepPreviewCard({
+  preview,
+  onConfirm,
+  onEdit,
+}: {
+  preview: WhipflowPreview;
+  onConfirm?: () => void;
+  onEdit?: () => void;
+}) {
+  const [showSource, setShowSource] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const { analysis } = preview;
+
+  const tierLabel =
+    analysis.tier === "simple" ? "Simple" :
+    analysis.tier === "medium" ? "Multi-step" : "Complex";
+
+  const tierColor =
+    analysis.tier === "simple" ? "text-emerald-500" :
+    analysis.tier === "medium" ? "text-amber-500" : "text-red-400";
+
+  function handleConfirm() {
+    setConfirmed(true);
+    onConfirm?.();
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-[rgba(200,90,42,0.2)] bg-[rgba(200,90,42,0.04)] overflow-hidden">
+      {/* Header */}
+      <div className="px-3 py-2.5 flex items-center gap-2 border-b border-[rgba(200,90,42,0.1)]">
+        <span className={`text-[11px] font-semibold ${tierColor}`}>{tierLabel}</span>
+        <span className="text-[10px] text-[rgba(61,57,41,0.4)] font-mono">
+          {analysis.session_count} session{analysis.session_count !== 1 ? "s" : ""}
+          {analysis.has_parallel && " · parallel"}
+          {analysis.has_loops && " · loops"}
+          {analysis.has_choice && " · choice"}
+          {analysis.has_ask && " · user input"}
+        </span>
+        <div className="flex-1" />
+        {onConfirm && !confirmed && (
+          <button
+            onClick={handleConfirm}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#c85a2a] text-white hover:bg-[#a84a22] transition-colors"
+          >
+            Run
+          </button>
+        )}
+        {confirmed && (
+          <span className="flex items-center gap-1 text-[11px] text-[rgba(200,90,42,0.7)]">
+            <svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Running…
+          </span>
+        )}
+        {onEdit && !confirmed && (
+          <button
+            onClick={onEdit}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.15)] transition-colors"
+          >
+            Edit
+          </button>
+        )}
+        <button
+          onClick={() => setShowSource((s) => !s)}
+          className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.04)] text-[rgba(61,57,41,0.35)] hover:bg-[rgba(61,57,41,0.08)] transition-colors"
+        >
+          {showSource ? "Steps" : "Code"}
+        </button>
+      </div>
+
+      {showSource ? (
+        /* Source code view */
+        <pre className="px-3 py-2 text-[11px] font-mono text-[rgba(61,57,41,0.7)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto leading-relaxed">
+          {preview.source}
+        </pre>
+      ) : (
+        /* Step list */
+        <div className="px-3 py-2 space-y-1">
+          {analysis.steps.map((step) => (
+            <div key={step.index} className="flex items-start gap-2 py-1">
+              <span className="text-[11px] font-mono text-[rgba(200,90,42,0.6)] flex-shrink-0 w-5 text-right">
+                {step.index + 1}.
+              </span>
+              <div className="flex-1 min-w-0">
+                {step.name && (
+                  <span className="text-[11px] font-medium text-[rgba(61,57,41,0.7)] mr-2">{step.name}</span>
+                )}
+                <span className="text-[11px] text-[rgba(61,57,41,0.5)]">{step.prompt}</span>
+              </div>
+              {step.agent && (
+                <span className="text-[9px] font-mono text-[rgba(61,57,41,0.3)] flex-shrink-0">{step.agent}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Task summary bar
 // ---------------------------------------------------------------------------
 
@@ -325,7 +474,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 // Main ToolPanel
 // ---------------------------------------------------------------------------
 
-export function ToolPanel({ executions, onRetryFromSession, whipflowArgs }: Props) {
+export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, onEditPreview, whipflowArgs }: Props) {
   return (
     <div className="flex flex-col h-full bg-[#ece5d8] text-[#3d3929]">
       {/* Task summary bar */}
@@ -361,7 +510,22 @@ export function ToolPanel({ executions, onRetryFromSession, whipflowArgs }: Prop
             {exec.name === "whipflow_run" ? (
               <>
                 <WhipflowSource exec={exec} />
-                <WhipflowSessionSteps exec={exec} onRetryFromSession={whipflowArgs && onRetryFromSession ? (idx) => onRetryFromSession(idx, whipflowArgs) : undefined} />
+                {/* Check if the result is a preview (from mode=auto/preview) */}
+                {exec.result && isWhipflowPreview(tryParseJSON(exec.result)) ? (
+                  <StepPreviewCard
+                    preview={tryParseJSON(exec.result) as WhipflowPreview}
+                    onConfirm={onConfirmPreview ? () => {
+                      const p = tryParseJSON(exec.result) as WhipflowPreview;
+                      onConfirmPreview(p.source);
+                    } : undefined}
+                    onEdit={onEditPreview ? () => {
+                      const p = tryParseJSON(exec.result) as WhipflowPreview;
+                      onEditPreview(p.source);
+                    } : undefined}
+                  />
+                ) : (
+                  <WhipflowSessionSteps exec={exec} onRetryFromSession={whipflowArgs && onRetryFromSession ? (idx) => onRetryFromSession(idx, whipflowArgs) : undefined} />
+                )}
               </>
             ) : (
               <>

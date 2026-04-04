@@ -3,7 +3,7 @@ GO       := go
 CMDS     := clawfirm func gateway wschat
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: all clean $(CMDS) desktop frontend app install
+.PHONY: all clean $(CMDS) desktop frontend app install mobile-android mobile-ios mobile-dev-android mobile-dev-ios
 
 all: $(CMDS) desktop
 
@@ -50,6 +50,37 @@ install: app
 	@rm -rf /Applications/clawfirm.app
 	@cp -r $(BIN_DIR)/clawfirm.app /Applications/clawfirm.app
 	@echo "✓ Installed: /Applications/clawfirm.app"
+
+# --- Mobile (Tauri) ---
+MOBILE_DIR    := mobile
+TAURI         := npx tauri
+MOBILE_ENV    := JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home \
+                 ANDROID_HOME=$(HOME)/Library/Android/sdk \
+                 NDK_HOME=$(HOME)/Library/Android/sdk/ndk/27.0.12077973
+
+# Build debug APK (auto-signed, installable)
+mobile-android:
+	cd $(MOBILE_DIR) && $(MOBILE_ENV) $(TAURI) android build --apk --debug
+	@echo ""
+	@echo "✓ APK: $(MOBILE_DIR)/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk"
+	@echo "  Install: make mobile-install-android"
+
+# Install APK to connected device
+mobile-install-android:
+	$(HOME)/Library/Android/sdk/platform-tools/adb install -r \
+		$(MOBILE_DIR)/src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk
+
+# Dev mode on Android device
+mobile-dev-android:
+	cd $(MOBILE_DIR) && $(MOBILE_ENV) $(TAURI) android dev
+
+# Build iOS (device/simulator)
+mobile-ios:
+	cd $(MOBILE_DIR) && $(TAURI) ios build
+
+# Dev mode on iOS simulator
+mobile-dev-ios:
+	cd $(MOBILE_DIR) && $(TAURI) ios dev
 
 # --- Helpers ---
 clean:

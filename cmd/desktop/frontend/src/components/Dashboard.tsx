@@ -13,8 +13,9 @@ import {
   ListWhipFiles, GetWhipFileContent,
   BrowserTestCDP, BrowserLaunchChrome,
   BrowserListShortcuts, BrowserRunShortcut,
+  DisableRemote, EnableNgrok, GetRemoteStatus,
 } from "../wailsjs/go/app/App";
-import type { ChannelInfo, HistoryMessage, SkillInfo, RemoteSkillInfo, CronJob, CronJobHistory, Config, ProviderInfo, VaultEntry, BrowserStatus, ShortcutInfo } from "../wailsjs/go/app/App";
+import type { ChannelInfo, HistoryMessage, SkillInfo, RemoteSkillInfo, CronJob, CronJobHistory, Config, ProviderInfo, VaultEntry, BrowserStatus, ShortcutInfo, RemoteStatus } from "../wailsjs/go/app/App";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { MemoryPane } from "./MemoryPane";
 import { ProvidersPane } from "./ProvidersPane";
@@ -1572,10 +1573,11 @@ function WhipflowPane() {
       <div className="w-52 flex-shrink-0 border-r border-[rgba(61,57,41,0.1)] flex flex-col">
         <div className="px-4 py-3 border-b border-[rgba(61,57,41,0.1)]">
           <span className="text-[11px] font-semibold text-[rgba(61,57,41,0.35)] uppercase tracking-wider">Workflows</span>
+          <p className="text-[10px] text-[rgba(61,57,41,0.25)] font-mono mt-0.5 break-all">~/.clawfirm/workflows/</p>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {whipFiles.length === 0 ? (
-            <p className="px-4 py-3 text-[12px] text-[rgba(61,57,41,0.2)]">No .whip files in<br/>~/.clawfirm/workflows/</p>
+            <p className="px-4 py-3 text-[12px] text-[rgba(61,57,41,0.2)]">No .whip files found</p>
           ) : whipFiles.map(f => (
             <button
               key={f}
@@ -1727,6 +1729,7 @@ function ChannelsSettings() {
     <div className="grid gap-5 sm:grid-cols-2 max-w-2xl">
       <WhatsAppCard />
       <FeishuCard />
+      <RemoteCard />
     </div>
   );
 }
@@ -1856,6 +1859,103 @@ function FeishuCard() {
           <p className="mt-1 text-[11px] text-[rgba(61,57,41,0.4)]">通过 WebSocket 长连接接收消息，无需公网地址。</p>
         </div>
       )}
+    </Card>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Remote Control card
+// ─────────────────────────────────────────────────────────────────────────────
+function RemoteCard() {
+  const [status, setStatus] = useState<RemoteStatus | null>(null);
+  const [enabling, setEnabling] = useState(false);
+  const [ngrokToken, setNgrokToken] = useState("");
+  const [error, setError] = useState("");
+
+  // Poll status every 2s when enabled.
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const s = await GetRemoteStatus();
+        if (active) setStatus(s);
+      } catch {}
+    }
+    poll();
+    const id = setInterval(poll, POLL_MS);
+    return () => { active = false; clearInterval(id); };
+  }, []);
+
+  const enabled = status?.ngrokOn ?? false;
+
+  async function handleEnable() {
+    if (!ngrokToken.trim()) { setError("Enter your ngrok auth token first"); return; }
+    setError(""); setEnabling(true);
+    try {
+      const s = await EnableNgrok(ngrokToken.trim());
+      console.log("EnableNgrok result:", s);
+      setStatus(s);
+    } catch (e: unknown) {
+      console.error("EnableNgrok error:", e);
+      setError(String(e));
+    } finally {
+      setEnabling(false);
+    }
+  }
+
+  async function handleDisable() {
+    setError("");
+    try { await DisableRemote(); setStatus(null); } catch (e: unknown) { setError(String(e)); }
+  }
+
+  const badgeProps = enabled
+    ? { label: "Running", cls: "bg-[rgba(52,199,89,0.15)] text-emerald-400" }
+    : { label: "Off", cls: "bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)]" };
+
+  return (
+    <Card title="Remote"
+      badge={<Badge {...badgeProps} />}
+      action={enabled ? (
+        <button onClick={handleDisable}
+          className="text-[11px] text-red-400 hover:text-red-300">
+          Disable
+        </button>
+      ) : undefined}>
+      {!enabled && (
+        <div className="space-y-3 pt-1">
+          <p className="text-[11px] text-[rgba(61,57,41,0.4)]">
+            Connect via ngrok so the mobile app can access your agents remotely.
+          </p>
+          <input type="text" placeholder="ngrok auth token" value={ngrokToken} onChange={(e) => setNgrokToken(e.target.value)}
+            className="w-full px-3 py-2 text-[12px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)] font-mono" />
+          <button onClick={handleEnable} disabled={enabling}
+            className="w-full py-2 rounded-xl bg-[#c85a2a] text-white text-[12px] font-semibold hover:bg-[#a84a22] disabled:opacity-50">
+            {enabling ? "Starting…" : "Enable Remote"}
+          </button>
+        </div>
+      )}
+      {enabled && status && (
+        <div className="space-y-3 pt-1">
+          {/* QR Code */}
+          {status.qrCode && (
+            <div className="flex flex-col items-center gap-2">
+              <img src={status.qrCode} alt="Remote QR" className="w-44 h-44 rounded-xl border border-[rgba(61,57,41,0.12)]" />
+              <p className="text-[11px] text-[rgba(61,57,41,0.4)] text-center">Scan with mobile app to connect</p>
+            </div>
+          )}
+          {/* ngrok URL */}
+          <div>
+            <p className="text-[11px] text-[rgba(61,57,41,0.5)]">Public URL</p>
+            <p className="text-[12px] font-mono text-[#3d3929] break-all">{status.ngrokUrl}</p>
+          </div>
+          {/* Connected clients */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-[rgba(61,57,41,0.5)]">Connected devices:</span>
+            <span className="text-[12px] font-semibold text-[#3d3929]">{status.clients}</span>
+          </div>
+        </div>
+      )}
+      {error && <p className="text-[11px] text-red-400 pt-1">{error}</p>}
     </Card>
   );
 }

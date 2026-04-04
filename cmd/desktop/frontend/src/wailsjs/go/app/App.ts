@@ -355,3 +355,32 @@ export const BrowserListShortcuts = (): Promise<ShortcutInfo[]> =>
 
 export const BrowserRunShortcut = (file: string, command: string, args: string[]): Promise<Record<string, unknown>[]> =>
   callGo<Record<string, unknown>[]>(PKG, STRUCT, "BrowserRunShortcut", file, command, args);
+
+// ─── Remote Control ──────────────────────────────────────────────────────────
+
+export interface RemoteStatus {
+  enabled: boolean;
+  lanUrl: string;
+  ngrokUrl: string;
+  qrCode: string;
+  token: string;
+  port: number;
+  lanIP: string;
+  ngrokOn: boolean;
+  clients: number;
+}
+
+export const EnableRemote = (): Promise<RemoteStatus> =>
+  callGo<RemoteStatus>(PKG, STRUCT, "EnableRemote");
+
+export const DisableRemote = (): Promise<void> =>
+  callGo<void>(PKG, STRUCT, "DisableRemote");
+
+export const EnableNgrok = (authToken: string): Promise<RemoteStatus> =>
+  callGo<RemoteStatus>(PKG, STRUCT, "EnableNgrok", authToken);
+
+export const DisableNgrok = (): Promise<void> =>
+  callGo<void>(PKG, STRUCT, "DisableNgrok");
+
+export const GetRemoteStatus = (): Promise<RemoteStatus> =>
+  callGo<RemoteStatus>(PKG, STRUCT, "GetRemoteStatus");

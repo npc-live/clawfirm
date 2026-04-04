@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- 极简应用图标背景渐变 -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E8ECEF"/>
+    </linearGradient>
+
+    <!-- 虾和AI星号的主题色彩：高级且具有食欲的珊瑚橘橙色 -->
+    <linearGradient id="aiShrimpGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B5A"/>
+      <stop offset="30%" stop-color="#FF5A45"/>
+      <stop offset="100%" stop-color="#E13030"/>
+    </linearGradient>
+
+    <!-- 应用层级的现代投影厚重感 -->
+    <filter id="iconShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#E13030" flood-opacity="0.25"/>
+    </filter>
+
+    <!-- 星号/菊花射线的标准组件 -->
+    <g id="sparkRay">
+      <!-- 外层射线 (构成星芒) -->
+      <line x1="256" y1="46" x2="256" y2="92" stroke="url(#aiShrimpGrad)" stroke-width="15" stroke-linecap="round"/>
+      <!-- 内层射线 (构成"菊花"内圈的留白点阵) -->
+      <line x1="256" y1="164" x2="256" y2="206" stroke="url(#aiShrimpGrad)" stroke-width="15" stroke-linecap="round"/>
+    </g>
+  </defs>
+
+  <!-- App Icon 基底 (圆角矩形) -->
+  <rect width="512" height="512" rx="115" fill="url(#bgGrad)"/>
+  <rect x="2" y="2" width="508" height="508" rx="113" fill="none" stroke="#FFFFFF" stroke-width="4"/>
+
+  <!-- 整体图形应用阴影，营造质感 -->
+  <g filter="url(#iconShadow)">
+    
+    <!-- 10向的 AI Spark 射线 (同时兼任虾的须、腿和星芒) -->
+    <use href="#sparkRay" transform="rotate(0 256 256)" />
+    <use href="#sparkRay" transform="rotate(36 256 256)" />
+    <use href="#sparkRay" transform="rotate(72 256 256)" />
+    <use href="#sparkRay" transform="rotate(108 256 256)" />
+    <use href="#sparkRay" transform="rotate(144 256 256)" />
+    <use href="#sparkRay" transform="rotate(180 256 256)" />
+    <use href="#sparkRay" transform="rotate(216 256 256)" />
+    <use href="#sparkRay" transform="rotate(252 256 256)" />
+    <use href="#sparkRay" transform="rotate(288 256 256)" />
+    <use href="#sparkRay" transform="rotate(324 256 256)" />
+
+    <!-- 卷起来的虾身 (巧妙地连接在一个环形空间中) -->
+    <!-- M 164 164 是虾尾, 顺时针旋转一圈收起头部在 128 234 -->
+    <path d="M 164 164 A 130 130 0 1 1 128 234" 
+          fill="none" 
+          stroke="url(#aiShrimpGrad)" 
+          stroke-width="52" 
+          stroke-linecap="round"/>
+
+    <!-- 伪装成几何图形的虾尾末端 -->
+    <g stroke="url(#aiShrimpGrad)" stroke-width="14" stroke-linecap="round">
+      <line x1="164" y1="164" x2="120" y2="150" />
+      <line x1="164" y1="164" x2="150" y2="120" />
+    </g>
+
+    <!-- 伪装成曲线的虾须 (随星芒的轨迹向外发散) -->
+    <path d="M 100 234 C 60 220, 50 160, 90 90" fill="none" stroke="url(#aiShrimpGrad)" stroke-width="5" stroke-linecap="round"/>
+    <path d="M 100 234 C 75 200, 100 130, 126 76" fill="none" stroke="url(#aiShrimpGrad)" stroke-width="3" stroke-linecap="round"/>
+
+  </g>
+
+  <!-- 虾体节段切痕 (让虾体更逼真，由白色遮罩构成，产生扁平设计的切割感) -->
+  <g stroke="#FFFFFF" stroke-width="6" stroke-linecap="round">
+    <line x1="256" y1="106" x2="256" y2="148" opacity="0.9"/>
+    <line x1="333" y1="179" x2="363" y2="149" opacity="0.9"/>
+    <line x1="365" y1="256" x2="407" y2="256" opacity="0.9"/>
+    <line x1="333" y1="333" x2="363" y2="363" opacity="0.9"/>
+    <line x1="256" y1="408" x2="256" y2="366" opacity="0.9"/>
+    <line x1="149" y1="363" x2="179" y2="333" opacity="0.9"/>
+  </g>
+
+  <!-- 画龙点睛的虾眼 (嵌入在环形靠近正中心的地方) -->
+  <circle cx="146" cy="223" r="8" fill="#FFFFFF"/>
+  <circle cx="144" cy="221" r="3" fill="#1C1C1C"/>
+
+</svg>

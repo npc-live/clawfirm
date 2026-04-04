@@ -47,8 +47,11 @@ type AgentConfig struct {
 	MaxTokens int `yaml:"max_tokens" json:"max_tokens"`
 
 	// Tools lists the built-in tool names to enable for this agent.
-	// Supported values: "read", "write", "edit", "bash".
-	// Use ["read","write","edit","bash"] to enable all coding tools.
+	// Supported values: "read", "write", "edit", "bash", "exec", "process",
+	//   "grep", "find", "ls", "fetch", "web_search", "browser_shortcut",
+	//   "media_understand", "media_gen", "memory_search", "memory_get",
+	//   "whipflow_run", "sub_agent", "ask_user", "skill", "get_current_time",
+	//   "sessions_list".
 	Tools []string `yaml:"tools" json:"tools"`
 
 	// SkillPaths lists skill directories or SKILL.md files to load for this agent.
@@ -137,6 +140,15 @@ type MediaConfig struct {
 	Model string `yaml:"model" json:"model"`
 }
 
+// ImageGenConfig holds settings for the image generation tool (media_gen).
+type ImageGenConfig struct {
+	// Provider is the image generation backend: "openai" (default).
+	Provider string `yaml:"provider" json:"provider"`
+
+	// Model is the model ID, e.g. "dall-e-3".
+	Model string `yaml:"model" json:"model"`
+}
+
 // Config is the top-level clawfirm configuration structure.
 type Config struct {
 	// Providers maps provider IDs to their connection settings.
@@ -167,6 +179,9 @@ type Config struct {
 
 	// Media configures the dedicated multimodal provider for media analysis.
 	Media MediaConfig `yaml:"media" json:"media"`
+
+	// ImageGen configures the image generation tool (media_gen).
+	ImageGen ImageGenConfig `yaml:"image_gen" json:"image_gen"`
 }
 
 var envVarRe = regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
