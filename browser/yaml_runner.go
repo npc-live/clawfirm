@@ -132,17 +132,21 @@ func RunYAMLCommand(adapterPath, commandName string, argValues []string, cdpPort
 		}
 	}
 
+	// Create an isolated browser context so that automation does not
+	// interfere with the user's manual browsing (Input.dispatch* calls
+	// are scoped to the isolated context's tab).
+	iso, err := NewIsolatedContext(cdpPort)
+	if err != nil {
+		return nil, fmt.Errorf("create isolated context: %w", err)
+	}
+	defer iso.Close()
+	cdpClient := iso.TabClient()
+
 	// Connect agent-browser to the CDP port directly (not a per-tab WebSocket
 	// URL). This lets agent-browser pick/manage the tab internally and avoids
 	// "Session with given id not found" errors from stale ws URLs.
 	exec := NewStepExecutor(fmt.Sprintf("%d", cdpPort))
 	exec.Connect()
-
-	cdpClient, err := ConnectTab(cdpPort, 0)
-	if err != nil {
-		return nil, fmt.Errorf("connect CDP: %w", err)
-	}
-	defer cdpClient.Close()
 
 	log.Printf("browser: connected to %s", adapter.Platform)
 	log.Printf("browser: running %s %s %s", adapter.Platform, commandName, strings.Join(argValues, " "))

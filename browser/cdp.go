@@ -104,6 +104,9 @@ func (c *CDPClient) Send(method string, params any) (json.RawMessage, error) {
 		return resp.Result, nil
 	case <-c.done:
 		return nil, fmt.Errorf("cdp: connection closed")
+	case <-time.After(30 * time.Second):
+		c.pending.Delete(id)
+		return nil, fmt.Errorf("cdp: timeout waiting for %s response", method)
 	}
 }
 
@@ -201,6 +204,7 @@ func (c *CDPClient) Close() {
 
 // TabInfo represents a Chrome tab from the /json endpoint.
 type TabInfo struct {
+	ID          string `json:"id"`
 	Type        string `json:"type"`
 	URL         string `json:"url"`
 	Title       string `json:"title"`
@@ -260,4 +264,145 @@ func NewTab(cdpPort int) (*CDPClient, error) {
 func mustReq(method, url string) *http.Request {
 	req, _ := http.NewRequest(method, url, nil)
 	return req
+}
+
+// ── Browser-level connection & isolated contexts ────────────────────────────
+
+// BrowserWSURL returns the browser-level WebSocket debugger URL from /json/version.
+func BrowserWSURL(cdpPort int) (string, error) {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version", cdpPort))
+	if err != nil {
+		return "", fmt.Errorf("cdp: cannot connect to port %d: %w", cdpPort, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	var info struct {
+		WebSocketURL string `json:"webSocketDebuggerUrl"`
+	}
+	if err := json.Unmarshal(body, &info); err != nil {
+		return "", fmt.Errorf("cdp: invalid /json/version response: %w", err)
+	}
+	if info.WebSocketURL == "" {
+		return "", fmt.Errorf("cdp: /json/version returned empty webSocketDebuggerUrl")
+	}
+	return info.WebSocketURL, nil
+}
+
+// IsolatedContext holds a CDP browser context that is isolated from the user's
+// default browsing context. Automation runs inside this context so that
+// Input.dispatch* calls do not interfere with the user's manual interaction.
+type IsolatedContext struct {
+	browserClient    *CDPClient
+	browserContextID string
+	targetID         string
+	tabClient        *CDPClient
+	cdpPort          int
+}
+
+// NewIsolatedContext creates an isolated browser context and opens a new tab
+// inside it. The returned IsolatedContext.TabClient() can be used exactly like
+// a CDPClient obtained from ConnectTab, but all operations are scoped to the
+// isolated context.
+func NewIsolatedContext(cdpPort int) (*IsolatedContext, error) {
+	// 1. Get browser-level WebSocket URL.
+	bwsURL, err := BrowserWSURL(cdpPort)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Connect to the browser-level WebSocket.
+	bc, err := NewCDPClient(bwsURL)
+	if err != nil {
+		return nil, fmt.Errorf("cdp: browser connect: %w", err)
+	}
+
+	// 3. Create an isolated browser context.
+	raw, err := bc.Send("Target.createBrowserContext", map[string]any{})
+	if err != nil {
+		bc.Close()
+		return nil, fmt.Errorf("cdp: createBrowserContext: %w", err)
+	}
+	var ctxRes struct {
+		BrowserContextID string `json:"browserContextId"`
+	}
+	if err := json.Unmarshal(raw, &ctxRes); err != nil {
+		bc.Close()
+		return nil, fmt.Errorf("cdp: parse browserContextId: %w", err)
+	}
+
+	// 4. Create a new target (tab) inside the isolated context.
+	raw, err = bc.Send("Target.createTarget", map[string]any{
+		"url":              "about:blank",
+		"browserContextId": ctxRes.BrowserContextID,
+	})
+	if err != nil {
+		bc.Send("Target.disposeBrowserContext", map[string]any{
+			"browserContextId": ctxRes.BrowserContextID,
+		})
+		bc.Close()
+		return nil, fmt.Errorf("cdp: createTarget: %w", err)
+	}
+	var tgtRes struct {
+		TargetID string `json:"targetId"`
+	}
+	if err := json.Unmarshal(raw, &tgtRes); err != nil {
+		bc.Close()
+		return nil, fmt.Errorf("cdp: parse targetId: %w", err)
+	}
+
+	// 5. Find the new target's WebSocket URL by listing all tabs.
+	tabs, err := ListTabs(cdpPort)
+	if err != nil {
+		bc.Close()
+		return nil, fmt.Errorf("cdp: list tabs for new target: %w", err)
+	}
+	var tabWSURL string
+	for _, t := range tabs {
+		if t.ID == tgtRes.TargetID {
+			tabWSURL = t.WebSocketURL
+			break
+		}
+	}
+	if tabWSURL == "" {
+		bc.Close()
+		return nil, fmt.Errorf("cdp: could not find WebSocket URL for target %s", tgtRes.TargetID)
+	}
+
+	// 6. Connect to the new tab.
+	tc, err := NewCDPClient(tabWSURL)
+	if err != nil {
+		bc.Send("Target.closeTarget", map[string]any{"targetId": tgtRes.TargetID})
+		bc.Send("Target.disposeBrowserContext", map[string]any{
+			"browserContextId": ctxRes.BrowserContextID,
+		})
+		bc.Close()
+		return nil, fmt.Errorf("cdp: connect to isolated tab: %w", err)
+	}
+
+	return &IsolatedContext{
+		browserClient:    bc,
+		browserContextID: ctxRes.BrowserContextID,
+		targetID:         tgtRes.TargetID,
+		tabClient:        tc,
+		cdpPort:          cdpPort,
+	}, nil
+}
+
+// TabClient returns the CDPClient connected to the isolated tab.
+func (ic *IsolatedContext) TabClient() *CDPClient {
+	return ic.tabClient
+}
+
+// Close tears down the isolated context: closes the tab, disposes the browser
+// context, and disconnects all WebSocket connections.
+func (ic *IsolatedContext) Close() {
+	ic.tabClient.Close()
+	ic.browserClient.Send("Target.closeTarget", map[string]any{
+		"targetId": ic.targetID,
+	})
+	ic.browserClient.Send("Target.disposeBrowserContext", map[string]any{
+		"browserContextId": ic.browserContextID,
+	})
+	ic.browserClient.Close()
 }
