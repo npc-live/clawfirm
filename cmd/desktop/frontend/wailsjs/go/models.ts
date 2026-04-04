@@ -279,6 +279,20 @@ export namespace config {
 	        this.idle_minutes = source["idle_minutes"];
 	    }
 	}
+	export class ImageGenConfig {
+	    provider: string;
+	    model: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImageGenConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.provider = source["provider"];
+	        this.model = source["model"];
+	    }
+	}
 	export class MediaConfig {
 	    provider: string;
 	    model: string;
@@ -468,6 +482,7 @@ export namespace config {
 	    whipflow: WhipflowConfig;
 	    cron_jobs: CronJobConfig[];
 	    media: MediaConfig;
+	    image_gen: ImageGenConfig;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -485,6 +500,7 @@ export namespace config {
 	        this.whipflow = this.convertValues(source["whipflow"], WhipflowConfig);
 	        this.cron_jobs = this.convertValues(source["cron_jobs"], CronJobConfig);
 	        this.media = this.convertValues(source["media"], MediaConfig);
+	        this.image_gen = this.convertValues(source["image_gen"], ImageGenConfig);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -505,6 +521,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

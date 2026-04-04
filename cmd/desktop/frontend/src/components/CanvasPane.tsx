@@ -446,6 +446,27 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
 
   const { send } = useWebSocket({ url: wsURL, onMessage: handleMessage, onOpen: handleOpen, onClose: handleClose });
 
+  // Listen for postMessage from File Cell iframe (sandbox="allow-scripts").
+  // Canvas HTML buttons use: window.parent.postMessage({type:'run-whip', file:'...'}, '*')
+  useEffect(() => {
+    function onIframeMessage(e: MessageEvent) {
+      if (!e.data || e.data.type !== "run-whip") return;
+      const file: string = e.data.file ?? "";
+      const source: string = e.data.source ?? "";
+      if (!file && !source) return;
+      if (wsStatus !== "open" || isStreaming) return;
+      const content = file
+        ? `运行 whipflow 文件: ${file}`
+        : `运行 whipflow:\n\`\`\`\n${source}\n\`\`\``;
+      setMessages(prev => [...prev, { role: "user", content }]);
+      setIsStreaming(true);
+      send(JSON.stringify({ type: "message", content }));
+      setTab("chat");
+    }
+    window.addEventListener("message", onIframeMessage);
+    return () => window.removeEventListener("message", onIframeMessage);
+  }, [wsStatus, isStreaming, send]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);

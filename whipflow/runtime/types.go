@@ -33,7 +33,7 @@ type ExecutionResult struct {
 	Success        bool
 	Outputs        map[string]RuntimeValue
 	SessionOutputs []*SessionResult
-	FinalContext    *ContextSnapshot
+	FinalContext   *ContextSnapshot
 	Errors         []ExecutionError
 	Metadata       ExecutionMetadata
 }
@@ -105,7 +105,7 @@ func DefaultRuntimeConfig() RuntimeConfig {
 		Debug:                 false,
 		TraceExecution:        false,
 		LogLevel:              "info",
-		DefaultProvider:       "claude-code",
+		DefaultProvider:       "native",
 	}
 }
 
