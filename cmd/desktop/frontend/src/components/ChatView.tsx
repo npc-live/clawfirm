@@ -267,7 +267,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
         alert(`File "${f.name}" exceeds 20 MB limit.`);
         continue;
       }
-      if (!f.type.startsWith("image/") && !f.type.startsWith("video/")) continue;
+      if (!f.type.startsWith("image/") && !f.type.startsWith("video/") && !f.type.startsWith("audio/")) continue;
       const { data, mime } = await readFileAsBase64(f);
       const preview = URL.createObjectURL(f);
       setAttachedFiles((prev) => [...prev, { file: f, preview, data, mime }]);
@@ -631,7 +631,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*,video/*"
+              accept="image/*,video/*,audio/*"
               multiple
               className="hidden"
               onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }}

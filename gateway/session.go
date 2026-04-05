@@ -391,6 +391,13 @@ var mimeToExt = map[string]string{
 	"video/mp4":       ".mp4",
 	"video/webm":      ".webm",
 	"video/quicktime": ".mov",
+	"audio/mpeg":      ".mp3",
+	"audio/mp4":       ".m4a",
+	"audio/wav":       ".wav",
+	"audio/ogg":       ".ogg",
+	"audio/aac":       ".aac",
+	"audio/flac":      ".flac",
+	"audio/webm":      ".weba",
 }
 
 // saveMediaToTemp decodes base64 media data and writes it to a temp file.
