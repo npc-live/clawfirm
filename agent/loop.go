@@ -266,6 +266,11 @@ func AgentLoop(
 
 		for streamEv := range eventCh {
 			if ctx.Err() != nil {
+				// Drain the channel so the provider goroutine can exit.
+				go func() {
+					for range eventCh {
+					}
+				}()
 				break
 			}
 			// Forward stream event
@@ -316,14 +321,31 @@ func AgentLoop(
 		// Stream finished. Wait for all in-flight safe tools.
 		safeWg.Wait()
 
+		// Check for cancellation before executing unsafe tools.
+		if ctx.Err() != nil {
+			close(resultCh)
+			<-collectorDone
+			log.Printf("[agent-loop] ctx cancelled after stream, stopping")
+			return agentCtx.Messages, ctx.Err()
+		}
+
 		// Execute queued unsafe tools sequentially.
 		for _, uq := range unsafeQueue {
+			if ctx.Err() != nil {
+				break
+			}
 			r, err := executeOne(ctx, uq.call, reg, assistantMsg,
 				config.BeforeToolCall, config.AfterToolCall, emit)
 			resultCh <- indexedResult{uq.index, r, err}
 		}
 		close(resultCh)
 		<-collectorDone
+
+		// Check again after tool execution.
+		if ctx.Err() != nil {
+			log.Printf("[agent-loop] ctx cancelled after tool execution, stopping")
+			return agentCtx.Messages, ctx.Err()
+		}
 
 		// Ensure timestamp is set
 		if assistantMsg.Timestamp == 0 {

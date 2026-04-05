@@ -48,7 +48,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
   const [input, setInput] = useState("");
   const [wsURL, setWsURL] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("connecting");
+  const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("closed");
   const [toolExecutions, setToolExecutions] = useState<ToolExecution[]>([]);
   const [agentSkills, setAgentSkills] = useState<SkillInfo[]>([]);
   const [showSkillPicker, setShowSkillPicker] = useState(false);
@@ -74,6 +74,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
     GetWebhookBaseURL().then((base) => {
       if (base) {
         const wsBase = base.replace(/^http/, "ws");
+        setWsStatus("connecting");
         setWsURL(`${wsBase}/ws/${agentName}/${sessionID}`);
       }
     });

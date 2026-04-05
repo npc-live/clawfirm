@@ -77,31 +77,39 @@ func main() {
 				agent.WithModel(model),
 				agent.WithSystemPrompt(systemPrompt),
 			)
-			savedCount := 0
 			if history, err := msgStore.ListMessages(store.QueryParams{
 				ChannelID: channelID,
 				UserID:    userID,
 			}); err == nil && len(history) > 0 {
 				a.ReplaceMessages(history)
-				savedCount = len(history)
 				log.Printf("[%s] session %s/%s: restored %d messages", agentName, channelID, userID, len(history))
 			}
 			a.Subscribe(func(ev types.AgentEvent) {
-				if ev.Type != types.EventAgentEnd {
-					return
-				}
-				msgs := ev.Messages
-				for i := savedCount; i < len(msgs); i++ {
-					if err := msgStore.SaveMessage(channelID, userID, msgs[i]); err != nil {
-						log.Printf("[%s] session %s/%s: save message[%d]: %v", agentName, channelID, userID, i, err)
+				switch ev.Type {
+				case types.EventMessageEnd:
+					if ev.AssistantMsg != nil {
+						if err := msgStore.SaveMessage(channelID, userID, ev.AssistantMsg); err != nil {
+							log.Printf("[%s] session %s/%s: save assistant message: %v", agentName, channelID, userID, err)
+						}
+					}
+				case types.EventTurnEnd:
+					for i := range ev.ToolResults {
+						if err := msgStore.SaveMessage(channelID, userID, &ev.ToolResults[i]); err != nil {
+							log.Printf("[%s] session %s/%s: save tool result[%d]: %v", agentName, channelID, userID, i, err)
+						}
 					}
 				}
-				savedCount = len(msgs)
 			})
 			return a
 		})
 
-		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{})
+		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
+			OnUserMessage: func(channelID, userID string, msg types.Message) {
+				if err := msgStore.SaveMessage(channelID, userID, msg); err != nil {
+					log.Printf("[%s] save user message: %v", agentName, err)
+				}
+			},
+		})
 		registry.Register(ac.Name, mgr)
 		log.Printf("agent: %s  provider: %s  model: %s", ac.Name, ac.Provider, ac.Model)
 	}

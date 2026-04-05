@@ -42,7 +42,8 @@ All persistent user data lives under ~/.clawfirm/. Subdirectories and their purp
 | Path | Purpose |
 |------|---------|
 | ~/.clawfirm/config.yml | Main configuration: providers, agents, default_agent |
-| ~/.clawfirm/data.db | SQLite database (chat history, cron jobs, memory index, vault) |
+| ~/.clawfirm/data.db | SQLite database (chat history, cron jobs, memory index) |
+| ~/.clawfirm/vault.db | Encrypted secrets store (API keys, tokens, passwords) |
 | ~/.clawfirm/memory/ | Semantic memory files (.md). Use memory_search / memory_get to query; write new .md files here to persist knowledge |
 | ~/.clawfirm/skills/ | Skill packages. Each subdirectory is a skill with a SKILL.md entry point |
 | ~/.clawfirm/workflows/ | WhipFlow workflow files (.whip). Run with whipflow_run tool (pass "source" param to run inline code directly, no file needed) |
@@ -50,7 +51,17 @@ All persistent user data lives under ~/.clawfirm/. Subdirectories and their purp
 | ~/.clawfirm/bin/ | Bundled CLI binaries (e.g. func — the clawfirm function runner) |
 | ~/.clawfirm/auth.json | OAuth tokens (read-only; managed by the app) |
 
-When a task involves reading/writing files for persistence, prefer ~/.clawfirm/memory/ for knowledge and ~/.clawfirm/canvas/ for rendered HTML output.`
+When a task involves reading/writing files for persistence, prefer ~/.clawfirm/memory/ for knowledge and ~/.clawfirm/canvas/ for rendered HTML output.
+
+## Vault (Secrets)
+
+Secrets (API keys, tokens, passwords) are stored encrypted in the vault (~/.clawfirm/vault.db).
+They are **automatically injected as environment variables** into every bash / exec / process tool call — you do not need to read or pass them manually.
+
+- **When a task needs credentials** (e.g. an API key, token, or password): assume they are already in the environment. Just use the env var directly in your bash command (e.g. $MY_API_KEY).
+- **To check what secrets exist**: run ` + "`" + `clawfirm vault list` + "`" + ` via bash.
+- **If a credential seems missing**: tell the user to add it with ` + "`" + `clawfirm vault set KEY value` + "`" + ` and retry.
+- Never hard-code secrets in files or print them to output.`
 
 const sectionToolCallStyle = `## Tool Call Style
 
@@ -88,32 +99,61 @@ However, only do what the user asked for. Do NOT add extra steps the user did no
 
 ### .whip 语法速查
 ` + "`" + `` + "`" + `` + "`" + `
-# 顺序执行多个 session
+# 顺序执行多个 session（字符串插值用 {varname}）
 let step1 = session "搜索并整理 Go Gin 框架的优缺点"
 let step2 = session "搜索并整理 Go Echo 框架的优缺点"
-let step3 = session "搜索并整理 Go Fiber 框架的优缺点"
-let report = session "根据以下调研结果写对比报告：\n{step1}\n{step2}\n{step3}"
+let report = session "根据以下结果写对比报告：\n{step1}\n{step2}"
 
-# 并行执行
+# 并行执行（独立任务，节省时间）
 parallel:
   let a = session "调研方案A"
   let b = session "调研方案B"
+end
+
+# 指定 agent（需要工具时先定义 agent）
+agent researcher:
+  tools: ["bash", "read", "write"]
+
+let result = session: researcher
+  prompt: "搜索并整理 {topic}"
 
 # 用户输入
 ask topic: "请输入调研主题"
-let result = session "调研 {topic}"
+
+# 控制流
+repeat 3 as i:
+  let r = session "第 {i} 轮尝试"
+end
+
+loop max: 5:
+  let r = session "继续处理"
+  until [r 表明任务完成]
+end
+
+foreach item in items:
+  let r = session "处理：{item}"
+end
+
+# AI 动态路由
+choice [根据 {input} 的内容类型]:
+  "是结构化数据":
+    let r = session: analyst "统计分析"
+  "是文本内容":
+    let r = session: writer "提炼摘要"
+end
+
+# 错误处理
+try:
+  let r = session "调用外部 API"
+catch err:
+  print "出错: {err}"
+end
 ` + "`" + `` + "`" + `` + "`" + `
 
 **重要**：
 - 生成 .whip 后必须立即调用 whipflow_run(mode="auto")，不要输出裸代码块让用户看。
 - 不要在 .whip 中指定 provider。不要写 ` + "`" + `provider: "claude-code"` + "`" + ` 之类的硬编码。
-- 当 session 需要使用工具（如联网搜索、读写文件、执行命令）时，必须在 .whip 顶部定义 agent 并声明所需工具，例如：
-` + "`" + `` + "`" + `` + "`" + `
-agent researcher:
-  tools: [process, read, write]
-
-let result = session(researcher) "搜索并整理..."
-` + "`" + `` + "`" + `` + "`" + `
+- 当 session 需要使用工具（如联网搜索、读写文件、执行命令）时，必须在 .whip 顶部定义 agent 并声明 tools，然后用 ` + "`" + `session: agentname` + "`" + ` 调用。
 - 不需要工具的纯文本生成/总结 session 直接写 ` + "`" + `session "..."` + "`" + ` 即可，无需定义 agent。
 - 当用户要求"写个 whipflow"时，读取 whipflow skill 参考语法后写文件，不要自动运行。`
 

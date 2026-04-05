@@ -34,6 +34,12 @@ You have access to **skills**, **built-in tools**, and **browser shortcuts**. Mo
 | **bilibili** | B站 — 分区策略、一键三连引导、弹幕文化适配、稿件审核、创作者激励。 |
 | **copywriting-base** | 病毒传播文案基础 — 中英双语写作规范、传播因子分析。被其他发布 skill 引用。 |
 
+### AI Video Generation
+
+| Skill | What it does |
+|-------|--------------|
+| **kling** | Kling AI API — 文生视频、图生视频、图像生成、唇形同步、虚拟换装、视频延长、Motion Brush、相机控制。支持 V1/V2/V3 模型，JWT 认证，自定义音色克隆（V2.6+）。 |
+
 ### Video Production
 
 | Skill | What it does |

@@ -33,6 +33,10 @@ type ManagerConfig struct {
 	DefaultResetMode  store.ResetMode // "" → store.ResetModeNever
 	DefaultResetHour  int             // UTC hour for daily reset (0–23)
 	DefaultIdleMinutes int            // idle threshold in minutes (0 → 30)
+
+	// OnUserMessage is called immediately before a user message is sent to the agent.
+	// Use this to persist the user message before the agent processes it.
+	OnUserMessage func(channelID, userID string, msg types.Message)
 }
 
 // SessionManager creates, caches, and expires Sessions.
@@ -131,7 +135,11 @@ func (m *SessionManager) GetOrCreate(channelID, userID string) (*Session, error)
 		}
 	}
 
-	s := newSession(key, channelID, userID, m.factory(channelID, userID), entry, m.cfg.SessionStore, m.cfg.Summarizer)
+	var onUser func(types.Message)
+	if m.cfg.OnUserMessage != nil {
+		onUser = func(msg types.Message) { m.cfg.OnUserMessage(channelID, userID, msg) }
+	}
+	s := newSession(key, channelID, userID, m.factory(channelID, userID), entry, m.cfg.SessionStore, m.cfg.Summarizer, onUser)
 	m.sessions[key] = s
 	return s, nil
 }

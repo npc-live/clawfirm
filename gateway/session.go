@@ -64,9 +64,10 @@ type Session struct {
 	sinks     []sinkEntry
 	lastUsed  time.Time
 
-	entry      *store.SessionEntry     // nil if no store
-	sessStore  *store.SessionStore     // nil if no store
-	summarizer ConversationSummarizer  // nil if not configured
+	entry         *store.SessionEntry    // nil if no store
+	sessStore     *store.SessionStore    // nil if no store
+	summarizer    ConversationSummarizer // nil if not configured
+	onUserMessage func(msg types.Message)
 }
 
 type sinkEntry struct {
@@ -79,17 +80,18 @@ var sinkSeq atomic.Uint64
 // newSession creates and starts a Session.
 func newSession(key, channelID, userID string, a *agent.Agent,
 	entry *store.SessionEntry, ss *store.SessionStore,
-	summarizer ConversationSummarizer) *Session {
+	summarizer ConversationSummarizer, onUserMessage func(types.Message)) *Session {
 	s := &Session{
-		key:        key,
-		channelID:  channelID,
-		userID:     userID,
-		agent:      a,
-		msgCh:      make(chan IncomingMessage, 16),
-		lastUsed:   time.Now(),
-		entry:      entry,
-		sessStore:  ss,
-		summarizer: summarizer,
+		key:           key,
+		channelID:     channelID,
+		userID:        userID,
+		agent:         a,
+		msgCh:         make(chan IncomingMessage, 16),
+		lastUsed:      time.Now(),
+		entry:         entry,
+		sessStore:     ss,
+		summarizer:    summarizer,
+		onUserMessage: onUserMessage,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -366,6 +368,9 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 	}
 
 	userMsg := &types.UserMessage{Role: "user", Content: blocks}
+	if s.onUserMessage != nil {
+		s.onUserMessage(userMsg)
+	}
 	if err := s.agent.PromptMessages(ctx, []types.Message{userMsg}); err != nil {
 		return
 	}
