@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -165,7 +166,10 @@ func callGeminiVision(apiKey, b64, mimeType, prompt string) (string, error) {
 	baseURL := os.Getenv("GEMINI_BASE_URL")
 	if baseURL == "" {
 		baseURL = "https://generativelanguage.googleapis.com"
+	} else if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "http://" + baseURL
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	url := baseURL + "/v1beta/models/" + model + ":generateContent?key=" + apiKey
 	respBytes, err := doPost(url, nil, body)
 	if err != nil {
