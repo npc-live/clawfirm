@@ -2614,43 +2614,51 @@ func (a *App) buildClawFactory(ac config.AgentConfig, agentName string) gateway.
 		// Inject API credentials into the subprocess environment.
 		// macOS .app bundles do NOT inherit shell profile env vars,
 		// so the subprocess needs explicit injection.
+		// Inject ALL configured providers — the claw subprocess may invoke
+		// external plugins (media-gen, media-understand) that need keys
+		// for providers other than the agent's own.
 		var env []string
+		providerEnvMap := map[string]string{
+			"anthropic": "ANTHROPIC_API_KEY",
+			"openai":    "OPENAI_API_KEY",
+			"gemini":    "GEMINI_API_KEY",
+			"google":    "GOOGLE_API_KEY",
+		}
 
-		// 1. Try config.yml providers (primary source for app users).
+		// 1. Inject keys from ALL config.yml providers.
+		for id, pc := range a.cfg.Providers {
+			if pc.APIKey == "" {
+				continue
+			}
+			envVar, ok := providerEnvMap[id]
+			if !ok {
+				continue
+			}
+			env = append(env, envVar+"="+pc.APIKey)
+		}
+
+		// Set ANTHROPIC_BASE_URL from the agent's own provider.
 		providerID := ac.Provider
 		if providerID == "" {
 			providerID = a.cfg.DefaultProvider
 		}
-		if pc, ok := a.cfg.Providers[providerID]; ok {
-			if pc.APIKey != "" {
-				envVar := "ANTHROPIC_API_KEY"
-				if v, ok2 := map[string]string{
-					"anthropic": "ANTHROPIC_API_KEY",
-					"openai":    "OPENAI_API_KEY",
-					"gemini":    "GEMINI_API_KEY",
-					"google":    "GOOGLE_API_KEY",
-				}[providerID]; ok2 {
-					envVar = v
-				}
-				env = append(env, envVar+"="+pc.APIKey)
-			}
-			if pc.BaseURL != "" {
-				env = append(env, "ANTHROPIC_BASE_URL="+pc.BaseURL)
-			}
+		if pc, ok := a.cfg.Providers[providerID]; ok && pc.BaseURL != "" {
+			env = append(env, "ANTHROPIC_BASE_URL="+pc.BaseURL)
 		}
 
-		// 2. Fallback: auth storage / keychain / env via AuthResolver.
-		if len(env) == 0 {
-			resolver := auth.NewAuthResolver(a.authStor)
-			for provider, envVar := range map[string]string{
-				"anthropic": "ANTHROPIC_API_KEY",
-				"openai":    "OPENAI_API_KEY",
-				"gemini":    "GEMINI_API_KEY",
-				"google":    "GOOGLE_API_KEY",
-			} {
-				if key, err := resolver.ResolveAPIKey(context.Background(), provider); err == nil && key != "" {
-					env = append(env, envVar+"="+key)
-				}
+		// 2. Fallback: auth storage / keychain / env via AuthResolver
+		//    for any provider not already covered by config.
+		resolver := auth.NewAuthResolver(a.authStor)
+		envSet := make(map[string]bool)
+		for _, e := range env {
+			envSet[e[:strings.Index(e, "=")]] = true
+		}
+		for provider, envVar := range providerEnvMap {
+			if envSet[envVar] {
+				continue
+			}
+			if key, err := resolver.ResolveAPIKey(context.Background(), provider); err == nil && key != "" {
+				env = append(env, envVar+"="+key)
 			}
 		}
 
