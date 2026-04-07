@@ -153,7 +153,7 @@ func callOpenRouter(apiKey, b64, mimeType, prompt string) (string, error) {
 func callGeminiVision(apiKey, b64, mimeType, prompt string) (string, error) {
 	model := os.Getenv("CLAWFIRM_MEDIA_MODEL")
 	if model == "" {
-		model = "gemini-2.0-flash"
+		model = "gemini-2.5-flash"
 	}
 	body := map[string]any{
 		"contents": []map[string]any{{
