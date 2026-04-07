@@ -104,12 +104,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
 
     GetToolExecutions("webchat/" + agentName, sessionID).then((execs) => {
       if (!execs || execs.length === 0) return;
-      setToolExecutions(execs.map((e) => ({
+      setToolExecutions(execs.map((e: any) => ({
         id: e.id,
         name: e.name,
         args: e.args,
         status: e.isError ? "error" as const : "done" as const,
         result: e.result,
+        partialResult: e.partialSteps && e.partialSteps.length > 0 ? e.partialSteps : undefined,
         startTime: e.timestamp,
         endTime: e.timestamp,
       })));

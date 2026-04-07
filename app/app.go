@@ -1314,12 +1314,13 @@ func (a *App) AbortCurrentTurn(agentName, sessionID string) {
 
 // ToolExecutionInfo is a summary of one tool call + result for the frontend.
 type ToolExecutionInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Args      any    `json:"args,omitempty"`
-	Result    string `json:"result,omitempty"`
-	IsError   bool   `json:"isError"`
-	Timestamp int64  `json:"timestamp"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"`
+	Args         any              `json:"args,omitempty"`
+	Result       string           `json:"result,omitempty"`
+	IsError      bool             `json:"isError"`
+	Timestamp    int64            `json:"timestamp"`
+	PartialSteps []map[string]any `json:"partialSteps,omitempty"`
 }
 
 // GetToolExecutions returns tool call summaries extracted from stored messages.
@@ -1384,7 +1385,20 @@ func (a *App) GetToolExecutions(channelID, userID string) ([]ToolExecutionInfo, 
 
 	out := make([]ToolExecutionInfo, 0, len(order))
 	for _, id := range order {
-		out = append(out, *byID[id])
+		info := *byID[id]
+		// Restore whipflow session steps from sidecar file (written by tailWhipflowProgress).
+		if info.Name == "whipflow_run" {
+			if home, err := os.UserHomeDir(); err == nil {
+				sidecarPath := filepath.Join(home, ".clawfirm", "whipflow-steps", info.ID+".json")
+				if data, err := os.ReadFile(sidecarPath); err == nil {
+					var steps []map[string]any
+					if json.Unmarshal(data, &steps) == nil {
+						info.PartialSteps = steps
+					}
+				}
+			}
+		}
+		out = append(out, info)
 	}
 	return out, nil
 }
