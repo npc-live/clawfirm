@@ -213,6 +213,7 @@ export namespace app {
 	    result?: string;
 	    isError: boolean;
 	    timestamp: number;
+	    partialSteps?: any[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolExecutionInfo(source);
@@ -226,6 +227,7 @@ export namespace app {
 	        this.result = source["result"];
 	        this.isError = source["isError"];
 	        this.timestamp = source["timestamp"];
+	        this.partialSteps = source["partialSteps"];
 	    }
 	}
 	export class VaultEntry {

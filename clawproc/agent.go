@@ -411,6 +411,8 @@ func tailWhipflowProgress(stopCh <-chan struct{}, toolCallID string, a *ClawAgen
 	}
 	defer f.Close()
 
+	var allSteps []map[string]any // accumulated for sidecar persistence
+
 	emitLine := func(line string) {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -421,6 +423,7 @@ func tailWhipflowProgress(stopCh <-chan struct{}, toolCallID string, a *ClawAgen
 			return
 		}
 		log.Printf("clawproc: whipflow progress: %s", line)
+		allSteps = append(allSteps, step)
 		a.emit(types.AgentEvent{
 			Type:          types.EventToolExecutionUpdate,
 			ToolCallID:    toolCallID,
@@ -459,9 +462,31 @@ func tailWhipflowProgress(stopCh <-chan struct{}, toolCallID string, a *ClawAgen
 			if pending != "" {
 				emitLine(pending)
 			}
+			// Persist all steps to a sidecar file so the frontend can restore
+			// session cards after app restart.
+			if len(allSteps) > 0 {
+				sidecarPath := whipflowStepsPath(toolCallID)
+				if data, err := json.Marshal(allSteps); err == nil {
+					_ = os.WriteFile(sidecarPath, data, 0o644)
+				}
+			}
 			return
 		default:
 			time.Sleep(100 * time.Millisecond)
 		}
 	}
+}
+
+// whipflowStepsPath returns the sidecar file path for persisted session steps.
+// Uses ~/.clawfirm/whipflow-steps/ for cross-reboot persistence.
+func whipflowStepsPath(toolCallID string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(os.TempDir(), "whipflow-steps-"+toolCallID+".json")
+	}
+	dir := filepath.Join(home, ".clawfirm", "whipflow-steps")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return filepath.Join(os.TempDir(), "whipflow-steps-"+toolCallID+".json")
+	}
+	return filepath.Join(dir, toolCallID+".json")
 }
