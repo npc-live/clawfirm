@@ -4,9 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -130,6 +134,11 @@ func RunYAMLCommand(adapterPath, commandName string, argValues []string, cdpPort
 		if i < len(argValues) {
 			vars[name] = argValues[i]
 		}
+	}
+
+	// Ensure Chrome is running with CDP enabled.
+	if err := ensureChromeRunning(cdpPort); err != nil {
+		return nil, err
 	}
 
 	// Open a new tab in the default browser context so that automation
@@ -446,4 +455,73 @@ func truncStr(s string, n int) string {
 		return s
 	}
 	return s[:n] + "..."
+}
+
+// ensureChromeRunning checks if Chrome CDP is reachable on the given port.
+// If not, it launches Chrome with the social-cli profile and waits for CDP.
+func ensureChromeRunning(cdpPort int) error {
+	if isCDPReachable(cdpPort) {
+		return nil
+	}
+
+	chromePath := findChromePath()
+	if chromePath == "" {
+		return fmt.Errorf("Chrome not found; please launch Chrome with --remote-debugging-port=%d", cdpPort)
+	}
+
+	home, _ := os.UserHomeDir()
+	profileDir := filepath.Join(home, ".social-cli", "chrome-profile")
+	if _, err := os.Stat(profileDir); os.IsNotExist(err) {
+		profileDir = filepath.Join(home, ".clawfirm", "chrome-profile")
+	}
+
+	cmd := exec.Command(chromePath,
+		fmt.Sprintf("--remote-debugging-port=%d", cdpPort),
+		"--user-data-dir="+profileDir,
+		"--no-first-run",
+		"--no-default-browser-check",
+	)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to launch Chrome: %w", err)
+	}
+	go func() { _ = cmd.Wait() }()
+
+	// Poll for CDP readiness.
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+		if isCDPReachable(cdpPort) {
+			return nil
+		}
+	}
+	return fmt.Errorf("Chrome launched but CDP not ready on port %d after 10s", cdpPort)
+}
+
+func isCDPReachable(port int) bool {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/json/version", port))
+	if err != nil {
+		return false
+	}
+	resp.Body.Close()
+	return resp.StatusCode == 200
+}
+
+func findChromePath() string {
+	if runtime.GOOS == "darwin" {
+		candidates := []string{
+			"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+			"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		}
+		for _, c := range candidates {
+			if _, err := os.Stat(c); err == nil {
+				return c
+			}
+		}
+	}
+	for _, name := range []string{"google-chrome", "google-chrome-stable", "chromium", "chromium-browser"} {
+		if p, err := exec.LookPath(name); err == nil {
+			return p
+		}
+	}
+	return ""
 }
