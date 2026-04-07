@@ -2626,11 +2626,17 @@ func (a *App) buildClawFactory(ac config.AgentConfig, agentName string) gateway.
 		}
 
 		// 1. Inject keys from ALL config.yml providers.
+		// Match by Type field first (normalized lowercase, e.g. "gemini"),
+		// then fall back to the provider map key (e.g. "Gemini" → "gemini").
 		for id, pc := range a.cfg.Providers {
 			if pc.APIKey == "" {
 				continue
 			}
-			envVar, ok := providerEnvMap[id]
+			lookup := strings.ToLower(pc.Type)
+			if lookup == "" {
+				lookup = strings.ToLower(id)
+			}
+			envVar, ok := providerEnvMap[lookup]
 			if !ok {
 				continue
 			}
