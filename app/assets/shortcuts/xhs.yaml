@@ -89,16 +89,20 @@ commands:
     steps:
       - open: "https://creator.xiaohongshu.com/publish/publish?source=official"
       - wait: 3000
-      # 等待上传按钮渲染完成
-      - wait:
-          selector: "input.upload-input"
+      # 等待上传按钮渲染完成（file input 是隐藏元素，不能用 wait selector）
+      - wait_until:
+          eval: "!!document.querySelector('input.upload-input, input[type=file]')"
+          timeout: 15000
+          interval: 1000
       # 默认就在「上传视频」tab，直接上传
       - upload:
-          selector: "input.upload-input"
+          selector: "input.upload-input, input[type=file]"
           file: "{{video}}"
-      # 等待上传完成（标题输入框出现）
-      - wait:
-          selector: "input.d-text"
+      # 等待上传完成（标题输入框出现，也可能是隐藏元素）
+      - wait_until:
+          eval: "!!document.querySelector('input.d-text, input[placeholder*=标题], #title')"
+          timeout: 120000
+          interval: 2000
       # 等待视频真正上传完成（进度条消失 / 发布按钮可点击）
       - wait_until:
           eval: >-
