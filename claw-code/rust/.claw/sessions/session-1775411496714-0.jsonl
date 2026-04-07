@@ -1,0 +1,3 @@
+{"created_at_ms":1775411496714,"session_id":"session-1775411496714-0","type":"session_meta","updated_at_ms":1775411500430,"version":1}
+{"message":{"blocks":[{"text":"say hello in one sentence","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"text":"Hello! I'm here to help you with your software engineering tasks. How can I assist you today?","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":7,"input_tokens":9132,"output_tokens":46}},"type":"message"}

@@ -138,12 +138,6 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					Content:   msg.Content,
 					Images:    images,
 				})
-			case "run_tool":
-				callID := msg.ToolID
-				if callID == "" {
-					callID = "direct-" + msg.ToolName
-				}
-				go sess.RunTool(r.Context(), callID, msg.ToolName, msg.ToolArgs)
 			}
 		}
 	}()

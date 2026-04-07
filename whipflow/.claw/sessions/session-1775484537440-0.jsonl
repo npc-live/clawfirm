@@ -1,0 +1,3 @@
+{"created_at_ms":1775484537440,"session_id":"session-1775484537440-0","type":"session_meta","updated_at_ms":1775484547494,"version":1}
+{"message":{"blocks":[{"text":"用一个英文单词回答：香蕉的英文是什么？只输出单词本身。","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"text":"Banana","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":251732,"output_tokens":5}},"type":"message"}

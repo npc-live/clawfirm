@@ -1199,6 +1199,11 @@ func (p *Parser) parsePrimary() ast.Node {
 	case token.MULTILINE_DISCRETION:
 		return p.parseDiscretionNode()
 
+	case token.SESSION:
+		// Allow `session "..."` as an expression so it can be used in
+		// let/const bindings: `let x = session "prompt"`.
+		return p.parseSessionStatement()
+
 	default:
 		return nil
 	}

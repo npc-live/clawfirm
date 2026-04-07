@@ -13,6 +13,14 @@ import (
 //go:embed assets/func
 var embeddedFunc []byte
 
+// embeddedClaw holds the bundled `claw` binary (claw-code Rust CLI).
+// In production builds (make app), the Makefile copies the release binary here.
+// During `wails dev`, this contains a small placeholder — findClawBinary falls
+// back to the build tree or PATH.
+//
+//go:embed assets/claw
+var embeddedClaw []byte
+
 //go:embed assets/skills
 var embeddedSkills embed.FS
 
@@ -21,3 +29,10 @@ var embeddedWorkflows embed.FS
 
 //go:embed assets/shortcuts
 var embeddedShortcuts embed.FS
+
+// embeddedBrowserShortcut holds the bundled `browser-shortcut` binary.
+// In production builds (make app), the Makefile copies the release binary here.
+// During `wails dev`, this contains a small placeholder — the plugin is not registered.
+//
+//go:embed assets/browser-shortcut
+var embeddedBrowserShortcut []byte

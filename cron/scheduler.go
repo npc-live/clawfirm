@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/clawproc"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
 	robfigcron "github.com/robfig/cron/v3"
 )
 
-// AgentBuilder creates a fresh Agent for the named agent config.
-type AgentBuilder func(agentName string) (*agent.Agent, error)
+// AgentBuilder creates a fresh ClawAgent for the named agent config.
+type AgentBuilder func(agentName string) (*clawproc.ClawAgent, error)
 
 // Scheduler manages cron jobs: scheduling, execution, and dynamic updates.
 type Scheduler struct {
@@ -394,9 +394,35 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 		}
 		return
 	}
+	defer ag.Close()
+
+	// Accumulate text output from agent events.
+	var mu sync.Mutex
+	var textParts []string
+	var toolResults []string
+
+	unsub := ag.Subscribe(func(ev types.AgentEvent) {
+		mu.Lock()
+		defer mu.Unlock()
+		switch ev.Type {
+		case types.EventMessageUpdate:
+			if ev.StreamEvent != nil && ev.StreamEvent.Type == types.StreamEventTextDelta && ev.StreamEvent.Delta != "" {
+				textParts = append(textParts, ev.StreamEvent.Delta)
+			}
+		case types.EventToolExecutionEnd:
+			if ev.ToolResult != "" && !ev.ToolIsError {
+				toolResults = append(toolResults, fmt.Sprintf("[%s] %s", ev.ToolName, ev.ToolResult))
+			}
+		}
+	})
+	defer unsub()
 
 	ctx := s.ctx
-	if err := ag.Prompt(ctx, prompt); err != nil {
+	userMsg := &types.UserMessage{
+		Role:    "user",
+		Content: []types.ContentBlock{&types.TextContent{Type: types.ContentTypeText, Text: prompt}},
+	}
+	if err := ag.PromptMessages(ctx, []types.Message{userMsg}); err != nil {
 		errMsg := fmt.Sprintf("prompt: %v", err)
 		log.Printf("cron: job %s: %s", jobName, errMsg)
 		if historyID > 0 {
@@ -407,23 +433,18 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 	if err := ag.WaitForIdle(ctx); err != nil {
 		errMsg := fmt.Sprintf("wait: %v", err)
 		log.Printf("cron: job %s: %s", jobName, errMsg)
+		mu.Lock()
+		result := buildResult(textParts, toolResults)
+		mu.Unlock()
 		if historyID > 0 {
-			_ = s.store.CompleteHistory(historyID, "error", collectMessages(ag.State().Messages), errMsg)
+			_ = s.store.CompleteHistory(historyID, "error", result, errMsg)
 		}
 		return
 	}
 
-	finalState := ag.State()
-	result := collectMessages(finalState.Messages)
-
-	// If the agent loop itself errored (e.g. LLM auth failure), surface it.
-	if finalState.Error != "" {
-		log.Printf("cron: job %s: agent error: %s", jobName, finalState.Error)
-		if historyID > 0 {
-			_ = s.store.CompleteHistory(historyID, "error", result, finalState.Error)
-		}
-		return
-	}
+	mu.Lock()
+	result := buildResult(textParts, toolResults)
+	mu.Unlock()
 
 	// Truncate result to avoid blowing up the DB.
 	const maxResult = 10000
@@ -437,37 +458,12 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 	log.Printf("cron: job %s (%s) completed successfully", jobName, jobID)
 }
 
-// collectMessages extracts a human-readable log from the agent's message history.
-// It includes assistant text and tool result text (e.g. whipflow_run output).
-func collectMessages(msgs []types.Message) string {
-	var b strings.Builder
-	for _, msg := range msgs {
-		switch m := msg.(type) {
-		case *types.AssistantMessage:
-			for _, block := range m.Content {
-				if tb, ok := block.(*types.TextContent); ok {
-					if strings.TrimSpace(tb.Text) == "" {
-						continue
-					}
-					if b.Len() > 0 {
-						b.WriteString("\n")
-					}
-					b.WriteString(tb.Text)
-				}
-			}
-		case *types.ToolResultMessage:
-			for _, block := range m.Content {
-				if tb, ok := block.(*types.TextContent); ok {
-					if strings.TrimSpace(tb.Text) == "" {
-						continue
-					}
-					if b.Len() > 0 {
-						b.WriteString("\n")
-					}
-					b.WriteString(fmt.Sprintf("[%s] %s", m.ToolName, tb.Text))
-				}
-			}
-		}
+// buildResult joins accumulated text and tool result parts into a single string.
+func buildResult(textParts, toolResults []string) string {
+	var parts []string
+	if t := strings.TrimSpace(strings.Join(textParts, "")); t != "" {
+		parts = append(parts, t)
 	}
-	return b.String()
+	parts = append(parts, toolResults...)
+	return strings.Join(parts, "\n")
 }

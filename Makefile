@@ -1,11 +1,11 @@
 BIN_DIR  := bin
 GO       := go
-CMDS     := clawfirm func gateway wschat
+CMDS     := clawfirm func gateway wschat browser-shortcut
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-.PHONY: all clean $(CMDS) desktop frontend app install mobile-android mobile-ios mobile-dev-android mobile-dev-ios
+.PHONY: all clean $(CMDS) desktop frontend app install claw mobile-android mobile-ios mobile-dev-android mobile-dev-ios
 
-all: $(CMDS) desktop
+all: claw $(CMDS) desktop
 
 # --- Pure Go binaries ---
 $(CMDS):
@@ -16,12 +16,25 @@ frontend:
 	cd cmd/desktop/frontend && npm install && npm run build
 
 desktop:
+	@rm -rf cmd/desktop/frontend/wailsjs
 	cd cmd/desktop && wails build -o ../../$(BIN_DIR)/desktop
+
+# --- claw-code Rust CLI ---
+claw:
+	cd claw-code/rust && cargo build --release
+	@echo "✓ Built: claw-code/rust/target/release/claw"
+
+claw-debug:
+	cd claw-code/rust && cargo build
+	@echo "✓ Built: claw-code/rust/target/debug/claw"
 
 # --- macOS .app bundle ---
 # Produces: bin/clawfirm.app  (drag to /Applications to install)
-# Embeds a darwin/universal `func` binary into app/assets/func before compiling.
-app: func-universal
+# Embeds a darwin/universal `func` binary and claw binary into app/assets before compiling.
+app: func-universal claw browser-shortcut-universal
+	@cp claw-code/rust/target/release/claw app/assets/claw
+	@echo "✓ Embedded claw binary: app/assets/claw ($$(wc -c < app/assets/claw | tr -d ' ') bytes)"
+	@rm -rf cmd/desktop/frontend/wailsjs
 	cd cmd/desktop && wails build \
 		-ldflags "-X github.com/ai-gateway/clawfirm/app.Version=$(VERSION)" \
 		-platform darwin/universal \
@@ -43,6 +56,17 @@ func-universal:
 	@lipo -create -output app/assets/func $(BIN_DIR)/func-arm64 $(BIN_DIR)/func-amd64
 	@rm -f $(BIN_DIR)/func-arm64 $(BIN_DIR)/func-amd64
 	@echo "✓ Embedded func binary: app/assets/func ($$(wc -c < app/assets/func | tr -d ' ') bytes)"
+
+# Build browser-shortcut as a darwin/universal binary and embed it into the app package.
+browser-shortcut-universal:
+	@echo "Building browser-shortcut (arm64)…"
+	@GOOS=darwin GOARCH=arm64 $(GO) build -o $(BIN_DIR)/browser-shortcut-arm64 ./cmd/browser-shortcut
+	@echo "Building browser-shortcut (amd64)…"
+	@GOOS=darwin GOARCH=amd64 $(GO) build -o $(BIN_DIR)/browser-shortcut-amd64 ./cmd/browser-shortcut
+	@echo "Creating universal binary…"
+	@lipo -create -output app/assets/browser-shortcut $(BIN_DIR)/browser-shortcut-arm64 $(BIN_DIR)/browser-shortcut-amd64
+	@rm -f $(BIN_DIR)/browser-shortcut-arm64 $(BIN_DIR)/browser-shortcut-amd64
+	@echo "✓ Embedded browser-shortcut binary: app/assets/browser-shortcut ($$(wc -c < app/assets/browser-shortcut | tr -d ' ') bytes)"
 
 # --- Quick install to /Applications ---
 install: app

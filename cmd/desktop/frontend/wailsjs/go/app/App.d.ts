@@ -91,6 +91,8 @@ export function InstallRemoteSkill(arg1:string,arg2:boolean):Promise<string>;
 
 export function IsFirstRun():Promise<boolean>;
 
+export function ListCanvasFiles():Promise<Array<string>>;
+
 export function ListCronJobs():Promise<Array<store.CronJob>>;
 
 export function ListMemoryFiles():Promise<Array<app.MemoryFile>>;

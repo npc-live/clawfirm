@@ -2,7 +2,6 @@ package types
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 )
 
@@ -97,7 +96,8 @@ func unmarshalContentBlocks(data json.RawMessage) ([]ContentBlock, error) {
 			}
 			block = v
 		default:
-			return nil, fmt.Errorf("unknown content block type: %q", r.Type)
+			// Skip unknown/empty content block types gracefully (e.g. legacy data).
+			continue
 		}
 		blocks = append(blocks, block)
 	}

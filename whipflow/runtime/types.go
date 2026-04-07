@@ -87,7 +87,7 @@ type RuntimeConfig struct {
 	// obtain extra environment variables (secrets from the vault).
 	VaultEnv func() map[string]string
 	// SkillResolver, if set, resolves a skill name to its SKILL.md content.
-	// Used by NativeProvider sessions to inject skill knowledge.
+	// Injected into provider sessions for skill knowledge.
 	SkillResolver func(name string) (string, error)
 }
 
@@ -95,7 +95,7 @@ type RuntimeConfig struct {
 func DefaultRuntimeConfig() RuntimeConfig {
 	return RuntimeConfig{
 		DefaultModel:          "sonnet",
-		SessionTimeout:        300000,
+		SessionTimeout:        900000,
 		TotalExecutionTimeout: 3600000,
 		MaxLoopIterations:     100,
 		MaxCallDepth:          50,
@@ -105,7 +105,7 @@ func DefaultRuntimeConfig() RuntimeConfig {
 		Debug:                 false,
 		TraceExecution:        false,
 		LogLevel:              "info",
-		DefaultProvider:       "native",
+		DefaultProvider:       "claw",
 	}
 }
 

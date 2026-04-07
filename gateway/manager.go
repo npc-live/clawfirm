@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/clawfirm/agent"
-	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
 )
@@ -18,8 +16,8 @@ const (
 	defaultMaxSessions = 100
 )
 
-// AgentFactory creates a new Agent for the given channelID+userID.
-type AgentFactory func(channelID, userID string) *agent.Agent
+// AgentFactory creates a new AgentRunner for the given channelID+userID.
+type AgentFactory func(channelID, userID string) AgentRunner
 
 // ManagerConfig configures a SessionManager.
 type ManagerConfig struct {
@@ -37,6 +35,10 @@ type ManagerConfig struct {
 	// OnUserMessage is called immediately before a user message is sent to the agent.
 	// Use this to persist the user message before the agent processes it.
 	OnUserMessage func(channelID, userID string, msg types.Message)
+
+	// OnAgentEvent is called for every agent event emitted during a session.
+	// Use this to persist assistant messages and tool results.
+	OnAgentEvent func(channelID, userID string, ev types.AgentEvent)
 }
 
 // SessionManager creates, caches, and expires Sessions.
@@ -64,16 +66,6 @@ func NewSessionManager(factory AgentFactory, cfg ManagerConfig) *SessionManager 
 	}
 	go m.cleanupLoop()
 	return m
-}
-
-// SimpleAgentFactory returns an AgentFactory that creates agents from the given provider+model.
-func SimpleAgentFactory(prov provider.LLMProvider, model types.Model, systemPrompt string) AgentFactory {
-	return func(_, _ string) *agent.Agent {
-		return agent.NewAgent(prov,
-			agent.WithModel(model),
-			agent.WithSystemPrompt(systemPrompt),
-		)
-	}
 }
 
 // buildKey returns the structured session key for a channel+user pair.
@@ -139,7 +131,11 @@ func (m *SessionManager) GetOrCreate(channelID, userID string) (*Session, error)
 	if m.cfg.OnUserMessage != nil {
 		onUser = func(msg types.Message) { m.cfg.OnUserMessage(channelID, userID, msg) }
 	}
-	s := newSession(key, channelID, userID, m.factory(channelID, userID), entry, m.cfg.SessionStore, m.cfg.Summarizer, onUser)
+	var onEvent func(types.AgentEvent)
+	if m.cfg.OnAgentEvent != nil {
+		onEvent = func(ev types.AgentEvent) { m.cfg.OnAgentEvent(channelID, userID, ev) }
+	}
+	s := newSession(key, channelID, userID, m.factory(channelID, userID), entry, m.cfg.SessionStore, m.cfg.Summarizer, onUser, onEvent)
 	m.sessions[key] = s
 	return s, nil
 }

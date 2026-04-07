@@ -1,0 +1,3 @@
+{"created_at_ms":1775464490618,"session_id":"session-1775464490618-0","type":"session_meta","updated_at_ms":1775464501636,"version":1}
+{"message":{"blocks":[{"text":"hello","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"text":"Hello! How can I help you with your project today?\n\nI can see you're working on **pi-go** (a Go project with quite a few interesting components including an AI gateway, whipflow automation, browser shortcuts, and a desktop app). Is there something specific you'd like to work on?","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":67}},"type":"message"}

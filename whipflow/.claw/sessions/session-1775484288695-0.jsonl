@@ -1,0 +1,3 @@
+{"created_at_ms":1775484288695,"session_id":"session-1775484288695-0","type":"session_meta","updated_at_ms":1775484299071,"version":1}
+{"message":{"blocks":[{"text":"请用一句话回答：你是哪个AI模型？提到版本。","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"text":"我是 Claude，由 Anthropic 开发，当前运行的是 Claude Opus 4.6 版本。","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":0,"output_tokens":36}},"type":"message"}

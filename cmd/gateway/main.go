@@ -15,12 +15,10 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ai-gateway/clawfirm/agent"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
+	"github.com/ai-gateway/clawfirm/clawproc"
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/gateway"
-	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
-	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
 )
@@ -45,46 +43,31 @@ func main() {
 	defer db.Close()
 	log.Println("store: SQLite ready")
 
-	// ── Provider instances ────────────────────────────────────────────────────
-	providerMap, err := buildProviders(cfg)
-	if err != nil {
-		log.Fatalf("providers: %v", err)
-	}
-
 	// ── Agent registry ────────────────────────────────────────────────────────
 	msgStore := db.Messages()
 	registry := gateway.NewAgentRegistry()
 
-	for _, ac := range cfg.Agents {
-		prov, ok := providerMap[ac.Provider]
-		if !ok {
-			log.Fatalf("agent %q: provider %q not found in config", ac.Name, ac.Provider)
-		}
-		maxTokens := ac.MaxTokens
-		if maxTokens == 0 {
-			maxTokens = 4096
-		}
-		model := types.Model{
-			ID:        ac.Model,
-			Provider:  ac.Provider,
-			MaxTokens: maxTokens,
-		}
-		systemPrompt := ac.SystemPrompt
-		agentName := ac.Name
+	binPath := findClawBinary()
 
-		factory := gateway.AgentFactory(func(channelID, userID string) *agent.Agent {
-			a := agent.NewAgent(prov,
-				agent.WithModel(model),
-				agent.WithSystemPrompt(systemPrompt),
-			)
-			if history, err := msgStore.ListMessages(store.QueryParams{
-				ChannelID: channelID,
-				UserID:    userID,
-			}); err == nil && len(history) > 0 {
-				a.ReplaceMessages(history)
-				log.Printf("[%s] session %s/%s: restored %d messages", agentName, channelID, userID, len(history))
+	for _, ac := range cfg.Agents {
+		agentName := ac.Name
+		workDir := ac.WorkspaceDir
+		if workDir == "" {
+			workDir, _ = os.UserHomeDir()
+		}
+
+		factory := gateway.AgentFactory(func(channelID, userID string) gateway.AgentRunner {
+			proc := clawproc.NewProcess(clawproc.Config{
+				BinaryPath:     binPath,
+				Model:          ac.Model,
+				PermissionMode: "danger-full-access",
+				WorkingDir:     workDir,
+			})
+			ca := clawproc.NewClawAgent(proc)
+			if err := ca.Start(context.Background()); err != nil {
+				log.Printf("[%s] claw start failed: %v", agentName, err)
 			}
-			a.Subscribe(func(ev types.AgentEvent) {
+			ca.Subscribe(func(ev types.AgentEvent) {
 				switch ev.Type {
 				case types.EventMessageEnd:
 					if ev.AssistantMsg != nil {
@@ -92,15 +75,9 @@ func main() {
 							log.Printf("[%s] session %s/%s: save assistant message: %v", agentName, channelID, userID, err)
 						}
 					}
-				case types.EventTurnEnd:
-					for i := range ev.ToolResults {
-						if err := msgStore.SaveMessage(channelID, userID, &ev.ToolResults[i]); err != nil {
-							log.Printf("[%s] session %s/%s: save tool result[%d]: %v", agentName, channelID, userID, i, err)
-						}
-					}
 				}
 			})
-			return a
+			return ca
 		})
 
 		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
@@ -111,7 +88,7 @@ func main() {
 			},
 		})
 		registry.Register(ac.Name, mgr)
-		log.Printf("agent: %s  provider: %s  model: %s", ac.Name, ac.Provider, ac.Model)
+		log.Printf("agent: %s  model: %s", ac.Name, ac.Model)
 	}
 
 	if len(cfg.Agents) == 0 {
@@ -150,16 +127,18 @@ func main() {
 	log.Println("gateway: stopped")
 }
 
-// buildProviders constructs one LLMProvider per entry in cfg.Providers.
-func buildProviders(cfg *config.Config) (map[string]provider.LLMProvider, error) {
-	return agentbuilder.BuildProviders(cfg)
-}
-
-// buildProvider creates an LLMProvider from a single ProviderConfig.
-func buildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, error) {
-	return agentbuilder.BuildProvider(id, pc)
-}
-
-func providerEnvVar(id string) string {
-	return agentbuilder.ProviderEnvVar(id)
+// findClawBinary locates the claw binary.
+func findClawBinary() string {
+	// 1. Development build tree.
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates := []string{
+			home + "/.clawfirm/bin/claw",
+		}
+		for _, p := range candidates {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
+	return "claw"
 }

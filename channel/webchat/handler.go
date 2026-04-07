@@ -168,13 +168,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Content:   msg.Content,
 					Images:    images,
 				})
-			case "run_tool":
-				callID := msg.ToolID
-				if callID == "" {
-					callID = "direct-" + msg.ToolName
-				}
-				log.Printf("[%s] run_tool: %s/%s: tool=%s args=%v", agentName, channelID, sessionID, msg.ToolName, msg.ToolArgs)
-				go sess.RunTool(r.Context(), callID, msg.ToolName, msg.ToolArgs)
 			}
 		}
 	}()

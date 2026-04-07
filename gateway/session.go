@@ -12,9 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ai-gateway/clawfirm/agent"
 	"github.com/ai-gateway/clawfirm/store"
-	"github.com/ai-gateway/clawfirm/tool"
 	"github.com/ai-gateway/clawfirm/types"
 )
 
@@ -56,7 +54,7 @@ type Session struct {
 	channelID string
 	userID    string
 
-	agent     *agent.Agent
+	agent     AgentRunner
 	msgCh     chan IncomingMessage
 	cancel    context.CancelFunc
 
@@ -78,9 +76,10 @@ type sinkEntry struct {
 var sinkSeq atomic.Uint64
 
 // newSession creates and starts a Session.
-func newSession(key, channelID, userID string, a *agent.Agent,
+func newSession(key, channelID, userID string, a AgentRunner,
 	entry *store.SessionEntry, ss *store.SessionStore,
-	summarizer ConversationSummarizer, onUserMessage func(types.Message)) *Session {
+	summarizer ConversationSummarizer, onUserMessage func(types.Message),
+	onAgentEvent func(types.AgentEvent)) *Session {
 	s := &Session{
 		key:           key,
 		channelID:     channelID,
@@ -104,6 +103,11 @@ func newSession(key, channelID, userID string, a *agent.Agent,
 		s.mu.Unlock()
 		for _, e := range entries {
 			e.fn(ev)
+		}
+
+		// Forward to the persistence callback (if configured).
+		if onAgentEvent != nil {
+			onAgentEvent(ev)
 		}
 
 		// Track token usage per turn (EventTurnEnd carries the single assistant message).
@@ -174,55 +178,6 @@ func (s *Session) Send(msg IncomingMessage) bool {
 // Abort cancels the agent's current in-progress turn without stopping the session.
 func (s *Session) Abort() { s.agent.Abort() }
 
-// RunTool finds and directly executes a named tool, bypassing the LLM.
-// Events (tool_start, tool_update, tool_end, agent_end) are emitted to subscribers.
-func (s *Session) RunTool(ctx context.Context, callID, toolName string, args map[string]any) {
-	t := s.agent.FindTool(toolName)
-	if t == nil {
-		s.emitEvent(types.AgentEvent{
-			Type: types.EventToolExecutionEnd,
-			ToolCallID: callID,
-			ToolName:   toolName,
-			ToolResult: "tool not found: " + toolName,
-			ToolIsError: true,
-		})
-		s.emitEvent(types.AgentEvent{Type: types.EventAgentEnd})
-		return
-	}
-	s.emitEvent(types.AgentEvent{
-		Type:       types.EventToolExecutionStart,
-		ToolCallID: callID,
-		ToolName:   toolName,
-		ToolArgs:   args,
-	})
-	result, err := t.Execute(ctx, callID, args, func(upd tool.ToolUpdate) {
-		s.emitEvent(types.AgentEvent{
-			Type:          types.EventToolExecutionUpdate,
-			ToolCallID:    callID,
-			ToolName:      toolName,
-			PartialResult: upd.Details,
-		})
-	})
-	toolResult := ""
-	isErr := false
-	if err != nil {
-		toolResult = err.Error()
-		isErr = true
-	} else if len(result.Content) > 0 {
-		if tc, ok := result.Content[0].(*types.TextContent); ok {
-			toolResult = tc.Text
-		}
-	}
-	s.emitEvent(types.AgentEvent{
-		Type:        types.EventToolExecutionEnd,
-		ToolCallID:  callID,
-		ToolName:    toolName,
-		ToolResult:  toolResult,
-		ToolIsError: isErr,
-	})
-	s.emitEvent(types.AgentEvent{Type: types.EventAgentEnd})
-}
-
 // emitEvent fans out an event to all current subscribers.
 func (s *Session) emitEvent(ev types.AgentEvent) {
 	s.mu.Lock()
@@ -249,9 +204,12 @@ func (s *Session) SummarizeNow(ctx context.Context) {
 	}
 }
 
-// Stop shuts down the session's processing goroutine.
+// Stop shuts down the session's processing goroutine and the underlying agent process.
 func (s *Session) Stop() {
 	s.cancel()
+	if c, ok := s.agent.(interface{ Close() error }); ok {
+		_ = c.Close()
+	}
 }
 
 // LastUsed returns the time the session last received a message.
@@ -311,13 +269,14 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 		for _, img := range msg.Images {
 			path, err := saveMediaToTemp(img.Data, img.MimeType)
 			if err != nil {
-				log.Printf("webchat: save media: %v", err)
+				log.Printf("gateway: save media: %v", err)
 				continue
 			}
+			log.Printf("gateway: saved attached file → %s (%s, %d bytes)", path, img.MimeType, len(img.Data))
 			filePaths = append(filePaths, path)
 		}
 		if len(filePaths) > 0 {
-			hint := fmt.Sprintf("[User attached %d file(s): %s]\nUse the media_understand tool with the file path(s) above to analyze them.",
+			hint := fmt.Sprintf("[User attached %d file(s): %s]\nYou can read these files using the Read tool (images) or process them with Bash (audio/video).",
 				len(filePaths), strings.Join(filePaths, ", "))
 			blocks = append(blocks, &types.TextContent{
 				Type: types.ContentTypeText,

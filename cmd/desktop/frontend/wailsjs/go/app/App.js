@@ -174,6 +174,10 @@ export function IsFirstRun() {
   return window['go']['app']['App']['IsFirstRun']();
 }
 
+export function ListCanvasFiles() {
+  return window['go']['app']['App']['ListCanvasFiles']();
+}
+
 export function ListCronJobs() {
   return window['go']['app']['App']['ListCronJobs']();
 }

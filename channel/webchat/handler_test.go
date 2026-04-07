@@ -6,37 +6,64 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 
-	"github.com/ai-gateway/clawfirm/agent"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
 	"github.com/ai-gateway/clawfirm/gateway"
-	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/types"
 )
 
-// fakeProvider returns one delta + done for every stream call.
-type fakeProvider struct{ reply string }
+// mockRunner is a minimal AgentRunner that emits one text delta and agent-end.
+type mockRunner struct {
+	reply string
+	mu    sync.Mutex
+	ls    []func(types.AgentEvent)
+}
 
-func (f *fakeProvider) ID() string            { return "fake" }
-func (f *fakeProvider) Models() []types.Model { return nil }
-func (f *fakeProvider) Stream(_ context.Context, _ provider.LLMRequest) (<-chan types.AssistantMessageEvent, error) {
-	ch := make(chan types.AssistantMessageEvent, 3)
-	ch <- types.AssistantMessageEvent{Type: types.StreamEventTextDelta, Delta: f.reply}
-	ch <- types.AssistantMessageEvent{
-		Type:    types.StreamEventDone,
-		Message: &types.AssistantMessage{Role: "assistant", StopReason: types.StopReasonStop},
+func (m *mockRunner) PromptMessages(_ context.Context, _ []types.Message) error {
+	go func() {
+		m.emit(types.AgentEvent{
+			Type:        types.EventMessageUpdate,
+			StreamEvent: &types.AssistantMessageEvent{Type: types.StreamEventTextDelta, Delta: m.reply},
+		})
+		m.emit(types.AgentEvent{Type: types.EventAgentEnd})
+	}()
+	return nil
+}
+func (m *mockRunner) Abort()                              {}
+func (m *mockRunner) WaitForIdle(_ context.Context) error { return nil }
+func (m *mockRunner) ClearMessages()                      {}
+func (m *mockRunner) State() types.AgentState             { return types.AgentState{} }
+func (m *mockRunner) Subscribe(fn func(types.AgentEvent)) func() {
+	m.mu.Lock()
+	m.ls = append(m.ls, fn)
+	idx := len(m.ls) - 1
+	m.mu.Unlock()
+	return func() {
+		m.mu.Lock()
+		m.ls[idx] = nil
+		m.mu.Unlock()
 	}
-	close(ch)
-	return ch, nil
+}
+func (m *mockRunner) emit(ev types.AgentEvent) {
+	m.mu.Lock()
+	ls := make([]func(types.AgentEvent), len(m.ls))
+	copy(ls, m.ls)
+	m.mu.Unlock()
+	for _, fn := range ls {
+		if fn != nil {
+			fn(ev)
+		}
+	}
 }
 
 func newTestRegistry(reply string) *gateway.AgentRegistry {
-	factory := gateway.AgentFactory(func(_, _ string) *agent.Agent {
-		return agent.NewAgent(&fakeProvider{reply: reply}, agent.WithModel(types.Model{ID: "m"}))
+	factory := gateway.AgentFactory(func(_, _ string) gateway.AgentRunner {
+		return &mockRunner{reply: reply}
 	})
 	mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{})
 	reg := gateway.NewAgentRegistry()

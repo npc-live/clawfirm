@@ -9,21 +9,61 @@ package main
 
 import (
 	_ "embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/whipflow"
 )
+
+// progressEvent is the NDJSON line emitted to stdout for each session event.
+type progressEvent struct {
+	Type       string `json:"type"`
+	Index      int    `json:"index"`
+	Name       string `json:"name,omitempty"`
+	Provider   string `json:"provider,omitempty"`
+	Done       bool   `json:"done"`
+	DurationMs int64  `json:"duration_ms,omitempty"`
+	Output     string `json:"output,omitempty"`
+	Error      string `json:"error,omitempty"`
+}
+
+func emitProgress(p whipflow.SessionProgress) {
+	ev := progressEvent{
+		Type:       "session_progress",
+		Index:      p.Index,
+		Name:       p.Name,
+		Provider:   p.Provider,
+		Done:       p.Done,
+		DurationMs: p.DurationMs,
+		Output:     p.Output,
+		Error:      p.Error,
+	}
+	b, _ := json.Marshal(ev)
+	fmt.Println(string(b))
+}
+
+// inputFlags collects multiple -input key=value flags.
+type inputFlags []string
+
+func (f *inputFlags) String() string { return strings.Join(*f, ", ") }
+func (f *inputFlags) Set(v string) error {
+	*f = append(*f, v)
+	return nil
+}
 
 //go:embed SKILL.md
 var skillMD []byte
 
 func main() {
 	cfgPath := flag.String("config", "", "path to config.yml (default: ~/.clawfirm/config.yml)")
+	var inputs inputFlags
+	flag.Var(&inputs, "input", "pre-fill ask variable: key=value (repeatable)")
 	flag.Parse()
 
 	args := flag.Args()
@@ -31,6 +71,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: whip [flags] <file.whip>")
 		fmt.Fprintln(os.Stderr, "       whip validate <file.whip> [...]")
 		fmt.Fprintln(os.Stderr, "       whip install-skills [--force]")
+		fmt.Fprintln(os.Stderr, "flags:")
+		fmt.Fprintln(os.Stderr, "  -input key=value   pre-fill ask variable (repeatable)")
+		fmt.Fprintln(os.Stderr, "  -config path       path to config.yml")
 		os.Exit(1)
 	}
 
@@ -54,13 +97,28 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	result, err := whipflow.RunFile(filePath, whipflow.WithPiConfig(cfg))
-	if err != nil {
-		log.Fatalf("whipflow: %v", err)
+	opts := []whipflow.Option{
+		whipflow.WithPiConfig(cfg),
+		// Emit each session as an NDJSON event immediately when it completes;
+		// context between sessions flows through the interpreter's variable
+		// environment (markdown output stored as $last / named session vars).
+		whipflow.WithSessionProgressCallback(emitProgress),
 	}
 
-	for _, output := range result.Outputs {
-		fmt.Println(output)
+	// Parse -input flags into initial inputs map.
+	if len(inputs) > 0 {
+		inputMap := make(map[string]string, len(inputs))
+		for _, kv := range inputs {
+			parts := strings.SplitN(kv, "=", 2)
+			if len(parts) == 2 {
+				inputMap[parts[0]] = parts[1]
+			}
+		}
+		opts = append(opts, whipflow.WithInitialInputs(inputMap))
+	}
+
+	if _, err := whipflow.RunFile(filePath, opts...); err != nil {
+		log.Fatalf("whipflow: %v", err)
 	}
 }
 

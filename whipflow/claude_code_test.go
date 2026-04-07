@@ -2,12 +2,20 @@ package whipflow_test
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"testing"
 
 	"github.com/ai-gateway/clawfirm/whipflow"
 )
 
 func TestClaudeCodeProvider(t *testing.T) {
+	// Skip if claw binary is not available (CI or dev without build).
+	if _, err := exec.LookPath("claw"); err != nil {
+		if _, err := os.Stat("../claw-code/rust/target/debug/claw"); err != nil {
+			t.Skip("claw binary not found, skipping integration test")
+		}
+	}
 	src := `let result = session "请用一句话回答：你是哪个AI模型？提到版本。"`
 
 	prog, errs := whipflow.Parse(src)

@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { GetWebhookBaseURL, AbortCurrentTurn, GetConfig, ReadCanvasFile } from "../wailsjs/go/app/App";
+import { GetWebhookBaseURL, AbortCurrentTurn, GetConfig, ReadCanvasFile, ListCanvasFiles } from "../wailsjs/go/app/App";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
 import { ToolPanel, type ToolExecution } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";
@@ -81,6 +81,7 @@ export function CanvasPane() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [newFilePrompt, setNewFilePrompt] = useState(false);
   const [fileNameInput, setFileNameInput] = useState("");
+  const [canvasFiles, setCanvasFiles] = useState<string[]>([]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const panRef = useRef(pan);
@@ -219,7 +220,11 @@ export function CanvasPane() {
           + Chat Cell
         </button>
         <button
-          onClick={() => { setNewFilePrompt(true); setFileNameInput(""); }}
+          onClick={() => {
+            setNewFilePrompt(true);
+            setFileNameInput("");
+            ListCanvasFiles().then(files => setCanvasFiles(files ?? [])).catch(() => setCanvasFiles([]));
+          }}
           className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[12px] font-medium
             bg-[rgba(168,85,247,0.12)] text-purple-400 border border-[rgba(168,85,247,0.25)]
             hover:bg-[rgba(168,85,247,0.22)] transition-colors"
@@ -248,6 +253,24 @@ export function CanvasPane() {
               Watches <code className="text-purple-400">~/.clawfirm/canvas/<em>name</em>.html</code><br />
               Any workflow that writes to this file will auto-update the Preview tab.
             </p>
+            {canvasFiles.length > 0 && (
+              <div className="mb-3">
+                <div className="text-[11px] text-[rgba(61,57,41,0.35)] mb-1.5">Existing files</div>
+                <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
+                  {canvasFiles.map(f => (
+                    <button
+                      key={f}
+                      onClick={() => { addFileCell(f); setNewFilePrompt(false); }}
+                      className="text-left px-3 py-1.5 rounded-lg text-[12px] text-purple-300
+                        bg-[rgba(168,85,247,0.08)] border border-[rgba(168,85,247,0.15)]
+                        hover:bg-[rgba(168,85,247,0.18)] transition-colors truncate">
+                      {f}
+                    </button>
+                  ))}
+                </div>
+                <div className="my-3 border-t border-[rgba(61,57,41,0.08)]" />
+              </div>
+            )}
             <input
               autoFocus
               value={fileNameInput}
@@ -256,7 +279,7 @@ export function CanvasPane() {
                 if (e.key === "Enter") { addFileCell(fileNameInput); setNewFilePrompt(false); }
                 if (e.key === "Escape") setNewFilePrompt(false);
               }}
-              placeholder="e.g. rockflow"
+              placeholder="or type a new name…"
               className="w-full bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.12)] rounded-lg
                 px-3 py-2 text-[13px] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)]
                 focus:outline-none focus:border-[rgba(168,85,247,0.5)] mb-3"

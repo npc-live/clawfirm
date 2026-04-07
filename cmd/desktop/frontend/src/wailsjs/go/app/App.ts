@@ -75,6 +75,9 @@ export const DeleteVaultEntry = (key: string): Promise<void> =>
 export const TriggerCronJob = (jobID: string): Promise<void> =>
   callGo<void>(PKG, STRUCT, "TriggerCronJob", jobID);
 
+export const ListCanvasFiles = (): Promise<string[]> =>
+  callGo<string[]>(PKG, STRUCT, "ListCanvasFiles");
+
 export const ReadCanvasFile = (name: string): Promise<string> =>
   callGo<string>(PKG, STRUCT, "ReadCanvasFile", name);
 

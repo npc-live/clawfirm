@@ -69,15 +69,17 @@ interface WhipflowSessionStep {
   output?: string;
   duration_ms?: number;
   error?: string;
+  stream_text?: string;
 }
 
 function isWhipflowStep(v: any): v is WhipflowSessionStep {
-  return v !== null && typeof v === "object" && typeof v.prompt === "string" && typeof v.index === "number";
+  return v !== null && typeof v === "object" && typeof v.index === "number";
 }
 
 // Accumulate session steps from a stream of partial_result updates.
 // Each update is a single WhipflowSessionStep; we merge them into a map
 // keyed by index so start (done=false) and end (done=true) merge cleanly.
+// stream_text deltas are appended (not replaced) to build the full text.
 function mergeSessionSteps(partial: any): Map<number, WhipflowSessionStep> {
   const map = new Map<number, WhipflowSessionStep>();
   if (!partial) return map;
@@ -86,7 +88,20 @@ function mergeSessionSteps(partial: any): Map<number, WhipflowSessionStep> {
   for (const item of items) {
     if (!isWhipflowStep(item)) continue;
     const existing = map.get(item.index);
-    map.set(item.index, existing ? { ...existing, ...item } : item);
+    if (existing) {
+      // Append stream_text delta to accumulated text
+      if (item.stream_text) {
+        const merged = { ...existing };
+        merged.stream_text = (existing.stream_text || "") + item.stream_text;
+        // Also apply any other fields from the update (e.g. done, output)
+        if (item.done) { merged.done = true; merged.output = item.output; merged.duration_ms = item.duration_ms; merged.error = item.error; }
+        map.set(item.index, merged);
+      } else {
+        map.set(item.index, { ...existing, ...item });
+      }
+    } else {
+      map.set(item.index, item);
+    }
   }
   return map;
 }
@@ -278,15 +293,35 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
         <span className={`text-[rgba(61,57,41,0.3)] text-[10px] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
 
+      {/* Streaming text preview (collapsed, while running) */}
+      {!open && isRunning && step.stream_text && (
+        <div className="px-3 pb-2">
+          <pre className="text-[11px] text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.03)] rounded p-1.5 whitespace-pre-wrap break-words max-h-16 overflow-hidden font-mono leading-relaxed line-clamp-3">
+            {step.stream_text.length > 200 ? "…" + step.stream_text.slice(-200) : step.stream_text}
+          </pre>
+        </div>
+      )}
+
       {open && (
         <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[rgba(61,57,41,0.08)]">
           {/* Prompt */}
+          {step.prompt && (
           <div>
             <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Prompt</p>
             <pre className="text-[11px] text-[rgba(61,57,41,0.55)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto font-mono leading-relaxed">
               {step.prompt}
             </pre>
           </div>
+          )}
+          {/* Streaming text (while running) */}
+          {isRunning && step.stream_text && (
+            <div>
+              <p className="text-[10px] font-semibold text-[rgba(200,90,42,0.5)] uppercase tracking-wider mb-1">Generating…</p>
+              <pre className="text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
+                {step.stream_text}
+              </pre>
+            </div>
+          )}
           {/* Output */}
           {step.output && (
             <div>
@@ -516,7 +551,7 @@ export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, on
                     preview={tryParseJSON(exec.result) as WhipflowPreview}
                     onConfirm={onConfirmPreview ? () => {
                       const p = tryParseJSON(exec.result) as WhipflowPreview;
-                      onConfirmPreview(p.source);
+                      onConfirmPreview(p.source, whipflowArgs?.user_inputs);
                     } : undefined}
                     onEdit={onEditPreview ? () => {
                       const p = tryParseJSON(exec.result) as WhipflowPreview;

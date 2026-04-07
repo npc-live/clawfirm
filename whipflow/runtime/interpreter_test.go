@@ -1,41 +1,11 @@
 package runtime
 
 import (
-	"context"
 	"testing"
 
-	"github.com/ai-gateway/clawfirm/provider"
-	"github.com/ai-gateway/clawfirm/types"
 	"github.com/ai-gateway/clawfirm/whipflow/ast"
 	"github.com/ai-gateway/clawfirm/whipflow/token"
 )
-
-// mockLLMProvider is a test double that returns a fixed text response.
-type mockLLMProvider struct {
-	response string
-}
-
-func (m *mockLLMProvider) ID() string { return "mock" }
-func (m *mockLLMProvider) Models() []types.Model {
-	return []types.Model{{ID: "mock-model", Provider: "mock"}}
-}
-func (m *mockLLMProvider) Stream(_ context.Context, _ provider.LLMRequest) (<-chan types.AssistantMessageEvent, error) {
-	ch := make(chan types.AssistantMessageEvent, 3)
-	ch <- types.AssistantMessageEvent{Type: types.StreamEventStart}
-	ch <- types.AssistantMessageEvent{
-		Type: types.StreamEventDone,
-		Message: &types.AssistantMessage{
-			Role: "assistant",
-			Content: []types.ContentBlock{
-				&types.TextContent{Type: "text", Text: m.response},
-			},
-			StopReason: types.StopReasonStop,
-		},
-		Reason: types.StopReasonStop,
-	}
-	close(ch)
-	return ch, nil
-}
 
 func zeroSpan() token.SourceSpan {
 	return token.SourceSpan{}
@@ -257,110 +227,15 @@ func TestInterpreterTryCatch(t *testing.T) {
 	}
 }
 
-func TestNativeProviderSessionExecution(t *testing.T) {
-	// Create a mock LLM provider that returns a fixed response.
-	mockProv := &mockLLMProvider{response: "Hello from native provider!"}
-
-	// Create a NativeProvider wrapping the mock.
-	np, err := NewNativeProvider("test-native", "mock-model", mockProv)
-	if err != nil {
-		t.Fatalf("failed to create NativeProvider: %v", err)
-	}
-
-	if np.ProviderName() != "test-native" {
-		t.Errorf("expected provider name 'test-native', got %q", np.ProviderName())
-	}
-
-	// Execute a session directly via the provider.
-	result, err := np.ExecuteSession(
-		SessionSpec{Prompt: "Say hello"},
-		DefaultRuntimeConfig(),
-		false, nil, nil,
-	)
-	if err != nil {
-		t.Fatalf("ExecuteSession failed: %v", err)
-	}
-	if result.Output != "Hello from native provider!" {
-		t.Errorf("expected 'Hello from native provider!', got %q", result.Output)
-	}
-	if result.Metadata.Model != "mock-model" {
-		t.Errorf("expected model 'mock-model', got %q", result.Metadata.Model)
-	}
-}
-
-func TestInterpreterWithNativeProvider(t *testing.T) {
-	// Create a mock provider and NativeProvider.
-	mockProv := &mockLLMProvider{response: "generated code here"}
-	np, err := NewNativeProvider("my-agent", "mock-model", mockProv)
-	if err != nil {
-		t.Fatalf("failed to create NativeProvider: %v", err)
-	}
-
-	// Configure the interpreter to use "my-agent" as the default provider.
-	cfg := DefaultRuntimeConfig()
-	cfg.DefaultProvider = "my-agent"
-	env := NewRuntimeEnvironment(&cfg)
-
-	interp := NewInterpreter(env,
-		WithNativeProviders(map[string]Provider{"my-agent": np}),
-	)
-
-	// Build a program with a named session statement (Name is used to save results).
-	program := &ast.Program{
-		Span: zeroSpan(),
-		Statements: []ast.Node{
-			&ast.SessionStatement{
-				Span:   zeroSpan(),
-				Prompt: &ast.StringLiteral{Span: zeroSpan(), Value: "Write some code"},
-				Name:   &ast.Identifier{Span: zeroSpan(), Name: "output"},
-			},
-		},
-	}
-
-	result, err := interp.Execute(program)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Errorf("expected success, got errors: %v", result.Errors)
-	}
-
-	// Verify the session result was saved to the variable.
-	v, verr := env.Context.GetVariable("output")
-	if verr != nil {
-		t.Fatalf("variable 'output' not found: %v", verr)
-	}
-	sr, ok := IsSessionResult(v)
-	if !ok {
-		t.Fatalf("expected *SessionResult, got %T", v)
-	}
-	if sr.Output != "generated code here" {
-		t.Errorf("expected 'generated code here', got %q", sr.Output)
-	}
-}
-
 func TestResolveProviderFallback(t *testing.T) {
-	// Native registry should take priority.
-	mockProv := &mockLLMProvider{response: "native"}
-	np, _ := NewNativeProvider("test", "m", mockProv)
-	registry := map[string]Provider{"my-native": np}
-
-	p, err := ResolveProvider("my-native", nil, registry)
-	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
-	}
-	if p.ProviderName() != "test" {
-		t.Errorf("expected 'test', got %q", p.ProviderName())
-	}
-
 	// Unknown provider should error.
-	_, err = ResolveProvider("nonexistent-xyz", nil, nil)
+	_, err := ResolveProvider("nonexistent-xyz", nil, nil)
 	if err == nil {
 		t.Error("expected error for unknown provider")
 	}
 
 	// Built-in CLI preset should resolve.
-	p, err = ResolveProvider("claude-code", nil, nil)
+	p, err := ResolveProvider("claude-code", nil, nil)
 	if err != nil {
 		t.Fatalf("expected claude-code to resolve, got: %v", err)
 	}

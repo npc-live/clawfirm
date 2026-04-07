@@ -21,9 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/clawfirm/agent"
-	"github.com/ai-gateway/clawfirm/browser"
 	"github.com/ai-gateway/clawfirm/auth"
+	"github.com/ai-gateway/clawfirm/browser"
+	"github.com/ai-gateway/clawfirm/clawproc"
 	"github.com/ai-gateway/clawfirm/channel/feishu"
 	"github.com/ai-gateway/clawfirm/channel/remote"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
@@ -31,16 +31,12 @@ import (
 	"github.com/ai-gateway/clawfirm/config"
 	picron "github.com/ai-gateway/clawfirm/cron"
 	"github.com/ai-gateway/clawfirm/gateway"
-	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
-	"github.com/ai-gateway/clawfirm/memory"
-	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/skill"
 	"github.com/ai-gateway/clawfirm/skillctl"
 	"github.com/ai-gateway/clawfirm/store"
-	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 	"github.com/ai-gateway/clawfirm/vault"
 	"github.com/ai-gateway/clawfirm/vault/keychain"
-	"github.com/ai-gateway/clawfirm/types"
 	"github.com/google/uuid"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -86,7 +82,6 @@ type App struct {
 	feishuCh       *feishu.Channel
 	feishuCancel   context.CancelFunc
 	cronScheduler  *picron.Scheduler
-	memoryMgr      *memory.Manager
 	vault          *vault.Vault
 	remoteSrv      *remote.Server
 	remoteCancel   context.CancelFunc
@@ -143,6 +138,41 @@ func applySystemProxy() {
 
 // migrateFromPiGo renames ~/.pi-go to ~/.clawfirm if the old directory exists
 // and the new one does not. A symlink is left behind for backward compatibility.
+// registerClaudePlugin ensures pluginID is enabled in ~/.claw/settings.json.
+func registerClaudePlugin(pluginID string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	settingsPath := filepath.Join(home, ".claw", "settings.json")
+	data, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return
+	}
+	var settings map[string]any
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return
+	}
+	enabledPlugins, _ := settings["enabledPlugins"].(map[string]any)
+	if enabledPlugins == nil {
+		enabledPlugins = make(map[string]any)
+	}
+	if _, already := enabledPlugins[pluginID]; already {
+		return
+	}
+	enabledPlugins[pluginID] = true
+	settings["enabledPlugins"] = enabledPlugins
+	updated, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return
+	}
+	if err := os.WriteFile(settingsPath, updated, 0o644); err != nil {
+		log.Printf("app: register plugin %s: %v", pluginID, err)
+	} else {
+		log.Printf("app: registered claw plugin %s", pluginID)
+	}
+}
+
 func migrateFromPiGo() {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -292,13 +322,62 @@ func initUserDirs() {
 		}
 	}
 
-	// Extract bundled `func` binary — only if it's a real binary (> 4 KB).
+	// Extract bundled binaries — only if they're real (> 4 KB, not placeholders).
 	if len(embeddedFunc) > 4096 {
 		funcPath := filepath.Join(base, "bin", "func")
 		if err := os.WriteFile(funcPath, embeddedFunc, 0o755); err != nil {
 			log.Printf("app: write func binary: %v", err)
 		} else {
 			log.Printf("app: extracted func binary to %s", funcPath)
+		}
+	}
+	if len(embeddedClaw) > 4096 {
+		clawPath := filepath.Join(base, "bin", "claw")
+		if err := os.WriteFile(clawPath, embeddedClaw, 0o755); err != nil {
+			log.Printf("app: write claw binary: %v", err)
+		} else {
+			log.Printf("app: extracted claw binary to %s", clawPath)
+		}
+	}
+
+	// Extract browser-shortcut binary and register as claw-code plugin.
+	if len(embeddedBrowserShortcut) > 4096 {
+		bsBin := filepath.Join(base, "bin", "browser-shortcut")
+		if err := os.WriteFile(bsBin, embeddedBrowserShortcut, 0o755); err != nil {
+			log.Printf("app: write browser-shortcut binary: %v", err)
+		} else {
+			log.Printf("app: extracted browser-shortcut binary to %s", bsBin)
+			// Register as a claw-code plugin so claw agents can discover it.
+			pluginDir := filepath.Join(home, ".claw", "plugins", "installed", "browser-shortcut", ".claude-plugin")
+			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
+				pluginJSON := fmt.Sprintf(`{
+  "name": "browser-shortcut",
+  "version": "0.1.0",
+  "description": "Execute YAML browser automation shortcuts via Chrome DevTools Protocol (CDP). Shortcuts in ~/.clawfirm/shortcuts/.",
+  "defaultEnabled": true,
+  "tools": [{
+    "name": "browser_shortcut",
+    "description": "Execute a browser automation shortcut (YAML adapter) via CDP. Shortcuts are YAML files in ~/.clawfirm/shortcuts/ (e.g. douyin.yaml, xhs.yaml). Each shortcut defines commands like search, like, comment, follow, post. Requires Chrome with --remote-debugging-port=9222.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "file": {"type":"string","description":"YAML shortcut filename (e.g. douyin.yaml)"},
+        "command": {"type":"string","description":"Command to execute (e.g. search, like, comment)"},
+        "args": {"type":"array","items":{"type":"string"},"description":"Positional arguments"}
+      },
+      "required": ["file","command"]
+    },
+    "command": %q,
+    "requiredPermission": "danger-full-access"
+  }]
+}`, bsBin)
+				if err := os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(pluginJSON), 0o644); err != nil {
+					log.Printf("app: write browser-shortcut plugin.json: %v", err)
+				} else {
+					// Also register in ~/.claude/settings.json enabledPlugins so claw discovers it.
+					registerClaudePlugin("browser-shortcut@external")
+				}
+			}
 		}
 	}
 
@@ -440,17 +519,6 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 	}
 
-	// Initialise memory manager before gateway so tools have a valid manager.
-	if a.db != nil {
-		embedProvider, _ := memory.NewAutoProvider()
-		a.memoryMgr = memory.New(a.db.SQL(), embedProvider, memory.Config{})
-		go func() {
-			if err := a.memoryMgr.Sync(a.ctx); err != nil {
-				log.Printf("app: memory sync: %v", err)
-			}
-		}()
-	}
-
 	// Start gateway only if agents are configured.
 	if len(cfg.Agents) > 0 {
 		if err := a.startGateway(); err != nil {
@@ -515,25 +583,13 @@ func (a *App) OnShutdown(_ context.Context) {
 	a.mu.Unlock()
 }
 
-// startGateway builds providers and agents, then starts the HTTP server.
+// startGateway builds agents, then starts the HTTP server.
 // Must be called while holding no locks (it acquires a.mu.Lock briefly).
 func (a *App) startGateway() error {
 	a.mu.Lock()
 	cfg := a.cfg
 	db := a.db
-	memMgr := a.memoryMgr
 	a.mu.Unlock()
-
-	providerMap, err := buildProviders(cfg)
-	if err != nil {
-		return fmt.Errorf("startGateway: providers: %w", err)
-	}
-
-	// Resolve dedicated media provider if configured.
-	var mediaProvider provider.LLMProvider
-	if cfg.Media.Provider != "" {
-		mediaProvider = providerMap[cfg.Media.Provider]
-	}
 
 	registry := gateway.NewAgentRegistry()
 	var msgStore *store.MessageStore
@@ -542,117 +598,12 @@ func (a *App) startGateway() error {
 	}
 
 	for _, ac := range cfg.Agents {
-		prov, ok := providerMap[ac.Provider]
-		if !ok {
-			return fmt.Errorf("startGateway: agent %q: provider %q not found", ac.Name, ac.Provider)
-		}
-		maxTokens := ac.MaxTokens
-		if maxTokens == 0 {
-			maxTokens = 16384
-		}
-		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
-		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
-
-		// Load skills and build the skills prompt with size limits.
-		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
-		for _, d := range skillResult.Diagnostics {
-			log.Printf("app: agent %s: skill warning: %s: %s", agentName, d.Path, d.Message)
-		}
-		if len(skillResult.Skills) > 0 {
-			names := make([]string, len(skillResult.Skills))
-			for i, s := range skillResult.Skills {
-				names[i] = s.Name
-			}
-			log.Printf("app: agent %s: loaded %d skill(s): %s", agentName, len(skillResult.Skills), strings.Join(names, ", "))
-		}
-		compacted := skill.CompactSkillPaths(skillResult.Skills)
-		skillsPrompt, truncated, compact := skill.ApplySkillsPromptLimits(compacted)
-		if truncated {
-			log.Printf("app: agent %s: skills prompt truncated (compact=%v)", agentName, compact)
-		} else if compact {
-			log.Printf("app: agent %s: skills prompt using compact format", agentName)
-		}
-
-		// Load bootstrap context files (AGENTS.md / CLAUDE.md / SOUL.md).
-		bootstrap := agent.LoadBootstrapContext(ac.WorkspaceDir)
-
-		// Build full system prompt.
-		systemPrompt := agent.BuildSystemPrompt(agent.SystemPromptParams{
-			WorkspaceDir:   ac.WorkspaceDir,
-			SkillsPrompt:   skillsPrompt,
-			ContextFiles:   bootstrap.ContextFiles,
-			WorkspaceNotes: bootstrap.WorkspaceNotes,
-			PromptMode:     agent.PromptModeFull,
-			RuntimeInfo:    buildRuntimeInfo(ac),
-			ExtraPrompt:    ac.SystemPrompt,
-		})
-
-		temporal := agent.NewTemporalInjector(0)
-		loopCfg := agent.AgentLoopConfig{
-			TransformContext: temporal.TransformContext,
-		}
-
-		factory := gateway.AgentFactory(func(channelID, userID string) *agent.Agent {
-			opts := []agent.AgentOption{
-				agent.WithModel(model),
-				agent.WithSystemPrompt(systemPrompt),
-				agent.WithLoopConfig(loopCfg),
-			}
-			if len(tools) > 0 {
-				opts = append(opts, agent.WithTools(tools))
-			}
-			a := agent.NewAgent(prov, opts...)
-			// Use "webchat/<agentName>" as channel_id so each agent's history
-			// is stored separately and can be filtered by agent name.
-			storeChannelID := "webchat/" + agentName
-			if msgStore != nil {
-				if history, err := msgStore.ListMessages(store.QueryParams{
-					ChannelID: storeChannelID,
-					UserID:    userID,
-				}); err == nil && len(history) > 0 {
-					a.ReplaceMessages(history)
-					log.Printf("[%s] session %s/%s: restored %d messages", agentName, storeChannelID, userID, len(history))
-				}
-			}
-			a.Subscribe(func(ev types.AgentEvent) {
-				if msgStore == nil {
-					return
-				}
-				switch ev.Type {
-				case types.EventMessageEnd:
-					if ev.AssistantMsg != nil {
-						if err := msgStore.SaveMessage(storeChannelID, userID, ev.AssistantMsg); err != nil {
-							log.Printf("[%s] save assistant message: %v", agentName, err)
-						}
-					}
-				case types.EventTurnEnd:
-					for i := range ev.ToolResults {
-						if err := msgStore.SaveMessage(storeChannelID, userID, &ev.ToolResults[i]); err != nil {
-							log.Printf("[%s] save tool result[%d]: %v", agentName, i, err)
-						}
-					}
-				}
-			})
-			return a
-		})
+		factory := a.buildClawFactory(ac, agentName)
 
 		var sessStore *store.SessionStore
 		if db != nil {
 			sessStore = db.Sessions()
-		}
-
-		// Build conversation summarizer if memory manager is available.
-		var summarizer gateway.ConversationSummarizer
-		if memMgr != nil {
-			sumModel := types.Model{ID: ac.Model, Provider: ac.Provider}
-			sumProv := prov
-			sumFn := memory.SummarizeFunc(func(ctx context.Context, msgs []types.Message) (string, error) {
-				return streamSummarize(ctx, sumProv, sumModel, msgs)
-			})
-			summarizer = memory.NewSummarizer(memMgr, sumFn, memory.SummarizerConfig{
-				FilenamePrefix: "conv-" + ac.Name,
-			})
 		}
 
 		// Parse reset policy from agent config.
@@ -664,7 +615,6 @@ func (a *App) startGateway() error {
 		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
 			AgentName:          ac.Name,
 			SessionStore:       sessStore,
-			Summarizer:         summarizer,
 			DefaultResetMode:   resetMode,
 			DefaultResetHour:   ac.ResetAtHour,
 			DefaultIdleMinutes: ac.IdleMinutes,
@@ -675,6 +625,26 @@ func (a *App) startGateway() error {
 				storeChannelID := "webchat/" + agentName
 				if err := msgStore.SaveMessage(storeChannelID, uid, msg); err != nil {
 					log.Printf("[%s] save user message: %v", agentName, err)
+				}
+			},
+			OnAgentEvent: func(_, uid string, ev types.AgentEvent) {
+				if msgStore == nil {
+					return
+				}
+				storeChannelID := "webchat/" + agentName
+				switch ev.Type {
+				case types.EventMessageEnd:
+					if ev.AssistantMsg != nil {
+						if err := msgStore.SaveMessage(storeChannelID, uid, ev.AssistantMsg); err != nil {
+							log.Printf("[%s] save assistant message: %v", agentName, err)
+						}
+					}
+				case types.EventTurnEnd:
+					for i := range ev.ToolResults {
+						if err := msgStore.SaveMessage(storeChannelID, uid, &ev.ToolResults[i]); err != nil {
+							log.Printf("[%s] save tool result[%d]: %v", agentName, i, err)
+						}
+					}
 				}
 			},
 		})
@@ -947,6 +917,29 @@ func (a *App) ReadCanvasFile(name string) (string, error) {
 	return string(data), nil
 }
 
+// ListCanvasFiles returns all .html file names (without extension) in ~/.clawfirm/canvas/.
+func (a *App) ListCanvasFiles() ([]string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Join(home, ".clawfirm", "canvas")
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, e := range entries {
+		if !e.IsDir() && filepath.Ext(e.Name()) == ".html" {
+			names = append(names, strings.TrimSuffix(e.Name(), ".html"))
+		}
+	}
+	return names, nil
+}
+
 // WriteCanvasFile writes content to ~/.clawfirm/canvas/{name}.html.
 func (a *App) WriteCanvasFile(name, content string) error {
 	if name == "" || strings.ContainsAny(name, "/\\..") {
@@ -1109,24 +1102,10 @@ func (a *App) GetModels(providerID string) []string {
 	}
 }
 
-// TestProviderConnection sends a minimal request to verify provider credentials.
-// Returns true if the connection succeeds.
+// TestProviderConnection is a stub — provider credential testing is now done
+// via the claw subprocess. Always returns true to avoid breaking the frontend.
 func (a *App) TestProviderConnection(providerID string) bool {
-	a.mu.RLock()
-	cfg := a.cfg
-	a.mu.RUnlock()
-
-	prov, err := buildProvider(providerID, cfg.Providers[providerID])
-	if err != nil {
-		return false
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15_000_000_000) // 15s
-	defer cancel()
-	// Use a dummy agent with zero tools to send a minimal prompt.
-	a2 := agent.NewAgent(prov,
-		agent.WithModel(types.Model{ID: defaultModelForProvider(providerID), Provider: providerID, MaxTokens: 16}),
-	)
-	return a2.Prompt(ctx, "ping") == nil
+	return true
 }
 
 // GetChannels returns the list of configured agents with live session counts.
@@ -1242,7 +1221,7 @@ func (a *App) AbortCurrentTurn(agentName, sessionID string) {
 	if !ok {
 		return
 	}
-	sess, err := mgr.GetOrCreate("desktop", sessionID)
+	sess, err := mgr.GetOrCreate("webchat", sessionID)
 	if err != nil {
 		return
 	}
@@ -2058,24 +2037,15 @@ func (a *App) GetMemoryFileContent(path string) (string, error) {
 	return string(data), nil
 }
 
-// SaveMemoryFileContent writes new content to a memory file and re-indexes it.
+// SaveMemoryFileContent writes new content to a memory file.
 func (a *App) SaveMemoryFileContent(path string, content string) error {
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return err
-	}
-	if a.memoryMgr != nil {
-		return a.memoryMgr.IndexFile(a.ctx, path)
-	}
-	return nil
+	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-// DeleteMemoryFile removes a memory file from disk and its index.
+// DeleteMemoryFile removes a memory file from disk.
 func (a *App) DeleteMemoryFile(path string) error {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		return err
-	}
-	if a.memoryMgr != nil {
-		return a.memoryMgr.DeleteFile(a.ctx, path)
 	}
 	return nil
 }
@@ -2100,37 +2070,14 @@ func (a *App) CreateMemoryFile(name string) (string, error) {
 	return path, nil
 }
 
-// SearchMemory performs a semantic search over all indexed memory files.
+// SearchMemory is a stub — semantic search is no longer available.
 func (a *App) SearchMemory(query string, limit int) ([]MemorySearchResult, error) {
-	if a.memoryMgr == nil {
-		return nil, nil
-	}
-	if limit <= 0 {
-		limit = 10
-	}
-	results, err := a.memoryMgr.Search(a.ctx, query, limit)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]MemorySearchResult, len(results))
-	for i, r := range results {
-		out[i] = MemorySearchResult{
-			FilePath:  r.FilePath,
-			StartLine: r.StartLine,
-			EndLine:   r.EndLine,
-			Content:   r.Content,
-			Score:     r.Score,
-		}
-	}
-	return out, nil
+	return nil, nil
 }
 
-// SyncMemory re-indexes all files in the memory directory.
+// SyncMemory is a stub — memory indexing is no longer available.
 func (a *App) SyncMemory() error {
-	if a.memoryMgr == nil {
-		return nil
-	}
-	return a.memoryMgr.Sync(a.ctx)
+	return nil
 }
 
 // GetMemoryDir returns the path to the memory directory.
@@ -2151,22 +2098,6 @@ func saveConfig(cfg *config.Config) error {
 		return err
 	}
 	return writeConfigYAML(filepath.Join(dir, "config.yml"), cfg)
-}
-
-func buildProviders(cfg *config.Config) (map[string]provider.LLMProvider, error) {
-	return agentbuilder.BuildProviders(cfg)
-}
-
-func buildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, error) {
-	return agentbuilder.BuildProvider(id, pc)
-}
-
-func providerEnvVar(id string) string {
-	return agentbuilder.ProviderEnvVar(id)
-}
-
-func defaultModelForProvider(providerID string) string {
-	return agentbuilder.DefaultModelForProvider(providerID)
 }
 
 func openBrowser(url string) error {
@@ -2195,28 +2126,12 @@ func buildRuntimeInfo(ac config.AgentConfig) string {
 	return info
 }
 
-// buildTools resolves a list of tool names to AgentTool instances.
-// v may be nil, in which case vault injection is skipped.
-// mediaProvider may be nil, in which case media_understand is not configured.
-func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, mediaProvider provider.LLMProvider) []tool.AgentTool {
-	var vaultEnv func() map[string]string
-	if v != nil {
-		vaultEnv = func() map[string]string {
-			m, _ := v.Env()
-			return m
-		}
-	}
-	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, mediaProvider)
-}
-
 // ─── Cron Scheduler ──────────────────────────────────────────────────────────
 
-// buildAgentForCron creates a fresh Agent for the named agent config.
-// Reuses the same provider/model/tools/skills/system-prompt logic as startGateway.
-func (a *App) buildAgentForCron(agentName string) (*agent.Agent, error) {
+// buildAgentForCron creates a fresh ClawAgent for the named agent config.
+func (a *App) buildAgentForCron(agentName string) (*clawproc.ClawAgent, error) {
 	a.mu.RLock()
 	cfg := a.cfg
-	memMgr := a.memoryMgr
 	a.mu.RUnlock()
 
 	ac, ok := cfg.Agent(agentName)
@@ -2224,50 +2139,12 @@ func (a *App) buildAgentForCron(agentName string) (*agent.Agent, error) {
 		return nil, fmt.Errorf("cron: agent %q not found in config", agentName)
 	}
 
-	providerMap, err := buildProviders(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("cron: providers: %w", err)
+	factory := a.buildClawFactory(ac, agentName)
+	ca, ok := factory("cron", "cron").(*clawproc.ClawAgent)
+	if !ok || ca == nil {
+		return nil, fmt.Errorf("cron: failed to create ClawAgent for %q", agentName)
 	}
-	prov, ok := providerMap[ac.Provider]
-	if !ok {
-		return nil, fmt.Errorf("cron: provider %q not found for agent %q", ac.Provider, agentName)
-	}
-
-	var mediaProvider provider.LLMProvider
-	if cfg.Media.Provider != "" {
-		mediaProvider = providerMap[cfg.Media.Provider]
-	}
-
-	maxTokens := ac.MaxTokens
-	if maxTokens == 0 {
-		maxTokens = 4096
-	}
-	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
-	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
-
-	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
-	compacted := skill.CompactSkillPaths(skillResult.Skills)
-	skillsPrompt, _, _ := skill.ApplySkillsPromptLimits(compacted)
-
-	bootstrap := agent.LoadBootstrapContext(ac.WorkspaceDir)
-	systemPrompt := agent.BuildSystemPrompt(agent.SystemPromptParams{
-		WorkspaceDir:   ac.WorkspaceDir,
-		SkillsPrompt:   skillsPrompt,
-		ContextFiles:   bootstrap.ContextFiles,
-		WorkspaceNotes: bootstrap.WorkspaceNotes,
-		PromptMode:     agent.PromptModeFull,
-		RuntimeInfo:    buildRuntimeInfo(ac),
-		ExtraPrompt:    ac.SystemPrompt,
-	})
-
-	opts := []agent.AgentOption{
-		agent.WithModel(model),
-		agent.WithSystemPrompt(systemPrompt),
-	}
-	if len(tools) > 0 {
-		opts = append(opts, agent.WithTools(tools))
-	}
-	return agent.NewAgent(prov, opts...), nil
+	return ca, nil
 }
 
 // syncCronConfigToDB seeds the database with cron jobs from config.yml (by name, no duplicates).
@@ -2407,6 +2284,22 @@ func (a *App) TriggerCronJob(jobID string) error {
 
 // ─── WhipFlow file browsing ───────────────────────────────────────────────────
 
+// scanAllWhipFiles recursively walks dir and returns all .whip file paths,
+// skipping .bak files.
+func scanAllWhipFiles(dir string) []string {
+	var out []string
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if filepath.Ext(d.Name()) == ".whip" {
+			out = append(out, path)
+		}
+		return nil
+	})
+	return out
+}
+
 // ListWhipFiles returns all .whip files in ~/.clawfirm/workflows/.
 func (a *App) ListWhipFiles() ([]string, error) {
 	home, err := os.UserHomeDir()
@@ -2463,36 +2356,6 @@ func extractText(m types.Message) string {
 		}
 	}
 	return ""
-}
-
-// streamSummarize sends a summarization prompt to the provider and collects the full response.
-func streamSummarize(ctx context.Context, prov provider.LLMProvider, model types.Model, msgs []types.Message) (string, error) {
-	prompt := memory.BuildSummarizePrompt(msgs)
-	req := provider.LLMRequest{
-		Model: model,
-		Messages: []types.Message{
-			&types.UserMessage{
-				Role: "user",
-				Content: []types.ContentBlock{
-					&types.TextContent{Type: types.ContentTypeText, Text: prompt},
-				},
-			},
-		},
-	}
-	ch, err := prov.Stream(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("streamSummarize: %w", err)
-	}
-	var sb strings.Builder
-	for ev := range ch {
-		if ev.Type == types.StreamEventTextDelta {
-			sb.WriteString(ev.Delta)
-		}
-		if ev.Error != nil {
-			return "", fmt.Errorf("streamSummarize: %s", ev.Error.ErrorMessage)
-		}
-	}
-	return sb.String(), nil
 }
 
 // ─── Browser (CDP) ──────────────────────────────────────────────────────────
@@ -2652,4 +2515,74 @@ func (a *App) BrowserRunShortcut(file, command string, args []string) ([]map[str
 		return nil, fmt.Errorf("shortcut file not found: %s", file)
 	}
 	return browser.RunYAMLCommand(fp, command, args, 9222)
+}
+
+// buildClawFactory returns an AgentFactory that spawns a claw-code subprocess.
+func (a *App) buildClawFactory(ac config.AgentConfig, agentName string) gateway.AgentFactory {
+	binPath := findClawBinary()
+	workDir := ac.WorkspaceDir
+	if workDir == "" {
+		// Default to home directory — macOS .app bundles start with cwd=/
+		// which is read-only under SIP.
+		workDir, _ = os.UserHomeDir()
+	}
+	return func(channelID, userID string) gateway.AgentRunner {
+		proc := clawproc.NewProcess(clawproc.Config{
+			BinaryPath:     binPath,
+			Model:          ac.Model,
+			PermissionMode: "danger-full-access",
+			WorkingDir:     workDir,
+		})
+		ca := clawproc.NewClawAgent(proc)
+		if err := ca.Start(context.Background()); err != nil {
+			log.Printf("[%s] claw start failed: %v", agentName, err)
+		}
+		return ca
+	}
+}
+
+// findClawBinary locates the claw binary. Checks:
+// 1. Development build tree (claw-code/rust/target/{release,debug}/claw)
+// 2. Extracted binary at ~/.clawfirm/bin/claw (production app bundle)
+// 3. PATH
+func findClawBinary() string {
+	// 1. Development builds — check relative to working directory AND
+	//    relative to the executable's location (wails dev sets cwd to
+	//    cmd/desktop, not project root).
+	relPaths := []string{
+		"claw-code/rust/target/release/claw",
+		"claw-code/rust/target/debug/claw",
+	}
+	var devCandidates []string
+	devCandidates = append(devCandidates, relPaths...)
+	// Also try from the executable's parent directories.
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		for _, up := range []string{"../..", "../../..", "../../../.."} {
+			for _, c := range relPaths {
+				devCandidates = append(devCandidates, filepath.Join(exeDir, up, c))
+			}
+		}
+	}
+	for _, c := range devCandidates {
+		if _, err := os.Stat(c); err == nil {
+			abs, _ := filepath.Abs(c)
+			log.Printf("findClawBinary: found at %s", abs)
+			return abs
+		}
+	}
+	// 2. Extracted from embedded assets (production app bundle).
+	if home, err := os.UserHomeDir(); err == nil {
+		p := filepath.Join(home, ".clawfirm", "bin", "claw")
+		if _, err := os.Stat(p); err == nil {
+			log.Printf("findClawBinary: using extracted binary at %s", p)
+			return p
+		}
+	}
+	// 3. PATH.
+	if p, err := exec.LookPath("claw"); err == nil {
+		log.Printf("findClawBinary: using PATH binary at %s", p)
+		return p
+	}
+	return "claw" // let exec.Command fail with a clear error
 }

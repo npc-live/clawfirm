@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/clawproc"
 	"github.com/ai-gateway/clawfirm/store"
 )
 
@@ -26,7 +26,7 @@ func TestSchedulerEvery(t *testing.T) {
 	cs := db.CronJobs()
 
 	var count atomic.Int32
-	builder := func(agentName string) (*agent.Agent, error) {
+	builder := func(agentName string) (*clawproc.ClawAgent, error) {
 		count.Add(1)
 		return nil, nil // will cause executeJob to short-circuit with nil agent
 	}
@@ -68,7 +68,7 @@ func TestSchedulerAt(t *testing.T) {
 	cs := db.CronJobs()
 
 	var count atomic.Int32
-	builder := func(agentName string) (*agent.Agent, error) {
+	builder := func(agentName string) (*clawproc.ClawAgent, error) {
 		count.Add(1)
 		return nil, nil
 	}
@@ -118,7 +118,7 @@ func TestSchedulerCron(t *testing.T) {
 	cs := db.CronJobs()
 
 	var count atomic.Int32
-	builder := func(agentName string) (*agent.Agent, error) {
+	builder := func(agentName string) (*clawproc.ClawAgent, error) {
 		count.Add(1)
 		return nil, nil
 	}
@@ -159,7 +159,7 @@ func TestSchedulerOverlapPrevention(t *testing.T) {
 	var running atomic.Int32
 	maxConcurrent := atomic.Int32{}
 
-	builder := func(agentName string) (*agent.Agent, error) {
+	builder := func(agentName string) (*clawproc.ClawAgent, error) {
 		started.Add(1)
 		cur := running.Add(1)
 		// Track max concurrency.
@@ -208,7 +208,7 @@ func TestSchedulerToggle(t *testing.T) {
 	cs := db.CronJobs()
 
 	var count atomic.Int32
-	builder := func(agentName string) (*agent.Agent, error) {
+	builder := func(agentName string) (*clawproc.ClawAgent, error) {
 		count.Add(1)
 		return nil, nil
 	}
@@ -259,7 +259,7 @@ func TestSchedulerAddRemove(t *testing.T) {
 	cs := db.CronJobs()
 
 	var count atomic.Int32
-	builder := func(agentName string) (*agent.Agent, error) {
+	builder := func(agentName string) (*clawproc.ClawAgent, error) {
 		count.Add(1)
 		return nil, nil
 	}

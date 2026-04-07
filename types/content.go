@@ -1,5 +1,7 @@
 package types
 
+import "encoding/json"
+
 // ContentType constants identify the kind of content in a ContentBlock.
 const (
 	ContentTypeText     = "text"
@@ -24,6 +26,13 @@ type TextContent struct {
 
 // ContentType returns the type identifier for TextContent.
 func (t *TextContent) ContentType() string { return ContentTypeText }
+
+// MarshalJSON ensures the type field is always set to "text".
+func (t TextContent) MarshalJSON() ([]byte, error) {
+	type Alias TextContent
+	t.Type = ContentTypeText
+	return json.Marshal(Alias(t))
+}
 
 // ImageContent holds an image, either as base64 data or a URL.
 type ImageContent struct {

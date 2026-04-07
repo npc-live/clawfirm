@@ -1,0 +1,33 @@
+{
+  "name": "browser-shortcut",
+  "version": "0.1.0",
+  "description": "Execute YAML browser automation shortcuts via Chrome DevTools Protocol (CDP). Shortcuts in ~/.clawfirm/shortcuts/.",
+  "defaultEnabled": true,
+  "tools": [
+    {
+      "name": "browser_shortcut",
+      "description": "Execute a browser automation shortcut (YAML adapter) via CDP. Shortcuts are YAML files in ~/.clawfirm/shortcuts/ (e.g. douyin.yaml, xhs.yaml). Each shortcut defines commands like search, like, comment, follow, post. Requires Chrome with --remote-debugging-port=9222.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "YAML shortcut filename (e.g. douyin.yaml)"
+          },
+          "command": {
+            "type": "string",
+            "description": "Command to execute (e.g. search, like, comment)"
+          },
+          "args": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Positional arguments"
+          }
+        },
+        "required": ["file", "command"]
+      },
+      "command": "browser-shortcut",
+      "requiredPermission": "danger-full-access"
+    }
+  ]
+}

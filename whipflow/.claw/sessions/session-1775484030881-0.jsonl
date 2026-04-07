@@ -1,0 +1,3 @@
+{"created_at_ms":1775484030881,"session_id":"session-1775484030881-0","type":"session_meta","updated_at_ms":1775484045975,"version":1}
+{"message":{"blocks":[{"text":"把这个英文单词翻译回中文，只输出中文词：{}","type":"text"}],"role":"user"},"type":"message"}
+{"message":{"blocks":[{"text":"{}","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":251516,"output_tokens":4}},"type":"message"}

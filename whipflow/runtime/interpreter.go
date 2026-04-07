@@ -37,6 +37,9 @@ type SessionProgress struct {
 	DurationMs int64
 	// Error is set when Done == true and the session failed.
 	Error string
+	// StreamText carries an incremental text delta during session execution.
+	// When non-empty, Done is false and this is a streaming update.
+	StreamText string
 }
 
 // Interpreter executes WhipFlow programs.
