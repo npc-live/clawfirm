@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -18,6 +19,10 @@ import (
 // Provider defines the interface for executing AI sessions.
 type Provider interface {
 	ExecuteSession(spec SessionSpec, config RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error)
+	// ExecuteSessionStream is like ExecuteSession but calls onStream for each
+	// incremental update (tool_use events, text deltas) during execution.
+	// If onStream is nil it behaves identically to ExecuteSession.
+	ExecuteSessionStream(spec SessionSpec, config RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string, onStream func(delta string)) (*SessionResult, error)
 	ProviderName() string
 }
 
@@ -62,8 +67,8 @@ var builtinPresets = map[string]CliConfig{
 		Name:         "claw",
 		Bin:          findClawBin(),
 		PromptMode:   "arg",
-		Args:         []string{"--output-format", "json", "--permission-mode", "danger-full-access", "prompt"},
-		OutputFormat: "claw-json",
+		Args:         []string{"--output-format", "ndjson", "--permission-mode", "danger-full-access", "prompt"},
+		OutputFormat: "ndjson",
 	},
 	"claude-code": {
 		Name:         "claude-code",
@@ -163,7 +168,7 @@ func ResolveProvider(name string, piCfg *config.Config, nativeRegistry map[strin
 func newClawCliProvider(ac config.AgentConfig) *CliProvider {
 	bin := findClawBin()
 	args := []string{
-		"--output-format", "json",
+		"--output-format", "ndjson",
 		"--permission-mode", "danger-full-access",
 	}
 	if ac.Model != "" {
@@ -175,7 +180,7 @@ func newClawCliProvider(ac config.AgentConfig) *CliProvider {
 		Bin:          bin,
 		PromptMode:   "arg",
 		Args:         args,
-		OutputFormat: "claw-json",
+		OutputFormat: "ndjson",
 		Timeout:      1800000, // 30 min
 	}}
 }
@@ -213,6 +218,12 @@ func (p *CliProvider) ProviderName() string {
 
 // ExecuteSession executes an AI session using the configured CLI tool.
 func (p *CliProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error) {
+	return p.ExecuteSessionStream(spec, cfg, enableTools, allowedTools, skillPrompts, nil)
+}
+
+// ExecuteSessionStream executes an AI session and calls onStream for each
+// tool_use event or text delta emitted by the provider during execution.
+func (p *CliProvider) ExecuteSessionStream(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string, onStream func(delta string)) (*SessionResult, error) {
 	prompt := buildPrompt(spec, enableTools, allowedTools, skillPrompts, p.cfg.RawPrompt)
 
 	ctx := cfg.Ctx
@@ -220,7 +231,7 @@ func (p *CliProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enable
 		ctx = context.Background()
 	}
 
-	output, err := runCli(ctx, p.cfg, prompt, cfg.VaultEnv)
+	output, err := runCliStream(ctx, p.cfg, prompt, cfg.VaultEnv, onStream)
 	if err != nil {
 		return nil, fmt.Errorf("provider %s: %w", p.cfg.Name, err)
 	}
@@ -264,7 +275,7 @@ func buildPrompt(spec SessionSpec, enableTools bool, allowedTools []string, skil
 // CLI execution
 // ---------------------------------------------------------------------------
 
-func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv func() map[string]string) (string, error) {
+func runCliStream(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv func() map[string]string, onStream func(delta string)) (string, error) {
 	binPath, err := resolveRealPath(cfg.Bin)
 	if err != nil {
 		return "", fmt.Errorf("binary not found: %s: %w", cfg.Bin, err)
@@ -304,13 +315,54 @@ func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv fu
 	}
 	cmd.Env = filtered
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
+	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if cfg.PromptMode == "stdin" {
 		cmd.Stdin = strings.NewReader(prompt)
 	}
+
+	// For ndjson or claw-json format with a stream callback, read stdout
+	// line-by-line so we can emit text deltas in real time.
+	if (cfg.OutputFormat == "ndjson" || cfg.OutputFormat == "claw-json") && onStream != nil {
+		stdoutPipe, pipeErr := cmd.StdoutPipe()
+		if pipeErr != nil {
+			return "", fmt.Errorf("stdout pipe: %w", pipeErr)
+		}
+		if startErr := cmd.Start(); startErr != nil {
+			return "", fmt.Errorf("failed to start %s: %w", cfg.Bin, startErr)
+		}
+
+		var allLines []string
+		scanner := bufio.NewScanner(stdoutPipe)
+		scanner.Buffer(make([]byte, 256*1024), 256*1024)
+		for scanner.Scan() {
+			line := scanner.Text()
+			allLines = append(allLines, line)
+			emitClawStreamDelta(line, onStream)
+		}
+
+		runErr := cmd.Wait()
+		if runErr != nil {
+			if ctx.Err() == context.DeadlineExceeded {
+				return "", fmt.Errorf("command timed out after %dms", timeout)
+			}
+			if _, ok := runErr.(*exec.ExitError); !ok {
+				return "", fmt.Errorf("failed to execute %s: %w", cfg.Bin, runErr)
+			}
+			log.Printf("provider %s exited with error: %v, stderr: %s", cfg.Name, runErr, stderr.String())
+		}
+
+		combined := strings.Join(allLines, "\n")
+		if cfg.OutputFormat == "ndjson" {
+			return parseNdjson(combined)
+		}
+		return parseClawJson(combined)
+	}
+
+	// Default: buffer all stdout then parse.
+	var stdout bytes.Buffer
+	cmd.Stdout = &stdout
 
 	err = cmd.Run()
 	if err != nil {
@@ -335,6 +387,45 @@ func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv fu
 	}
 
 	return stripAnsi(strings.TrimSpace(stdoutStr)), nil
+}
+
+// emitClawStreamDelta parses a single claw JSON output line and calls onStream
+// with a human-readable delta if the line is a tool_use event or text delta.
+func emitClawStreamDelta(line string, onStream func(delta string)) {
+	line = strings.TrimSpace(line)
+	if line == "" || line[0] != '{' {
+		return
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(line), &obj); err != nil {
+		return
+	}
+	// claw --output-format json emits lines like:
+	//   {"type":"tool_use","name":"bash","input":"..."}
+	//   {"type":"text","text":"..."}
+	evType, _ := obj["type"].(string)
+	switch evType {
+	case "tool_use":
+		name, _ := obj["name"].(string)
+		input, _ := obj["input"].(string)
+		if name != "" {
+			// Trim input to a short preview for readability.
+			preview := strings.ReplaceAll(input, "\n", " ")
+			if len(preview) > 80 {
+				preview = preview[:80] + "…"
+			}
+			if preview != "" {
+				onStream(fmt.Sprintf("🔧 %s  %s", name, preview))
+			} else {
+				onStream(fmt.Sprintf("🔧 %s", name))
+			}
+		}
+	case "text", "text_delta": // claw --output-format json uses "text"; ndjson uses "text_delta"
+		text, _ := obj["text"].(string)
+		if text != "" {
+			onStream(text)
+		}
+	}
 }
 
 func parseStreamJson(stdout string) (string, error) {

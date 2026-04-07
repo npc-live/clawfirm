@@ -559,7 +559,29 @@ func (interp *Interpreter) executeSession(spec SessionSpec) (*SessionResult, err
 
 	enableTools := len(allowedTools) > 0
 
-	result, err := prov.ExecuteSession(spec, interp.env.Config, enableTools, allowedTools, skillPrompts)
+	// Build a stream callback if onSessionProgress is set — emit each tool_use
+	// / text delta as a StreamText update so the UI shows live activity.
+	var onStream func(delta string)
+	if interp.onSessionProgress != nil {
+		idx := interp.sessionIndex
+		name := spec.Name
+		provider := interp.env.Config.DefaultProvider
+		if spec.Agent != nil && spec.Agent.Provider != "" {
+			provider = spec.Agent.Provider
+		}
+		cb := interp.onSessionProgress
+		onStream = func(delta string) {
+			cb(SessionProgress{
+				Index:      idx,
+				Name:       name,
+				Provider:   provider,
+				Done:       false,
+				StreamText: delta,
+			})
+		}
+	}
+
+	result, err := prov.ExecuteSessionStream(spec, interp.env.Config, enableTools, allowedTools, skillPrompts, onStream)
 	if err != nil {
 		return nil, err
 	}

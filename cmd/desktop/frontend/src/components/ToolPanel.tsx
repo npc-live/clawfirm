@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export interface ToolExecution {
   id: string;
@@ -236,9 +236,30 @@ function WhipflowSessionSteps({ exec, onRetryFromSession }: { exec: ToolExecutio
 
 function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry?: () => void }) {
   const [open, setOpen] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef(Date.now());
+  const lastStreamRef = useRef(Date.now());
   const isRunning = !step.done;
   const isError = step.done && !!step.error;
   const isDone = step.done && !step.error;
+
+  // Update lastStream timestamp whenever stream_text changes
+  useEffect(() => {
+    if (step.stream_text) lastStreamRef.current = Date.now();
+  }, [step.stream_text]);
+
+  // Elapsed timer — ticks every second while running
+  useEffect(() => {
+    if (!isRunning) return;
+    startRef.current = Date.now() - elapsed * 1000;
+    const id = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isRunning]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const silentSecs = isRunning ? Math.floor((Date.now() - lastStreamRef.current) / 1000) : 0;
+  const isStuck = isRunning && silentSecs >= 30;
 
   const borderCls = isRunning
     ? "border-[rgba(200,90,42,0.3)] bg-[rgba(200,90,42,0.04)]"
@@ -274,12 +295,16 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
             {step.provider}
           </span>
         )}
-        {/* Duration */}
-        {step.duration_ms != null && step.duration_ms > 0 && (
+        {/* Elapsed / Duration */}
+        {isRunning ? (
+          <span className={`text-[10px] font-mono flex-shrink-0 ${isStuck ? "text-amber-400" : "text-[rgba(61,57,41,0.3)]"}`}>
+            {isStuck ? `⚠ ${elapsed}s` : `${elapsed}s`}
+          </span>
+        ) : step.duration_ms != null && step.duration_ms > 0 ? (
           <span className="text-[10px] text-[rgba(61,57,41,0.2)] font-mono flex-shrink-0">
             {step.duration_ms < 1000 ? `${step.duration_ms}ms` : `${(step.duration_ms / 1000).toFixed(1)}s`}
           </span>
-        )}
+        ) : null}
         {/* Retry button */}
         {(isDone || isError) && onRetry && (
           <button
@@ -294,11 +319,18 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
       </button>
 
       {/* Streaming text preview (collapsed, while running) */}
-      {!open && isRunning && step.stream_text && (
-        <div className="px-3 pb-2">
-          <pre className="text-[11px] text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.03)] rounded p-1.5 whitespace-pre-wrap break-words max-h-16 overflow-hidden font-mono leading-relaxed line-clamp-3">
-            {step.stream_text.length > 200 ? "…" + step.stream_text.slice(-200) : step.stream_text}
-          </pre>
+      {!open && isRunning && (
+        <div className="px-3 pb-2 space-y-1">
+          {isStuck && (
+            <p className="text-[11px] text-amber-400">
+              ⚠ No updates for {silentSecs}s — may be stuck
+            </p>
+          )}
+          {step.stream_text && (
+            <pre className="text-[11px] text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.03)] rounded p-1.5 whitespace-pre-wrap break-words max-h-16 overflow-hidden font-mono leading-relaxed line-clamp-3">
+              {step.stream_text.length > 200 ? "…" + step.stream_text.slice(-200) : step.stream_text}
+            </pre>
+          )}
         </div>
       )}
 

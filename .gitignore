@@ -29,3 +29,6 @@ mobile/node_modules
 .clawfirm/sessions/*.jsonl
 cover-asset
 clawproc/.clawfirm/sessions/*.jsonl
+.claw/
+whip
+.DS_Store

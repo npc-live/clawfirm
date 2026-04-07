@@ -46,3 +46,11 @@ var embeddedMediaGen []byte
 //
 //go:embed assets/browser-shortcut
 var embeddedBrowserShortcut []byte
+
+// embeddedWhip holds the bundled `whip` binary (WhipFlow workflow runner).
+// In production builds (make app), the Makefile replaces app/assets/whip
+// with a real darwin/universal binary before compilation.
+// During `wails dev`, this contains a small placeholder — falls back to PATH.
+//
+//go:embed assets/whip
+var embeddedWhip []byte

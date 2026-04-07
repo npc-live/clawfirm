@@ -338,6 +338,14 @@ func initUserDirs() {
 			log.Printf("app: extracted claw binary to %s", clawPath)
 		}
 	}
+	if len(embeddedWhip) > 4096 {
+		whipPath := filepath.Join(base, "bin", "whip")
+		if err := os.WriteFile(whipPath, embeddedWhip, 0o755); err != nil {
+			log.Printf("app: write whip binary: %v", err)
+		} else {
+			log.Printf("app: extracted whip binary to %s", whipPath)
+		}
+	}
 
 	// Extract browser-shortcut binary and register as claw-code plugin.
 	if len(embeddedBrowserShortcut) > 4096 {

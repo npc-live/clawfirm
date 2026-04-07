@@ -31,6 +31,7 @@ type progressEvent struct {
 	DurationMs int64  `json:"duration_ms,omitempty"`
 	Output     string `json:"output,omitempty"`
 	Error      string `json:"error,omitempty"`
+	StreamText string `json:"stream_text,omitempty"`
 }
 
 func emitProgress(p whipflow.SessionProgress) {
@@ -43,6 +44,7 @@ func emitProgress(p whipflow.SessionProgress) {
 		DurationMs: p.DurationMs,
 		Output:     p.Output,
 		Error:      p.Error,
+		StreamText: p.StreamText,
 	}
 	b, _ := json.Marshal(ev)
 	fmt.Println(string(b))

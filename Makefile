@@ -31,10 +31,10 @@ claw-debug:
 # --- macOS .app bundle ---
 # Produces: bin/clawfirm.app  (drag to /Applications to install)
 # Embeds a darwin/universal `func` binary and claw binary into app/assets before compiling.
-app: func-universal claw browser-shortcut-universal media-understand-universal media-gen-universal
+app: func-universal claw whip-universal browser-shortcut-universal media-understand-universal media-gen-universal
 	@cp claw-code/rust/target/release/claw app/assets/claw
 	@echo "✓ Embedded claw binary: app/assets/claw ($$(wc -c < app/assets/claw | tr -d ' ') bytes)"
-	@rm -rf cmd/desktop/frontend/wailsjs
+	@rm -rf cmd/desktop/frontend/wailsjs cmd/desktop/build/bin
 	cd cmd/desktop && wails build \
 		-ldflags "-X github.com/ai-gateway/clawfirm/app.Version=$(VERSION)" \
 		-platform darwin/universal \
@@ -56,6 +56,17 @@ func-universal:
 	@lipo -create -output app/assets/func $(BIN_DIR)/func-arm64 $(BIN_DIR)/func-amd64
 	@rm -f $(BIN_DIR)/func-arm64 $(BIN_DIR)/func-amd64
 	@echo "✓ Embedded func binary: app/assets/func ($$(wc -c < app/assets/func | tr -d ' ') bytes)"
+
+# Build whip as a darwin/universal binary and embed it into the app package.
+whip-universal:
+	@echo "Building whip (arm64)…"
+	@GOOS=darwin GOARCH=arm64 $(GO) build -o $(BIN_DIR)/whip-arm64 ./cmd/whip
+	@echo "Building whip (amd64)…"
+	@GOOS=darwin GOARCH=amd64 $(GO) build -o $(BIN_DIR)/whip-amd64 ./cmd/whip
+	@echo "Creating universal binary…"
+	@lipo -create -output app/assets/whip $(BIN_DIR)/whip-arm64 $(BIN_DIR)/whip-amd64
+	@rm -f $(BIN_DIR)/whip-arm64 $(BIN_DIR)/whip-amd64
+	@echo "✓ Embedded whip binary: app/assets/whip ($$(wc -c < app/assets/whip | tr -d ' ') bytes)"
 
 # Build browser-shortcut as a darwin/universal binary and embed it into the app package.
 browser-shortcut-universal:

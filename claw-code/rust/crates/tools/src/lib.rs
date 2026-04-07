@@ -2121,6 +2121,7 @@ fn resolve_whip_binary() -> Option<String> {
     // Check well-known locations first (most reliable in subprocess contexts).
     if let Ok(home) = std::env::var("HOME") {
         let candidates = [
+            format!("{home}/.clawfirm/bin/whip"), // extracted from app bundle (preferred)
             format!("{home}/go/bin/whip"),
             format!("{home}/.local/bin/whip"),
             "/usr/local/bin/whip".to_string(),
