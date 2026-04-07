@@ -2490,15 +2490,18 @@ func (a *App) BrowserLaunchChrome() BrowserStatus {
 		return BrowserStatus{Connected: false, Error: "Chrome not found on this system"}
 	}
 
-	// Use a dedicated profile dir so Chrome doesn't conflict with the user's existing session.
-	profileDir := filepath.Join(os.Getenv("HOME"), ".clawfirm", "chrome-profile")
+	// Use the social-cli chrome profile which preserves user logins/cookies.
+	// Falls back to ~/.clawfirm/chrome-profile if the social-cli profile doesn't exist.
+	profileDir := filepath.Join(os.Getenv("HOME"), ".social-cli", "chrome-profile")
+	if _, err := os.Stat(profileDir); os.IsNotExist(err) {
+		profileDir = filepath.Join(os.Getenv("HOME"), ".clawfirm", "chrome-profile")
+	}
 
 	cmd := exec.Command(chromePath,
 		"--remote-debugging-port=9222",
 		"--user-data-dir="+profileDir,
 		"--no-first-run",
 		"--no-default-browser-check",
-		"--disable-extensions",
 	)
 	if err := cmd.Start(); err != nil {
 		return BrowserStatus{Connected: false, Error: "failed to launch Chrome: " + err.Error()}

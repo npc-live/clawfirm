@@ -132,15 +132,14 @@ func RunYAMLCommand(adapterPath, commandName string, argValues []string, cdpPort
 		}
 	}
 
-	// Create an isolated browser context so that automation does not
-	// interfere with the user's manual browsing (Input.dispatch* calls
-	// are scoped to the isolated context's tab).
-	iso, err := NewIsolatedContext(cdpPort)
+	// Open a new tab in the default browser context so that automation
+	// can access the user's existing cookies and login sessions (required
+	// for posting to social media platforms).
+	cdpClient, err := NewTab(cdpPort)
 	if err != nil {
-		return nil, fmt.Errorf("create isolated context: %w", err)
+		return nil, fmt.Errorf("open new tab: %w", err)
 	}
-	defer iso.Close()
-	cdpClient := iso.TabClient()
+	defer cdpClient.Close()
 
 	// Connect agent-browser to the CDP port directly (not a per-tab WebSocket
 	// URL). This lets agent-browser pick/manage the tab internally and avoids
