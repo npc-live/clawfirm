@@ -2643,13 +2643,42 @@ func (a *App) buildClawFactory(ac config.AgentConfig, agentName string) gateway.
 			env = append(env, envVar+"="+pc.APIKey)
 		}
 
-		// Set ANTHROPIC_BASE_URL from the agent's own provider.
+		// Inject base URLs for providers that have custom endpoints.
+		baseURLEnvMap := map[string]string{
+			"anthropic": "ANTHROPIC_BASE_URL",
+			"gemini":    "GEMINI_BASE_URL",
+			"google":    "GEMINI_BASE_URL",
+			"openai":    "OPENAI_BASE_URL",
+		}
+		for id, pc := range a.cfg.Providers {
+			if pc.BaseURL == "" {
+				continue
+			}
+			lookup := strings.ToLower(pc.Type)
+			if lookup == "" {
+				lookup = strings.ToLower(id)
+			}
+			if envVar, ok := baseURLEnvMap[lookup]; ok {
+				env = append(env, envVar+"="+pc.BaseURL)
+			}
+		}
+
+		// Also set ANTHROPIC_BASE_URL from the agent's own provider if not already set.
 		providerID := ac.Provider
 		if providerID == "" {
 			providerID = a.cfg.DefaultProvider
 		}
 		if pc, ok := a.cfg.Providers[providerID]; ok && pc.BaseURL != "" {
-			env = append(env, "ANTHROPIC_BASE_URL="+pc.BaseURL)
+			hasAnthropicBase := false
+			for _, e := range env {
+				if strings.HasPrefix(e, "ANTHROPIC_BASE_URL=") {
+					hasAnthropicBase = true
+					break
+				}
+			}
+			if !hasAnthropicBase {
+				env = append(env, "ANTHROPIC_BASE_URL="+pc.BaseURL)
+			}
 		}
 
 		// 2. Fallback: auth storage / keychain / env via AuthResolver
