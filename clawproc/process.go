@@ -9,15 +9,7 @@ import (
 	"log"
 	"os/exec"
 	"sync"
-	"syscall"
 )
-
-// setSysProcAttr sets platform-specific process attributes so the subprocess
-// runs in its own process group. This allows Close() to kill the entire group
-// (claw + any whip sub-subprocesses) with a single signal.
-func setSysProcAttr(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-}
 
 // Config configures a claw subprocess.
 type Config struct {
@@ -127,7 +119,7 @@ func (p *Process) SendAbort() error {
 		return nil
 	}
 	p.alive = false
-	return p.cmd.Process.Signal(syscall.SIGTERM)
+	return sendSIGTERM(p)
 }
 
 // ReadEvent reads and parses one NDJSON line from stdout.
@@ -163,9 +155,9 @@ func (p *Process) Close() error {
 		_ = p.stdin.Close()
 	}
 	if p.cmd != nil && p.cmd.Process != nil {
-		// Kill the entire process group (negative PID = pgid).
+		// Kill the entire process group (negative PID = pgid on Unix).
 		pgid := p.cmd.Process.Pid
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
+		killProcessGroup(pgid)
 		return p.cmd.Wait()
 	}
 	return nil
