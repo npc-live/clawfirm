@@ -108,8 +108,8 @@ fn slash_command_names_match_known_commands_and_suggest_nearby_unknown_ones() {
 fn config_command_loads_defaults_from_standard_config_locations() {
     // given
     let temp_dir = unique_temp_dir("config-defaults");
-    let config_home = temp_dir.join("home").join(".claw");
-    fs::create_dir_all(temp_dir.join(".claw")).expect("project config dir should exist");
+    let config_home = temp_dir.join("home").join(".clawfirm");
+    fs::create_dir_all(temp_dir.join(".clawfirm")).expect("project config dir should exist");
     fs::create_dir_all(&config_home).expect("home config dir should exist");
 
     fs::write(config_home.join("settings.json"), r#"{"model":"haiku"}"#)
@@ -117,7 +117,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     fs::write(temp_dir.join(".claw.json"), r#"{"model":"sonnet"}"#)
         .expect("write project settings");
     fs::write(
-        temp_dir.join(".claw").join("settings.local.json"),
+        temp_dir.join(".clawfirm").join("settings.local.json"),
         r#"{"model":"opus"}"#,
     )
     .expect("write local settings");
@@ -151,7 +151,7 @@ fn config_command_loads_defaults_from_standard_config_locations() {
     assert!(stdout.contains(temp_dir.join(".claw.json").to_str().expect("utf8 path")));
     assert!(stdout.contains(
         temp_dir
-            .join(".claw")
+            .join(".clawfirm")
             .join("settings.local.json")
             .to_str()
             .expect("utf8 path")

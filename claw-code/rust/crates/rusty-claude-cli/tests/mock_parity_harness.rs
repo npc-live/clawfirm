@@ -360,7 +360,7 @@ fn run_case(case: ScenarioCase, workspace: &HarnessWorkspace, base_url: &str) ->
 
 #[allow(dead_code)]
 fn prepare_auto_compact_fixture(workspace: &HarnessWorkspace) {
-    let sessions_dir = workspace.root.join(".claw").join("sessions");
+    let sessions_dir = workspace.root.join(".clawfirm").join("sessions");
     fs::create_dir_all(&sessions_dir).expect("sessions dir should exist");
 
     // Write a pre-seeded session with 6 messages so auto-compact can remove them

@@ -24,3 +24,8 @@ cmd/desktop/trading_dashboard.html
 # Mobile build artifacts
 mobile/src-tauri/target/
 mobile/node_modules
+
+# Claw session logs
+.clawfirm/sessions/*.jsonl
+cover-asset
+clawproc/.clawfirm/sessions/*.jsonl

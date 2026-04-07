@@ -81,7 +81,7 @@ pub fn sessions_dir() -> Result<PathBuf, SessionControlError> {
 pub fn managed_sessions_dir_for(
     base_dir: impl AsRef<Path>,
 ) -> Result<PathBuf, SessionControlError> {
-    let path = base_dir.as_ref().join(".claw").join("sessions");
+    let path = base_dir.as_ref().join(".clawfirm").join("sessions");
     fs::create_dir_all(&path)?;
     Ok(path)
 }

@@ -13,6 +13,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/ai-gateway/clawfirm/app"
 	"github.com/ai-gateway/clawfirm/config"
@@ -73,15 +74,29 @@ Commands:
 
 func runWhip(args []string) {
 	var cfgPath string
+	initialInputs := map[string]string{}
 
 	// Simple flag parsing before positional arg.
 	i := 0
 	for i < len(args) {
-		if args[i] == "-config" || args[i] == "--config" {
+		switch args[i] {
+		case "-config", "--config":
 			if i+1 >= len(args) {
 				log.Fatal("run: -config requires a path")
 			}
 			cfgPath = args[i+1]
+			i += 2
+			continue
+		case "-var", "--var":
+			if i+1 >= len(args) {
+				log.Fatal("run: -var requires key=value")
+			}
+			kv := args[i+1]
+			idx := strings.IndexByte(kv, '=')
+			if idx < 0 {
+				log.Fatalf("run: -var %q must be in key=value format", kv)
+			}
+			initialInputs[kv[:idx]] = kv[idx+1:]
 			i += 2
 			continue
 		}
@@ -101,7 +116,12 @@ func runWhip(args []string) {
 		log.Fatalf("config: %v", err)
 	}
 
-	result, err := whipflow.RunFile(filePath, whipflow.WithPiConfig(cfg))
+	opts := []whipflow.Option{whipflow.WithPiConfig(cfg)}
+	if len(initialInputs) > 0 {
+		opts = append(opts, whipflow.WithInitialInputs(initialInputs))
+	}
+
+	result, err := whipflow.RunFile(filePath, opts...)
 	if err != nil {
 		log.Fatalf("whipflow: %v", err)
 	}

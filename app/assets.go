@@ -30,6 +30,16 @@ var embeddedWorkflows embed.FS
 //go:embed assets/shortcuts
 var embeddedShortcuts embed.FS
 
+// embeddedMediaUnderstand holds the bundled `media-understand` binary.
+//
+//go:embed assets/media-understand
+var embeddedMediaUnderstand []byte
+
+// embeddedMediaGen holds the bundled `media-gen` binary.
+//
+//go:embed assets/media-gen
+var embeddedMediaGen []byte
+
 // embeddedBrowserShortcut holds the bundled `browser-shortcut` binary.
 // In production builds (make app), the Makefile copies the release binary here.
 // During `wails dev`, this contains a small placeholder — the plugin is not registered.

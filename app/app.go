@@ -138,20 +138,19 @@ func applySystemProxy() {
 
 // migrateFromPiGo renames ~/.pi-go to ~/.clawfirm if the old directory exists
 // and the new one does not. A symlink is left behind for backward compatibility.
-// registerClaudePlugin ensures pluginID is enabled in ~/.claw/settings.json.
+// registerClaudePlugin ensures pluginID is enabled in ~/.clawfirm/settings.json.
 func registerClaudePlugin(pluginID string) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return
 	}
-	settingsPath := filepath.Join(home, ".claw", "settings.json")
+	settingsPath := filepath.Join(home, ".clawfirm", "settings.json")
 	data, err := os.ReadFile(settingsPath)
-	if err != nil {
-		return
-	}
 	var settings map[string]any
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return
+	if err != nil {
+		settings = make(map[string]any)
+	} else if err := json.Unmarshal(data, &settings); err != nil {
+		settings = make(map[string]any)
 	}
 	enabledPlugins, _ := settings["enabledPlugins"].(map[string]any)
 	if enabledPlugins == nil {
@@ -348,7 +347,7 @@ func initUserDirs() {
 		} else {
 			log.Printf("app: extracted browser-shortcut binary to %s", bsBin)
 			// Register as a claw-code plugin so claw agents can discover it.
-			pluginDir := filepath.Join(home, ".claw", "plugins", "installed", "browser-shortcut", ".claude-plugin")
+			pluginDir := filepath.Join(home, ".clawfirm", "plugins", "installed", "browser-shortcut", ".claude-plugin")
 			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
 				pluginJSON := fmt.Sprintf(`{
   "name": "browser-shortcut",
@@ -374,7 +373,7 @@ func initUserDirs() {
 				if err := os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(pluginJSON), 0o644); err != nil {
 					log.Printf("app: write browser-shortcut plugin.json: %v", err)
 				} else {
-					// Also register in ~/.claude/settings.json enabledPlugins so claw discovers it.
+					// Also register in ~/.clawfirm/settings.json enabledPlugins so claw discovers it.
 					registerClaudePlugin("browser-shortcut@external")
 				}
 			}
@@ -384,6 +383,82 @@ func initUserDirs() {
 	extractBuiltinAssets(embeddedSkills, "assets/skills", filepath.Join(base, "skills"))
 	extractBuiltinAssets(embeddedWorkflows, "assets/workflows", filepath.Join(base, "workflows"))
 	extractBuiltinAssets(embeddedShortcuts, "assets/shortcuts", filepath.Join(base, "shortcuts"))
+
+	// Extract media-understand binary and register as claw-code plugin.
+	if len(embeddedMediaUnderstand) > 4096 {
+		muBin := filepath.Join(base, "bin", "media-understand")
+		if err := os.WriteFile(muBin, embeddedMediaUnderstand, 0o755); err != nil {
+			log.Printf("app: write media-understand binary: %v", err)
+		} else {
+			pluginDir := filepath.Join(home, ".clawfirm", "plugins", "installed", "media-understand", ".claude-plugin")
+			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
+				pluginJSON := fmt.Sprintf(`{
+  "name": "media-understand",
+  "version": "1.0.0",
+  "description": "用视觉模型分析图片或视频帧内容，返回文字描述。",
+  "defaultEnabled": true,
+  "tools": [{
+    "name": "media_understand",
+    "description": "Analyse an image or video frame with a vision LLM and return a text description. Supports JPEG, PNG, GIF, WEBP.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "file_path": {"type": "string", "description": "Local path to the image or video frame file"},
+        "prompt":    {"type": "string", "description": "Optional analysis prompt"}
+      },
+      "required": ["file_path"]
+    },
+    "command": %q,
+    "requiredPermission": "danger-full-access"
+  }]
+}`, muBin)
+				if err := os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(pluginJSON), 0o644); err != nil {
+					log.Printf("app: write media-understand plugin.json: %v", err)
+				} else {
+					registerClaudePlugin("media-understand@external")
+					log.Printf("app: registered claw plugin media-understand")
+				}
+			}
+		}
+	}
+
+	// Extract media-gen binary and register as claw-code plugin.
+	if len(embeddedMediaGen) > 4096 {
+		mgBin := filepath.Join(base, "bin", "media-gen")
+		if err := os.WriteFile(mgBin, embeddedMediaGen, 0o755); err != nil {
+			log.Printf("app: write media-gen binary: %v", err)
+		} else {
+			pluginDir := filepath.Join(home, ".clawfirm", "plugins", "installed", "media-gen", ".claude-plugin")
+			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
+				pluginJSON := fmt.Sprintf(`{
+  "name": "media-gen",
+  "version": "1.0.0",
+  "description": "根据文字描述用 Gemini 生成图片，保存为 PNG 文件。",
+  "defaultEnabled": true,
+  "tools": [{
+    "name": "media_gen",
+    "description": "Generate an image from a text prompt using Gemini image generation and save it to a PNG file.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "prompt":      {"type": "string", "description": "Image generation prompt (English works best)"},
+        "output_path": {"type": "string", "description": "Output file path (default /tmp/media_gen_output.png)"}
+      },
+      "required": ["prompt"]
+    },
+    "command": %q,
+    "requiredPermission": "danger-full-access"
+  }]
+}`, mgBin)
+				if err := os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(pluginJSON), 0o644); err != nil {
+					log.Printf("app: write media-gen plugin.json: %v", err)
+				} else {
+					registerClaudePlugin("media-gen@external")
+					log.Printf("app: registered claw plugin media-gen")
+				}
+			}
+		}
+	}
 
 	cfgPath := filepath.Join(base, "config.yml")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
@@ -465,6 +540,7 @@ func extractBuiltinAssets(src embed.FS, prefix, destDir string) {
 		return nil
 	})
 }
+
 
 // OnStartup is called by Wails once the frontend webview is ready.
 func (a *App) OnStartup(ctx context.Context) {

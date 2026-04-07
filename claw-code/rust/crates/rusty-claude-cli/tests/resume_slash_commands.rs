@@ -116,8 +116,8 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
     // given
     let temp_dir = unique_temp_dir("resume-config");
     let project_dir = temp_dir.join("project");
-    let config_home = temp_dir.join("home").join(".claw");
-    fs::create_dir_all(project_dir.join(".claw")).expect("project config dir should exist");
+    let config_home = temp_dir.join("home").join(".clawfirm");
+    fs::create_dir_all(project_dir.join(".clawfirm")).expect("project config dir should exist");
     fs::create_dir_all(&config_home).expect("config home should exist");
 
     let session_path = project_dir.join("session.jsonl");
@@ -129,7 +129,7 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
     fs::write(config_home.join("settings.json"), r#"{"model":"haiku"}"#)
         .expect("user config should write");
     fs::write(
-        project_dir.join(".claw").join("settings.local.json"),
+        project_dir.join(".clawfirm").join("settings.local.json"),
         r#"{"model":"opus"}"#,
     )
     .expect("local config should write");
@@ -165,7 +165,7 @@ fn resumed_config_command_loads_settings_files_end_to_end() {
     ));
     assert!(stdout.contains(
         project_dir
-            .join(".claw")
+            .join(".clawfirm")
             .join("settings.local.json")
             .to_str()
             .expect("utf8 path")
@@ -179,7 +179,7 @@ fn resume_latest_restores_the_most_recent_managed_session() {
     // given
     let temp_dir = unique_temp_dir("resume-latest");
     let project_dir = temp_dir.join("project");
-    let sessions_dir = project_dir.join(".claw").join("sessions");
+    let sessions_dir = project_dir.join(".clawfirm").join("sessions");
     fs::create_dir_all(&sessions_dir).expect("sessions dir should exist");
 
     let older_path = sessions_dir.join("session-older.jsonl");
