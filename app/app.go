@@ -2611,11 +2611,55 @@ func (a *App) buildClawFactory(ac config.AgentConfig, agentName string) gateway.
 		workDir, _ = os.UserHomeDir()
 	}
 	return func(channelID, userID string) gateway.AgentRunner {
+		// Inject API credentials into the subprocess environment.
+		// macOS .app bundles do NOT inherit shell profile env vars,
+		// so the subprocess needs explicit injection.
+		var env []string
+
+		// 1. Try config.yml providers (primary source for app users).
+		providerID := ac.Provider
+		if providerID == "" {
+			providerID = a.cfg.DefaultProvider
+		}
+		if pc, ok := a.cfg.Providers[providerID]; ok {
+			if pc.APIKey != "" {
+				envVar := "ANTHROPIC_API_KEY"
+				if v, ok2 := map[string]string{
+					"anthropic": "ANTHROPIC_API_KEY",
+					"openai":    "OPENAI_API_KEY",
+					"gemini":    "GEMINI_API_KEY",
+					"google":    "GOOGLE_API_KEY",
+				}[providerID]; ok2 {
+					envVar = v
+				}
+				env = append(env, envVar+"="+pc.APIKey)
+			}
+			if pc.BaseURL != "" {
+				env = append(env, "ANTHROPIC_BASE_URL="+pc.BaseURL)
+			}
+		}
+
+		// 2. Fallback: auth storage / keychain / env via AuthResolver.
+		if len(env) == 0 {
+			resolver := auth.NewAuthResolver(a.authStor)
+			for provider, envVar := range map[string]string{
+				"anthropic": "ANTHROPIC_API_KEY",
+				"openai":    "OPENAI_API_KEY",
+				"gemini":    "GEMINI_API_KEY",
+				"google":    "GOOGLE_API_KEY",
+			} {
+				if key, err := resolver.ResolveAPIKey(context.Background(), provider); err == nil && key != "" {
+					env = append(env, envVar+"="+key)
+				}
+			}
+		}
+
 		proc := clawproc.NewProcess(clawproc.Config{
 			BinaryPath:     binPath,
 			Model:          ac.Model,
 			PermissionMode: "danger-full-access",
 			WorkingDir:     workDir,
+			Env:            env,
 		})
 		ca := clawproc.NewClawAgent(proc)
 		if err := ca.Start(context.Background()); err != nil {
