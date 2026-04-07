@@ -1,6 +1,0 @@
-{"created_at_ms":1775491525644,"session_id":"session-1775491525644-0","type":"session_meta","updated_at_ms":1775491525644,"version":1}
-{"message":{"blocks":[{"text":"/mcp list","type":"text"}],"role":"user"},"type":"message"}
-{"message":{"blocks":[{"text":"\n\nI'll check what MCP servers and resources are available.","type":"text"},{"id":"toolu_bdrk_0192NNeWVnwJuZYaqcL3dY4h","input":"","name":"ListMcpResources","type":"tool_use"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":252062,"output_tokens":53}},"type":"message"}
-{"message":{"blocks":[{"is_error":true,"output":"invalid tool input JSON: EOF while parsing a value at line 1 column 0","tool_name":"ListMcpResources","tool_use_id":"toolu_bdrk_0192NNeWVnwJuZYaqcL3dY4h","type":"tool_result"}],"role":"tool"},"type":"message"}
-{"message":{"blocks":[{"id":"toolu_bdrk_01SNJk4ErkDpetx3SrWXdH7Q","input":"","name":"ListMcpResources","type":"tool_use"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":252169,"output_tokens":39}},"type":"message"}
-{"message":{"blocks":[{"is_error":true,"output":"invalid tool input JSON: EOF while parsing a value at line 1 column 0","tool_name":"ListMcpResources","tool_use_id":"toolu_bdrk_01SNJk4ErkDpetx3SrWXdH7Q","type":"tool_result"}],"role":"tool"},"type":"message"}
