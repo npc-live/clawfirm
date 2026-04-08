@@ -1,36 +1,32 @@
 bin/
-OPTIMIZATION_PLAN.md
-mi
 **/.DS_Store
 
-# Compiled binaries
-clawfirm
-whip
-desktop
-run-whip
+# Temp / scratch files
+OPTIMIZATION_PLAN.md
 
-# Desktop build artifacts (keep source, ignore build output)
+# Compiled binaries (root level, in case built outside bin/)
+/clawfirm
+/whip
+/desktop
+
+# Desktop build artifacts
 cmd/desktop/build/darwin/
 cmd/desktop/build/bin/
 cmd/desktop/frontend/node_modules/
 cmd/desktop/frontend/dist/
+cmd/desktop/frontend/wailsjs/
 cmd/desktop/frontend/package.json.md5
 cmd/desktop/desktop
 cmd/desktop/data/
-cmd/desktop/rwa-reports/
-cmd/desktop/tavily-cli/
-cmd/desktop/tavily-tools/
 cmd/desktop/.whipflow/
-cmd/desktop/trading_dashboard.html
 
 # Mobile build artifacts
 mobile/src-tauri/target/
-mobile/node_modules
+mobile/node_modules/
 
-# Claw session logs
+# Session logs & local state
 .clawfirm/sessions/*.jsonl
-cover-asset
-clawproc/.clawfirm/sessions/*.jsonl
 .claw/
-whip
-.DS_Store
+
+# Media assets (large files, not source)
+cover-asset/
