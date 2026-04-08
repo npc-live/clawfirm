@@ -11,14 +11,14 @@ import (
 	"context"
 	"flag"
 	"log"
-	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/ai-gateway/clawfirm/agent"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
-	"github.com/ai-gateway/clawfirm/clawproc"
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/gateway"
+	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
 )
@@ -43,31 +43,33 @@ func main() {
 	defer db.Close()
 	log.Println("store: SQLite ready")
 
+	// ── Providers ────────────────────────────────────────────────────────────
+	providerMap, err := agentbuilder.BuildProviders(cfg)
+	if err != nil {
+		log.Fatalf("providers: %v", err)
+	}
+
 	// ── Agent registry ────────────────────────────────────────────────────────
 	msgStore := db.Messages()
 	registry := gateway.NewAgentRegistry()
 
-	binPath := findClawBinary()
-
 	for _, ac := range cfg.Agents {
-		agentName := ac.Name
-		workDir := ac.WorkspaceDir
-		if workDir == "" {
-			workDir, _ = os.UserHomeDir()
+		prov, ok := providerMap[ac.Provider]
+		if !ok {
+			log.Fatalf("agent %q: provider %q not found", ac.Name, ac.Provider)
 		}
+		agentName := ac.Name
+		maxTokens := ac.MaxTokens
+		if maxTokens == 0 {
+			maxTokens = 16384
+		}
+		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 
 		factory := gateway.AgentFactory(func(channelID, userID string) gateway.AgentRunner {
-			proc := clawproc.NewProcess(clawproc.Config{
-				BinaryPath:     binPath,
-				Model:          ac.Model,
-				PermissionMode: "danger-full-access",
-				WorkingDir:     workDir,
-			})
-			ca := clawproc.NewClawAgent(proc)
-			if err := ca.Start(context.Background()); err != nil {
-				log.Printf("[%s] claw start failed: %v", agentName, err)
-			}
-			ca.Subscribe(func(ev types.AgentEvent) {
+			ag := agent.NewAgent(prov,
+				agent.WithModel(model),
+			)
+			ag.Subscribe(func(ev types.AgentEvent) {
 				switch ev.Type {
 				case types.EventMessageEnd:
 					if ev.AssistantMsg != nil {
@@ -77,7 +79,7 @@ func main() {
 					}
 				}
 			})
-			return ca
+			return ag
 		})
 
 		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
@@ -116,7 +118,7 @@ func main() {
 	srv.Handle("GET /ws/{sessionID}", handler)
 
 	// ── Run ───────────────────────────────────────────────────────────────────
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	log.Printf("gateway: starting on %s  default-agent: %s", listenAddr, defaultAgent)
@@ -125,20 +127,4 @@ func main() {
 		log.Fatalf("gateway: %v", err)
 	}
 	log.Println("gateway: stopped")
-}
-
-// findClawBinary locates the claw binary.
-func findClawBinary() string {
-	// 1. Development build tree.
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates := []string{
-			home + "/.clawfirm/bin/claw",
-		}
-		for _, p := range candidates {
-			if _, err := os.Stat(p); err == nil {
-				return p
-			}
-		}
-	}
-	return "claw"
 }

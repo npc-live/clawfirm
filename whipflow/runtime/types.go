@@ -13,6 +13,9 @@ type RuntimeValue = any
 type SessionResult struct {
 	Output   string
 	Metadata SessionMetadata
+	// Messages holds the full conversation history from the session.
+	// Only populated for NativeProvider sessions.
+	Messages []any // []types.Message — stored as any to avoid circular imports
 }
 
 type SessionMetadata struct {

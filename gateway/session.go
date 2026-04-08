@@ -178,6 +178,18 @@ func (s *Session) Send(msg IncomingMessage) bool {
 // Abort cancels the agent's current in-progress turn without stopping the session.
 func (s *Session) Abort() { s.agent.Abort() }
 
+// State returns a snapshot of the agent's current state (including message history).
+func (s *Session) State() types.AgentState {
+	return s.agent.State()
+}
+
+// ExecuteToolDirectly runs a tool call outside the LLM loop and injects it into
+// the conversation history. Progress events are fanned out to all subscribers
+// (including the persistence callback) via the agent's subscription mechanism.
+func (s *Session) ExecuteToolDirectly(ctx context.Context, toolID, toolName string, args map[string]any) error {
+	return s.agent.ExecuteToolDirectly(ctx, toolID, toolName, args, nil)
+}
+
 // emitEvent fans out an event to all current subscribers.
 func (s *Session) emitEvent(ev types.AgentEvent) {
 	s.mu.Lock()

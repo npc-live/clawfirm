@@ -17,6 +17,7 @@ frontend:
 
 desktop:
 	@rm -rf cmd/desktop/frontend/wailsjs
+	@mkdir -p cmd/desktop/build/bin
 	cd cmd/desktop && wails build -o ../../$(BIN_DIR)/desktop
 
 # --- claw-code Rust CLI ---

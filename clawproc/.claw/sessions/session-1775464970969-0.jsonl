@@ -1,3 +1,0 @@
-{"created_at_ms":1775464970969,"session_id":"session-1775464970969-0","type":"session_meta","updated_at_ms":1775464973710,"version":1}
-{"message":{"blocks":[{"text":"Say exactly: HELLO_TEST_OK","type":"text"}],"role":"user"},"type":"message"}
-{"message":{"blocks":[{"text":"HELLO_TEST_OK","type":"text"}],"role":"assistant","usage":{"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"input_tokens":29000,"output_tokens":9}},"type":"message"}

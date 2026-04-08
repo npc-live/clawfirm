@@ -17,13 +17,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/ai-gateway/clawfirm/agent"
 	"github.com/ai-gateway/clawfirm/auth"
 	"github.com/ai-gateway/clawfirm/browser"
-	"github.com/ai-gateway/clawfirm/clawproc"
 	"github.com/ai-gateway/clawfirm/channel/feishu"
 	"github.com/ai-gateway/clawfirm/channel/remote"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
@@ -31,9 +32,14 @@ import (
 	"github.com/ai-gateway/clawfirm/config"
 	picron "github.com/ai-gateway/clawfirm/cron"
 	"github.com/ai-gateway/clawfirm/gateway"
+	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
+	"github.com/ai-gateway/clawfirm/tool/builtin"
+	"github.com/ai-gateway/clawfirm/memory"
+	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/skill"
 	"github.com/ai-gateway/clawfirm/skillctl"
 	"github.com/ai-gateway/clawfirm/store"
+	"github.com/ai-gateway/clawfirm/tool"
 	"github.com/ai-gateway/clawfirm/types"
 	"github.com/ai-gateway/clawfirm/vault"
 	"github.com/ai-gateway/clawfirm/vault/keychain"
@@ -85,6 +91,7 @@ type App struct {
 	vault          *vault.Vault
 	remoteSrv      *remote.Server
 	remoteCancel   context.CancelFunc
+	memoryMgr      *memory.Manager
 }
 
 // New creates the App. Call wails.Run with a.OnStartup / a.OnShutdown.
@@ -667,13 +674,25 @@ func (a *App) OnShutdown(_ context.Context) {
 	a.mu.Unlock()
 }
 
-// startGateway builds agents, then starts the HTTP server.
+// startGateway builds providers and agents, then starts the HTTP server.
 // Must be called while holding no locks (it acquires a.mu.Lock briefly).
 func (a *App) startGateway() error {
 	a.mu.Lock()
 	cfg := a.cfg
 	db := a.db
+	memMgr := a.memoryMgr
 	a.mu.Unlock()
+
+	providerMap, err := buildProviders(cfg)
+	if err != nil {
+		return fmt.Errorf("startGateway: providers: %w", err)
+	}
+
+	// Resolve dedicated media provider if configured.
+	var mediaProvider provider.LLMProvider
+	if cfg.Media.Provider != "" {
+		mediaProvider = providerMap[cfg.Media.Provider]
+	}
 
 	registry := gateway.NewAgentRegistry()
 	var msgStore *store.MessageStore
@@ -682,12 +701,139 @@ func (a *App) startGateway() error {
 	}
 
 	for _, ac := range cfg.Agents {
+		prov, ok := providerMap[ac.Provider]
+		if !ok {
+			return fmt.Errorf("startGateway: agent %q: provider %q not found", ac.Name, ac.Provider)
+		}
+		maxTokens := ac.MaxTokens
+		if maxTokens == 0 {
+			maxTokens = 16384
+		}
+		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
-		factory := a.buildClawFactory(ac, agentName)
+		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
+
+		// Inject MessageSaver into WhipflowRun so each session's conversation
+		// is persisted to DB as channelID="whipflow/<toolExecID>" userID="<idx>".
+		if msgStore != nil {
+			for _, t := range tools {
+				if wr, ok := t.(*builtin.WhipflowRun); ok {
+					ms := msgStore // capture
+					wr.MessageSaver = func(toolExecID string, sessionIndex int, _ string, messages []any) {
+						chID := "whipflow/" + toolExecID
+						uID := strconv.Itoa(sessionIndex)
+						for _, m := range messages {
+							if msg, ok := m.(types.Message); ok {
+								if err := ms.SaveMessage(chID, uID, msg); err != nil {
+									log.Printf("app: whipflow save message: %v", err)
+								}
+							}
+						}
+					}
+					break
+				}
+			}
+		}
+
+		// Load skills and build the skills prompt with size limits.
+		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+		for _, d := range skillResult.Diagnostics {
+			log.Printf("app: agent %s: skill warning: %s: %s", agentName, d.Path, d.Message)
+		}
+		if len(skillResult.Skills) > 0 {
+			names := make([]string, len(skillResult.Skills))
+			for i, s := range skillResult.Skills {
+				names[i] = s.Name
+			}
+			log.Printf("app: agent %s: loaded %d skill(s): %s", agentName, len(skillResult.Skills), strings.Join(names, ", "))
+		}
+		compacted := skill.CompactSkillPaths(skillResult.Skills)
+		skillsPrompt, truncated, compact := skill.ApplySkillsPromptLimits(compacted)
+		if truncated {
+			log.Printf("app: agent %s: skills prompt truncated (compact=%v)", agentName, compact)
+		} else if compact {
+			log.Printf("app: agent %s: skills prompt using compact format", agentName)
+		}
+
+		// Load bootstrap context files (AGENTS.md / CLAUDE.md / SOUL.md).
+		bootstrap := agent.LoadBootstrapContext(ac.WorkspaceDir)
+
+		// Build full system prompt.
+		systemPrompt := agent.BuildSystemPrompt(agent.SystemPromptParams{
+			WorkspaceDir:   ac.WorkspaceDir,
+			SkillsPrompt:   skillsPrompt,
+			ContextFiles:   bootstrap.ContextFiles,
+			WorkspaceNotes: bootstrap.WorkspaceNotes,
+			PromptMode:     agent.PromptModeFull,
+			RuntimeInfo:    buildRuntimeInfo(ac),
+			ExtraPrompt:    ac.SystemPrompt,
+		})
+
+		temporal := agent.NewTemporalInjector(0)
+		loopCfg := agent.AgentLoopConfig{
+			TransformContext: temporal.TransformContext,
+		}
+
+		factory := gateway.AgentFactory(func(channelID, userID string) gateway.AgentRunner {
+			opts := []agent.AgentOption{
+				agent.WithModel(model),
+				agent.WithSystemPrompt(systemPrompt),
+				agent.WithLoopConfig(loopCfg),
+			}
+			if len(tools) > 0 {
+				opts = append(opts, agent.WithTools(tools))
+			}
+			ag := agent.NewAgent(prov, opts...)
+			// Restore message history from store.
+			storeChannelID := "webchat/" + agentName
+			if msgStore != nil {
+				if history, err := msgStore.ListMessages(store.QueryParams{
+					ChannelID: storeChannelID,
+					UserID:    userID,
+				}); err == nil && len(history) > 0 {
+					ag.ReplaceMessages(history)
+					log.Printf("[%s] session %s/%s: restored %d messages", agentName, storeChannelID, userID, len(history))
+				}
+			}
+			// Persist assistant messages and tool results as they arrive.
+			ag.Subscribe(func(ev types.AgentEvent) {
+				if msgStore == nil {
+					return
+				}
+				switch ev.Type {
+				case types.EventMessageEnd:
+					if ev.AssistantMsg != nil {
+						if err := msgStore.SaveMessage(storeChannelID, userID, ev.AssistantMsg); err != nil {
+							log.Printf("[%s] save assistant message: %v", agentName, err)
+						}
+					}
+				case types.EventTurnEnd:
+					for i := range ev.ToolResults {
+						if err := msgStore.SaveMessage(storeChannelID, userID, &ev.ToolResults[i]); err != nil {
+							log.Printf("[%s] save tool result[%d]: %v", agentName, i, err)
+						}
+					}
+				}
+			})
+			return ag
+		})
 
 		var sessStore *store.SessionStore
 		if db != nil {
 			sessStore = db.Sessions()
+		}
+
+		// Build conversation summarizer if memory manager is available.
+		var summarizer gateway.ConversationSummarizer
+		if memMgr != nil {
+			sumModel := types.Model{ID: ac.Model, Provider: ac.Provider}
+			sumProv := prov
+			sumFn := memory.SummarizeFunc(func(ctx context.Context, msgs []types.Message) (string, error) {
+				return streamSummarize(ctx, sumProv, sumModel, msgs)
+			})
+			summarizer = memory.NewSummarizer(memMgr, sumFn, memory.SummarizerConfig{
+				FilenamePrefix: "conv-" + ac.Name,
+			})
 		}
 
 		// Parse reset policy from agent config.
@@ -699,6 +845,7 @@ func (a *App) startGateway() error {
 		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
 			AgentName:          ac.Name,
 			SessionStore:       sessStore,
+			Summarizer:         summarizer,
 			DefaultResetMode:   resetMode,
 			DefaultResetHour:   ac.ResetAtHour,
 			DefaultIdleMinutes: ac.IdleMinutes,
@@ -709,26 +856,6 @@ func (a *App) startGateway() error {
 				storeChannelID := "webchat/" + agentName
 				if err := msgStore.SaveMessage(storeChannelID, uid, msg); err != nil {
 					log.Printf("[%s] save user message: %v", agentName, err)
-				}
-			},
-			OnAgentEvent: func(_, uid string, ev types.AgentEvent) {
-				if msgStore == nil {
-					return
-				}
-				storeChannelID := "webchat/" + agentName
-				switch ev.Type {
-				case types.EventMessageEnd:
-					if ev.AssistantMsg != nil {
-						if err := msgStore.SaveMessage(storeChannelID, uid, ev.AssistantMsg); err != nil {
-							log.Printf("[%s] save assistant message: %v", agentName, err)
-						}
-					}
-				case types.EventTurnEnd:
-					for i := range ev.ToolResults {
-						if err := msgStore.SaveMessage(storeChannelID, uid, &ev.ToolResults[i]); err != nil {
-							log.Printf("[%s] save tool result[%d]: %v", agentName, i, err)
-						}
-					}
 				}
 			},
 		})
@@ -853,10 +980,14 @@ func (a *App) restartGateway() error {
 // ─── Frontend API ─────────────────────────────────────────────────────────────
 
 // IsFirstRun returns true when no providers or agents are configured.
-func (a *App) IsFirstRun() bool {
+// Returns an error if the app is still initialising (frontend should retry).
+func (a *App) IsFirstRun() (bool, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	return len(a.cfg.Providers) == 0 && len(a.cfg.Agents) == 0
+	if a.cfg == nil {
+		return false, fmt.Errorf("initialising")
+	}
+	return len(a.cfg.Providers) == 0 && len(a.cfg.Agents) == 0, nil
 }
 
 // GetConfig returns the current configuration.
@@ -1446,6 +1577,49 @@ func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) 
 		out = append(out, map[string]string{"role": role, "content": text})
 	}
 	return out, nil
+}
+
+// OpenWhipflowSession loads the saved messages from a whipflow session and creates
+// a new regular chat session under the given agentName pre-populated with those
+// messages. Returns {"agentName": "...", "sessionID": "..."} for navigation.
+func (a *App) OpenWhipflowSession(toolExecID string, sessionIndex int, agentName string) (map[string]string, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+	if db == nil {
+		return nil, fmt.Errorf("database not available")
+	}
+
+	// Load messages saved by the MessageSaver callback.
+	msgs, err := db.Messages().ListMessages(store.QueryParams{
+		ChannelID: "whipflow/" + toolExecID,
+		UserID:    strconv.Itoa(sessionIndex),
+		Limit:     500,
+	})
+	if err != nil || len(msgs) == 0 {
+		return nil, fmt.Errorf("no history found for session %d of tool %s", sessionIndex, toolExecID)
+	}
+
+	// Create a new chat session for the agent, pre-populated with these messages.
+	newSessionID := fmt.Sprintf("whipflow-%s-%d", toolExecID[:min(8, len(toolExecID))], sessionIndex)
+	chID := "webchat/" + agentName
+	for _, m := range msgs {
+		if err := db.Messages().SaveMessage(chID, newSessionID, m); err != nil {
+			log.Printf("app: OpenWhipflowSession copy message: %v", err)
+		}
+	}
+
+	return map[string]string{
+		"agentName": agentName,
+		"sessionID": newSessionID,
+	}, nil
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // GetSessions returns a list of active session keys from all registered agents.
@@ -2224,12 +2398,71 @@ func buildRuntimeInfo(ac config.AgentConfig) string {
 	return info
 }
 
+func buildProviders(cfg *config.Config) (map[string]provider.LLMProvider, error) {
+	return agentbuilder.BuildProviders(cfg)
+}
+
+func buildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, error) {
+	return agentbuilder.BuildProvider(id, pc)
+}
+
+func providerEnvVar(id string) string {
+	return agentbuilder.ProviderEnvVar(id)
+}
+
+func defaultModelForProvider(providerID string) string {
+	return agentbuilder.DefaultModelForProvider(providerID)
+}
+
+// buildTools resolves a list of tool names to AgentTool instances.
+func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, mediaProvider provider.LLMProvider) []tool.AgentTool {
+	var vaultEnv func() map[string]string
+	if v != nil {
+		vaultEnv = func() map[string]string {
+			m, _ := v.Env()
+			return m
+		}
+	}
+	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, mediaProvider)
+}
+
+func streamSummarize(ctx context.Context, prov provider.LLMProvider, model types.Model, msgs []types.Message) (string, error) {
+	prompt := memory.BuildSummarizePrompt(msgs)
+	req := provider.LLMRequest{
+		Model: model,
+		Messages: []types.Message{
+			&types.UserMessage{
+				Role: "user",
+				Content: []types.ContentBlock{
+					&types.TextContent{Type: types.ContentTypeText, Text: prompt},
+				},
+			},
+		},
+	}
+	ch, err := prov.Stream(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("streamSummarize: %w", err)
+	}
+	var sb strings.Builder
+	for ev := range ch {
+		if ev.Type == types.StreamEventTextDelta {
+			sb.WriteString(ev.Delta)
+		}
+		if ev.Error != nil {
+			return "", fmt.Errorf("streamSummarize: %s", ev.Error.ErrorMessage)
+		}
+	}
+	return sb.String(), nil
+}
+
 // ─── Cron Scheduler ──────────────────────────────────────────────────────────
 
-// buildAgentForCron creates a fresh ClawAgent for the named agent config.
-func (a *App) buildAgentForCron(agentName string) (*clawproc.ClawAgent, error) {
+// buildAgentForCron creates a fresh Agent for the named agent config.
+// Reuses the same provider/model/tools/skills/system-prompt logic as startGateway.
+func (a *App) buildAgentForCron(agentName string) (gateway.AgentRunner, error) {
 	a.mu.RLock()
 	cfg := a.cfg
+	memMgr := a.memoryMgr
 	a.mu.RUnlock()
 
 	ac, ok := cfg.Agent(agentName)
@@ -2237,12 +2470,50 @@ func (a *App) buildAgentForCron(agentName string) (*clawproc.ClawAgent, error) {
 		return nil, fmt.Errorf("cron: agent %q not found in config", agentName)
 	}
 
-	factory := a.buildClawFactory(ac, agentName)
-	ca, ok := factory("cron", "cron").(*clawproc.ClawAgent)
-	if !ok || ca == nil {
-		return nil, fmt.Errorf("cron: failed to create ClawAgent for %q", agentName)
+	providerMap, err := buildProviders(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("cron: providers: %w", err)
 	}
-	return ca, nil
+	prov, ok := providerMap[ac.Provider]
+	if !ok {
+		return nil, fmt.Errorf("cron: provider %q not found for agent %q", ac.Provider, agentName)
+	}
+
+	var mediaProvider provider.LLMProvider
+	if cfg.Media.Provider != "" {
+		mediaProvider = providerMap[cfg.Media.Provider]
+	}
+
+	maxTokens := ac.MaxTokens
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
+	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
+
+	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+	compacted := skill.CompactSkillPaths(skillResult.Skills)
+	skillsPrompt, _, _ := skill.ApplySkillsPromptLimits(compacted)
+
+	bootstrap := agent.LoadBootstrapContext(ac.WorkspaceDir)
+	systemPrompt := agent.BuildSystemPrompt(agent.SystemPromptParams{
+		WorkspaceDir:   ac.WorkspaceDir,
+		SkillsPrompt:   skillsPrompt,
+		ContextFiles:   bootstrap.ContextFiles,
+		WorkspaceNotes: bootstrap.WorkspaceNotes,
+		PromptMode:     agent.PromptModeFull,
+		RuntimeInfo:    buildRuntimeInfo(ac),
+		ExtraPrompt:    ac.SystemPrompt,
+	})
+
+	opts := []agent.AgentOption{
+		agent.WithModel(model),
+		agent.WithSystemPrompt(systemPrompt),
+	}
+	if len(tools) > 0 {
+		opts = append(opts, agent.WithTools(tools))
+	}
+	return agent.NewAgent(prov, opts...), nil
 }
 
 // syncCronConfigToDB seeds the database with cron jobs from config.yml (by name, no duplicates).
@@ -2616,161 +2887,4 @@ func (a *App) BrowserRunShortcut(file, command string, args []string) ([]map[str
 		return nil, fmt.Errorf("shortcut file not found: %s", file)
 	}
 	return browser.RunYAMLCommand(fp, command, args, 9222)
-}
-
-// buildClawFactory returns an AgentFactory that spawns a claw-code subprocess.
-func (a *App) buildClawFactory(ac config.AgentConfig, agentName string) gateway.AgentFactory {
-	binPath := findClawBinary()
-	workDir := ac.WorkspaceDir
-	if workDir == "" {
-		// Default to home directory — macOS .app bundles start with cwd=/
-		// which is read-only under SIP.
-		workDir, _ = os.UserHomeDir()
-	}
-	return func(channelID, userID string) gateway.AgentRunner {
-		// Inject API credentials into the subprocess environment.
-		// macOS .app bundles do NOT inherit shell profile env vars,
-		// so the subprocess needs explicit injection.
-		// Inject ALL configured providers — the claw subprocess may invoke
-		// external plugins (media-gen, media-understand) that need keys
-		// for providers other than the agent's own.
-		var env []string
-		providerEnvMap := map[string]string{
-			"anthropic": "ANTHROPIC_API_KEY",
-			"openai":    "OPENAI_API_KEY",
-			"gemini":    "GEMINI_API_KEY",
-			"google":    "GOOGLE_API_KEY",
-		}
-
-		// 1. Inject keys from ALL config.yml providers.
-		// Match by Type field first (normalized lowercase, e.g. "gemini"),
-		// then fall back to the provider map key (e.g. "Gemini" → "gemini").
-		for id, pc := range a.cfg.Providers {
-			if pc.APIKey == "" {
-				continue
-			}
-			lookup := strings.ToLower(pc.Type)
-			if lookup == "" {
-				lookup = strings.ToLower(id)
-			}
-			envVar, ok := providerEnvMap[lookup]
-			if !ok {
-				continue
-			}
-			env = append(env, envVar+"="+pc.APIKey)
-		}
-
-		// Inject base URLs for providers that have custom endpoints.
-		baseURLEnvMap := map[string]string{
-			"anthropic": "ANTHROPIC_BASE_URL",
-			"gemini":    "GEMINI_BASE_URL",
-			"google":    "GEMINI_BASE_URL",
-			"openai":    "OPENAI_BASE_URL",
-		}
-		for id, pc := range a.cfg.Providers {
-			if pc.BaseURL == "" {
-				continue
-			}
-			lookup := strings.ToLower(pc.Type)
-			if lookup == "" {
-				lookup = strings.ToLower(id)
-			}
-			if envVar, ok := baseURLEnvMap[lookup]; ok {
-				env = append(env, envVar+"="+pc.BaseURL)
-			}
-		}
-
-		// Also set ANTHROPIC_BASE_URL from the agent's own provider if not already set.
-		providerID := ac.Provider
-		if providerID == "" {
-			providerID = a.cfg.DefaultProvider
-		}
-		if pc, ok := a.cfg.Providers[providerID]; ok && pc.BaseURL != "" {
-			hasAnthropicBase := false
-			for _, e := range env {
-				if strings.HasPrefix(e, "ANTHROPIC_BASE_URL=") {
-					hasAnthropicBase = true
-					break
-				}
-			}
-			if !hasAnthropicBase {
-				env = append(env, "ANTHROPIC_BASE_URL="+pc.BaseURL)
-			}
-		}
-
-		// 2. Fallback: auth storage / keychain / env via AuthResolver
-		//    for any provider not already covered by config.
-		resolver := auth.NewAuthResolver(a.authStor)
-		envSet := make(map[string]bool)
-		for _, e := range env {
-			envSet[e[:strings.Index(e, "=")]] = true
-		}
-		for provider, envVar := range providerEnvMap {
-			if envSet[envVar] {
-				continue
-			}
-			if key, err := resolver.ResolveAPIKey(context.Background(), provider); err == nil && key != "" {
-				env = append(env, envVar+"="+key)
-			}
-		}
-
-		proc := clawproc.NewProcess(clawproc.Config{
-			BinaryPath:     binPath,
-			Model:          ac.Model,
-			PermissionMode: "danger-full-access",
-			WorkingDir:     workDir,
-			Env:            env,
-		})
-		ca := clawproc.NewClawAgent(proc)
-		if err := ca.Start(context.Background()); err != nil {
-			log.Printf("[%s] claw start failed: %v", agentName, err)
-		}
-		return ca
-	}
-}
-
-// findClawBinary locates the claw binary. Checks:
-// 1. Development build tree (claw-code/rust/target/{release,debug}/claw)
-// 2. Extracted binary at ~/.clawfirm/bin/claw (production app bundle)
-// 3. PATH
-func findClawBinary() string {
-	// 1. Development builds — check relative to working directory AND
-	//    relative to the executable's location (wails dev sets cwd to
-	//    cmd/desktop, not project root).
-	relPaths := []string{
-		"claw-code/rust/target/release/claw",
-		"claw-code/rust/target/debug/claw",
-	}
-	var devCandidates []string
-	devCandidates = append(devCandidates, relPaths...)
-	// Also try from the executable's parent directories.
-	if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exePath)
-		for _, up := range []string{"../..", "../../..", "../../../.."} {
-			for _, c := range relPaths {
-				devCandidates = append(devCandidates, filepath.Join(exeDir, up, c))
-			}
-		}
-	}
-	for _, c := range devCandidates {
-		if _, err := os.Stat(c); err == nil {
-			abs, _ := filepath.Abs(c)
-			log.Printf("findClawBinary: found at %s", abs)
-			return abs
-		}
-	}
-	// 2. Extracted from embedded assets (production app bundle).
-	if home, err := os.UserHomeDir(); err == nil {
-		p := filepath.Join(home, ".clawfirm", "bin", "claw")
-		if _, err := os.Stat(p); err == nil {
-			log.Printf("findClawBinary: using extracted binary at %s", p)
-			return p
-		}
-	}
-	// 3. PATH.
-	if p, err := exec.LookPath("claw"); err == nil {
-		log.Printf("findClawBinary: using PATH binary at %s", p)
-		return p
-	}
-	return "claw" // let exec.Command fail with a clear error
 }

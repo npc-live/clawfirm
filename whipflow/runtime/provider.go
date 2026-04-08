@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,14 +12,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ai-gateway/clawfirm/agent"
 	"github.com/ai-gateway/clawfirm/config"
+	llmprovider "github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/provider/anthropic"
+	"github.com/ai-gateway/clawfirm/provider/gemini"
+	"github.com/ai-gateway/clawfirm/provider/ollama"
+	"github.com/ai-gateway/clawfirm/provider/openai"
+	"github.com/ai-gateway/clawfirm/tool"
+	"github.com/ai-gateway/clawfirm/types"
 )
 
 // Provider defines the interface for executing AI sessions.
 type Provider interface {
 	ExecuteSession(spec SessionSpec, config RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error)
-	// ExecuteSessionStream is like ExecuteSession but calls onStream for each
-	// incremental update (tool_use events, text deltas) during execution.
+	// ExecuteSessionStream is like ExecuteSession but calls onStream for each text delta.
 	// If onStream is nil it behaves identically to ExecuteSession.
 	ExecuteSessionStream(spec SessionSpec, config RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string, onStream func(delta string)) (*SessionResult, error)
 	ProviderName() string
@@ -63,13 +69,6 @@ func cliConfigFromYAML(name string, wc config.WhipflowCliProvider) CliConfig {
 
 // builtinPresets contains the default CLI provider configurations.
 var builtinPresets = map[string]CliConfig{
-	"claw": {
-		Name:         "claw",
-		Bin:          findClawBin(),
-		PromptMode:   "arg",
-		Args:         []string{"--output-format", "ndjson", "--permission-mode", "danger-full-access", "prompt"},
-		OutputFormat: "ndjson",
-	},
 	"claude-code": {
 		Name:         "claude-code",
 		Bin:          "claude",
@@ -96,6 +95,13 @@ var builtinPresets = map[string]CliConfig{
 		PromptMode: "arg",
 		Args:       []string{"--message"},
 	},
+	"pi": {
+		Name:         "pi",
+		Bin:          "pi",
+		PromptMode:   "stdin",
+		StdinArgs:    []string{"-p", "--no-session", "--provider", "anthropic"},
+		OutputFormat: "text",
+	},
 	"fetch": {
 		Name:         "fetch",
 		Bin:          "curl",
@@ -110,9 +116,9 @@ var builtinPresets = map[string]CliConfig{
 //
 // Resolution order:
 //  1. nativeRegistry (injected programmatically, e.g. from app integration)
-//  2. clawfirm agents in config.yml — matched by agent name, routes to claw CLI binary
+//  2. clawfirm agents in config.yml — matched by agent name, creates NativeProvider
 //  3. whipflow.cli_providers in config.yml
-//  4. Built-in CLI presets (claude-code, claude, opencode, aider, fetch)
+//  4. Built-in CLI presets (claude-code, claude, opencode, aider, pi, fetch)
 //  5. "custom:bin args..." format
 func ResolveProvider(name string, piCfg *config.Config, nativeRegistry map[string]Provider) (Provider, error) {
 	// 1. Check native registry (injected programmatically).
@@ -123,10 +129,9 @@ func ResolveProvider(name string, piCfg *config.Config, nativeRegistry map[strin
 	}
 
 	if piCfg != nil {
-		// 2. Check clawfirm agents — route to claw CLI binary so the
-		//    session gets claw-code's full tool set (40+ built-in tools).
+		// 2. Check clawfirm agents — each agent is a native provider.
 		if ac, ok := piCfg.Agent(name); ok {
-			return newClawCliProvider(ac), nil
+			return newNativeProviderFromAgent(ac, piCfg)
 		}
 
 		// 3. Check whipflow.cli_providers.
@@ -161,44 +166,24 @@ func ResolveProvider(name string, piCfg *config.Config, nativeRegistry map[strin
 	return nil, fmt.Errorf("unknown provider: %s", name)
 }
 
-// newClawCliProvider creates a CliProvider that invokes the claw binary for
-// a clawfirm agent. The agent's model is passed via --model so claw uses the
-// correct model. This replaces the old NativeProvider (Go agent loop) and gives
-// whipflow sessions access to claw-code's full 40+ built-in tools.
-func newClawCliProvider(ac config.AgentConfig) *CliProvider {
-	bin := findClawBin()
-	args := []string{
-		"--output-format", "ndjson",
-		"--permission-mode", "danger-full-access",
+// newNativeProviderFromAgent creates a NativeProvider from a clawfirm AgentConfig +
+// the matching ProviderConfig in the top-level providers map.
+func newNativeProviderFromAgent(ac config.AgentConfig, piCfg *config.Config) (*NativeProvider, error) {
+	provID := ac.Provider
+	pc, ok := piCfg.Providers[provID]
+	if !ok {
+		return nil, fmt.Errorf("agent %q references unknown provider %q", ac.Name, provID)
 	}
-	if ac.Model != "" {
-		args = append(args, "--model", ac.Model)
-	}
-	args = append(args, "prompt")
-	return &CliProvider{cfg: CliConfig{
-		Name:         ac.Name,
-		Bin:          bin,
-		PromptMode:   "arg",
-		Args:         args,
-		OutputFormat: "ndjson",
-		Timeout:      1800000, // 30 min
-	}}
-}
 
-// findClawBin locates the claw binary for whipflow CLI providers.
-func findClawBin() string {
-	// 1. ~/.clawfirm/bin/claw (extracted from app bundle).
-	if home, err := os.UserHomeDir(); err == nil {
-		p := home + "/.clawfirm/bin/claw"
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
+	llmProv, err := BuildLLMProvider(pc)
+	if err != nil {
+		return nil, fmt.Errorf("agent %q: %w", ac.Name, err)
 	}
-	// 2. PATH.
-	if p, err := exec.LookPath("claw"); err == nil {
-		return p
-	}
-	return "claw"
+
+	return NewNativeProvider(ac.Name, ac.Model, llmProv,
+		WithMaxTokens(ac.MaxTokens),
+		WithSystemPromptHint(ac.SystemPrompt),
+	)
 }
 
 // CliProvider implements the Provider interface using CLI-based AI tools.
@@ -221,8 +206,7 @@ func (p *CliProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enable
 	return p.ExecuteSessionStream(spec, cfg, enableTools, allowedTools, skillPrompts, nil)
 }
 
-// ExecuteSessionStream executes an AI session and calls onStream for each
-// tool_use event or text delta emitted by the provider during execution.
+// ExecuteSessionStream executes an AI session and calls onStream for each text delta.
 func (p *CliProvider) ExecuteSessionStream(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string, onStream func(delta string)) (*SessionResult, error) {
 	prompt := buildPrompt(spec, enableTools, allowedTools, skillPrompts, p.cfg.RawPrompt)
 
@@ -230,10 +214,13 @@ func (p *CliProvider) ExecuteSessionStream(spec SessionSpec, cfg RuntimeConfig, 
 	if ctx == nil {
 		ctx = context.Background()
 	}
-
-	output, err := runCliStream(ctx, p.cfg, prompt, cfg.VaultEnv, onStream)
+	output, err := runCli(ctx, p.cfg, prompt, cfg.VaultEnv)
 	if err != nil {
 		return nil, fmt.Errorf("provider %s: %w", p.cfg.Name, err)
+	}
+
+	if onStream != nil && output != "" {
+		onStream(output)
 	}
 
 	return &SessionResult{
@@ -242,6 +229,253 @@ func (p *CliProvider) ExecuteSessionStream(spec SessionSpec, cfg RuntimeConfig, 
 			Model: p.cfg.Name,
 		},
 	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// NativeProvider — in-process execution via agent.Agent + provider.LLMProvider
+// ---------------------------------------------------------------------------
+
+// NativeProvider implements the Provider interface using clawfirm's native
+// agent.Agent and provider.LLMProvider, executing sessions in-process
+// instead of spawning external CLI processes.
+type NativeProvider struct {
+	name             string
+	llmProvider      llmprovider.LLMProvider
+	model            types.Model
+	tools            []tool.AgentTool
+	systemPromptHint string // default system prompt from agent config
+}
+
+// NativeProviderOption configures a NativeProvider.
+type NativeProviderOption func(*NativeProvider)
+
+// WithNativeTools sets the tools available to the native agent.
+func WithNativeTools(tools []tool.AgentTool) NativeProviderOption {
+	return func(np *NativeProvider) { np.tools = tools }
+}
+
+// WithLLMProvider overrides the LLM provider.
+func WithLLMProvider(p llmprovider.LLMProvider) NativeProviderOption {
+	return func(np *NativeProvider) { np.llmProvider = p }
+}
+
+// WithMaxTokens sets the max tokens on the NativeProvider model.
+func WithMaxTokens(n int) NativeProviderOption {
+	return func(np *NativeProvider) {
+		if n > 0 {
+			np.model.MaxTokens = n
+		}
+	}
+}
+
+// WithSystemPromptHint sets a default system prompt for the NativeProvider.
+func WithSystemPromptHint(s string) NativeProviderOption {
+	return func(np *NativeProvider) { np.systemPromptHint = s }
+}
+
+// NewNativeProvider creates a NativeProvider.
+// The llmProv parameter can be nil if WithLLMProvider is used.
+func NewNativeProvider(name, modelID string, llmProv llmprovider.LLMProvider, opts ...NativeProviderOption) (*NativeProvider, error) {
+	np := &NativeProvider{
+		name:        name,
+		llmProvider: llmProv,
+		model:       types.Model{ID: modelID},
+	}
+	for _, opt := range opts {
+		opt(np)
+	}
+	if np.llmProvider == nil {
+		return nil, fmt.Errorf("native provider %q: no LLMProvider configured", name)
+	}
+	return np, nil
+}
+
+// ProviderName returns the display name.
+func (np *NativeProvider) ProviderName() string { return np.name }
+
+// ExecuteSession runs a session using clawfirm's agent loop in-process.
+func (np *NativeProvider) ExecuteSession(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string) (*SessionResult, error) {
+	return np.ExecuteSessionStream(spec, cfg, enableTools, allowedTools, skillPrompts, nil)
+}
+
+// ExecuteSessionStream runs a session and calls onStream for each text delta.
+func (np *NativeProvider) ExecuteSessionStream(spec SessionSpec, cfg RuntimeConfig, enableTools bool, allowedTools []string, skillPrompts []string, onStream func(delta string)) (*SessionResult, error) {
+	prompt := buildPrompt(spec, enableTools, allowedTools, skillPrompts, false)
+
+	// Model: prefer the one from the WhipFlow agent definition,
+	// fall back to the one from config.yml agent config.
+	model := np.model
+	if spec.Agent != nil && spec.Agent.Model != "" {
+		model = types.Model{ID: spec.Agent.Model, MaxTokens: np.model.MaxTokens}
+	}
+
+	// Build agent options.
+	agentOpts := []agent.AgentOption{
+		agent.WithModel(model),
+	}
+
+	// System prompt: prefer the one from the WhipFlow agent definition,
+	// fall back to the hint from config.yml agent config.
+	sysPrompt := np.systemPromptHint
+	if spec.Agent != nil && spec.Agent.Prompt != "" {
+		sysPrompt = spec.Agent.Prompt
+	}
+	if sysPrompt != "" {
+		agentOpts = append(agentOpts, agent.WithSystemPrompt(sysPrompt))
+	}
+
+	// Attach tools if enabled.
+	if enableTools && len(np.tools) > 0 {
+		var filtered []tool.AgentTool
+		allowed := make(map[string]bool, len(allowedTools))
+		for _, n := range allowedTools {
+			allowed[n] = true
+		}
+		for _, t := range np.tools {
+			if len(allowed) == 0 || allowed[t.Name()] {
+				filtered = append(filtered, t)
+			}
+		}
+		if len(filtered) > 0 {
+			agentOpts = append(agentOpts, agent.WithTools(filtered))
+		}
+	}
+
+	// Create the agent.
+	a := agent.NewAgent(np.llmProvider, agentOpts...)
+
+	// Subscribe for streaming deltas if requested.
+	if onStream != nil {
+		unsub := a.Subscribe(func(ev types.AgentEvent) {
+			if ev.Type == types.EventMessageUpdate && ev.StreamEvent != nil &&
+				ev.StreamEvent.Type == types.StreamEventTextDelta && ev.StreamEvent.Delta != "" {
+				onStream(ev.StreamEvent.Delta)
+			}
+		})
+		defer unsub()
+	}
+
+	// Determine timeout.
+	timeout := cfg.SessionTimeout
+	if timeout <= 0 {
+		timeout = 300000 // 5 min default
+	}
+	parentCtx := cfg.Ctx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(parentCtx, time.Duration(timeout)*time.Millisecond)
+	defer cancel()
+
+	startTime := time.Now()
+
+	// Send the prompt and wait for completion.
+	if err := a.Prompt(ctx, prompt); err != nil {
+		return nil, fmt.Errorf("native provider %s: prompt failed: %w", np.name, err)
+	}
+	if err := a.WaitForIdle(ctx); err != nil {
+		return nil, fmt.Errorf("native provider %s: %w", np.name, err)
+	}
+
+	// Extract the result from the agent's final state.
+	state := a.State()
+	output := extractAgentOutput(state.Messages)
+
+	// Convert []types.Message → []any for SessionResult.Messages
+	anyMsgs := make([]any, len(state.Messages))
+	for i, m := range state.Messages {
+		anyMsgs[i] = m
+	}
+
+	return &SessionResult{
+		Output: output,
+		Metadata: SessionMetadata{
+			Model:    np.model.ID,
+			Duration: time.Since(startTime).Milliseconds(),
+		},
+		Messages: anyMsgs,
+	}, nil
+}
+
+// extractAgentOutput extracts text output from the agent's message history.
+func extractAgentOutput(messages []types.Message) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if am, ok := messages[i].(*types.AssistantMessage); ok {
+			var parts []string
+			for _, block := range am.Content {
+				if tc, ok := block.(*types.TextContent); ok && tc.Text != "" {
+					parts = append(parts, tc.Text)
+				}
+			}
+			if len(parts) > 0 {
+				return strings.Join(parts, "\n")
+			}
+		}
+	}
+	return ""
+}
+
+// ---------------------------------------------------------------------------
+// buildLLMProvider — creates LLMProvider from clawfirm ProviderConfig
+// ---------------------------------------------------------------------------
+
+// buildLLMProvider creates an LLMProvider from a clawfirm ProviderConfig.
+// Config values are already env-expanded by config.Load().
+// BuildLLMProvider creates an LLMProvider from a clawfirm ProviderConfig.
+func BuildLLMProvider(pc config.ProviderConfig) (llmprovider.LLMProvider, error) {
+	apiKey := pc.APIKey
+	baseURL := pc.BaseURL
+	provType := pc.Type
+	if provType == "" {
+		provType = "anthropic"
+	}
+
+	switch provType {
+	case "anthropic":
+		if apiKey == "" {
+			return nil, fmt.Errorf("api_key required for %s provider", provType)
+		}
+		if baseURL != "" {
+			return anthropic.NewWithBaseURL(apiKey, baseURL), nil
+		}
+		return anthropic.New(apiKey), nil
+
+	case "minimax":
+		if apiKey == "" {
+			return nil, fmt.Errorf("api_key required for minimax provider")
+		}
+		if baseURL == "" {
+			baseURL = "https://api.minimax.io/anthropic"
+		}
+		return anthropic.NewWithBaseURL(apiKey, baseURL), nil
+
+	case "openai", "deepseek", "groq", "mistral", "openrouter":
+		if apiKey == "" {
+			return nil, fmt.Errorf("api_key required for %s provider", provType)
+		}
+		if baseURL != "" {
+			return openai.NewWithBaseURL(apiKey, baseURL), nil
+		}
+		return openai.New(apiKey), nil
+
+	case "gemini", "google":
+		if apiKey == "" {
+			return nil, fmt.Errorf("api_key required for gemini provider")
+		}
+		return gemini.New(apiKey), nil
+
+	case "ollama":
+		if baseURL == "" {
+			baseURL = "http://localhost:11434"
+		}
+		return ollama.NewWithBaseURL(baseURL), nil
+
+	default:
+		return nil, fmt.Errorf(
+			"unsupported provider type %q; use WithLLMProvider() to inject a pre-built provider",
+			provType,
+		)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -260,34 +494,56 @@ func buildPrompt(spec SessionSpec, enableTools bool, allowedTools []string, skil
 		parts = append(parts, fmt.Sprintf("## System\n%s", spec.Agent.Prompt))
 	}
 	if enableTools && len(allowedTools) > 0 {
-		parts = append(parts, fmt.Sprintf("## Available Tools\n%s\nIMPORTANT: These tools are pre-approved and available. Do NOT use ToolSearch to verify them — call them directly.", strings.Join(allowedTools, ", ")))
+		parts = append(parts, fmt.Sprintf("## Available Tools\n%s", strings.Join(allowedTools, ", ")))
 	}
 	if len(skillPrompts) > 0 {
 		parts = append(parts, fmt.Sprintf("## Skills & Knowledge\n%s", strings.Join(skillPrompts, "\n\n")))
 	}
-	parts = append(parts, spec.Prompt)
+	parts = append(parts, fmt.Sprintf("## Task\n%s", spec.Prompt))
+	if spec.Context != nil && len(spec.Context.Variables) > 0 {
+		var varLines []string
+		for name, value := range spec.Context.Variables {
+			varLines = append(varLines, formatContextVariable(name, value))
+		}
+		parts = append(parts, fmt.Sprintf("## Context Variables\n%s", strings.Join(varLines, "\n")))
+	}
 
 	return strings.Join(parts, "\n\n")
 }
 
+func formatContextVariable(name string, value any) string {
+	if sr, ok := IsSessionResult(value); ok {
+		return fmt.Sprintf("- %s (session result): %s", name, sr.Output)
+	}
+	switch v := value.(type) {
+	case string:
+		return fmt.Sprintf("- %s: %s", name, v)
+	default:
+		data, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Sprintf("- %s: %v", name, v)
+		}
+		return fmt.Sprintf("- %s: %s", name, string(data))
+	}
+}
 
 // ---------------------------------------------------------------------------
 // CLI execution
 // ---------------------------------------------------------------------------
 
-func runCliStream(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv func() map[string]string, onStream func(delta string)) (string, error) {
+func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv func() map[string]string) (string, error) {
 	binPath, err := resolveRealPath(cfg.Bin)
 	if err != nil {
 		return "", fmt.Errorf("binary not found: %s: %w", cfg.Bin, err)
 	}
 
 	timeout := cfg.Timeout
-	ctx := parentCtx
-	if timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(parentCtx, time.Duration(timeout)*time.Millisecond)
-		defer cancel()
+	if timeout == 0 {
+		timeout = 1800000 // default 30 minutes
 	}
+
+	ctx, cancel := context.WithTimeout(parentCtx, time.Duration(timeout)*time.Millisecond)
+	defer cancel()
 
 	var args []string
 	if cfg.PromptMode == "stdin" {
@@ -315,54 +571,13 @@ func runCliStream(parentCtx context.Context, cfg CliConfig, prompt string, vault
 	}
 	cmd.Env = filtered
 
-	var stderr bytes.Buffer
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if cfg.PromptMode == "stdin" {
 		cmd.Stdin = strings.NewReader(prompt)
 	}
-
-	// For ndjson or claw-json format with a stream callback, read stdout
-	// line-by-line so we can emit text deltas in real time.
-	if (cfg.OutputFormat == "ndjson" || cfg.OutputFormat == "claw-json") && onStream != nil {
-		stdoutPipe, pipeErr := cmd.StdoutPipe()
-		if pipeErr != nil {
-			return "", fmt.Errorf("stdout pipe: %w", pipeErr)
-		}
-		if startErr := cmd.Start(); startErr != nil {
-			return "", fmt.Errorf("failed to start %s: %w", cfg.Bin, startErr)
-		}
-
-		var allLines []string
-		scanner := bufio.NewScanner(stdoutPipe)
-		scanner.Buffer(make([]byte, 256*1024), 256*1024)
-		for scanner.Scan() {
-			line := scanner.Text()
-			allLines = append(allLines, line)
-			emitClawStreamDelta(line, onStream)
-		}
-
-		runErr := cmd.Wait()
-		if runErr != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				return "", fmt.Errorf("command timed out after %dms", timeout)
-			}
-			if _, ok := runErr.(*exec.ExitError); !ok {
-				return "", fmt.Errorf("failed to execute %s: %w", cfg.Bin, runErr)
-			}
-			log.Printf("provider %s exited with error: %v, stderr: %s", cfg.Name, runErr, stderr.String())
-		}
-
-		combined := strings.Join(allLines, "\n")
-		if cfg.OutputFormat == "ndjson" {
-			return parseNdjson(combined)
-		}
-		return parseClawJson(combined)
-	}
-
-	// Default: buffer all stdout then parse.
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
 
 	err = cmd.Run()
 	if err != nil {
@@ -377,55 +592,11 @@ func runCliStream(parentCtx context.Context, cfg CliConfig, prompt string, vault
 
 	stdoutStr := stdout.String()
 
-	switch cfg.OutputFormat {
-	case "stream-json":
+	if cfg.OutputFormat == "stream-json" {
 		return parseStreamJson(stdoutStr)
-	case "ndjson":
-		return parseNdjson(stdoutStr)
-	case "claw-json":
-		return parseClawJson(stdoutStr)
 	}
 
 	return stripAnsi(strings.TrimSpace(stdoutStr)), nil
-}
-
-// emitClawStreamDelta parses a single claw JSON output line and calls onStream
-// with a human-readable delta if the line is a tool_use event or text delta.
-func emitClawStreamDelta(line string, onStream func(delta string)) {
-	line = strings.TrimSpace(line)
-	if line == "" || line[0] != '{' {
-		return
-	}
-	var obj map[string]any
-	if err := json.Unmarshal([]byte(line), &obj); err != nil {
-		return
-	}
-	// claw --output-format json emits lines like:
-	//   {"type":"tool_use","name":"bash","input":"..."}
-	//   {"type":"text","text":"..."}
-	evType, _ := obj["type"].(string)
-	switch evType {
-	case "tool_use":
-		name, _ := obj["name"].(string)
-		input, _ := obj["input"].(string)
-		if name != "" {
-			// Trim input to a short preview for readability.
-			preview := strings.ReplaceAll(input, "\n", " ")
-			if len(preview) > 80 {
-				preview = preview[:80] + "…"
-			}
-			if preview != "" {
-				onStream(fmt.Sprintf("🔧 %s  %s", name, preview))
-			} else {
-				onStream(fmt.Sprintf("🔧 %s", name))
-			}
-		}
-	case "text", "text_delta": // claw --output-format json uses "text"; ndjson uses "text_delta"
-		text, _ := obj["text"].(string)
-		if text != "" {
-			onStream(text)
-		}
-	}
 }
 
 func parseStreamJson(stdout string) (string, error) {
@@ -468,98 +639,6 @@ func parseStreamJson(stdout string) (string, error) {
 		}
 	}
 
-	return stripAnsi(strings.TrimSpace(stdout)), nil
-}
-
-// parseClawJson parses claw's non-interactive JSON output format.
-// claw --output-format json prompt "..." writes {"message":"..."} as the last
-// JSON line on stdout. Earlier lines may contain TUI startup text, session
-// banners, or ANSI-decorated progress — we scan from the end to find the JSON.
-func parseClawJson(stdout string) (string, error) {
-	stdout = strings.TrimSpace(stdout)
-	if stdout == "" {
-		return "", nil
-	}
-	// Scan lines in reverse: the last valid JSON line with a "message" field wins.
-	lines := strings.Split(stdout, "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
-		if line == "" || line[0] != '{' {
-			continue
-		}
-		var obj map[string]any
-		if err := json.Unmarshal([]byte(line), &obj); err != nil {
-			continue
-		}
-		if msg, ok := obj["message"].(string); ok && msg != "" {
-			return strings.TrimSpace(msg), nil
-		}
-	}
-	// Fallback: strip ANSI and return the raw text.
-	return stripAnsi(stdout), nil
-}
-
-// parseNdjson parses claw's ndjson session format.
-// Each line is a JSON object; we find the last assistant "message" event and
-// extract its text blocks as the final answer.
-func parseNdjson(stdout string) (string, error) {
-	lines := strings.Split(stdout, "\n")
-
-	var lastAssistantText string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		var msg map[string]any
-		if err := json.Unmarshal([]byte(line), &msg); err != nil {
-			continue
-		}
-
-		msgType, _ := msg["type"].(string)
-		switch msgType {
-		case "message":
-			message, ok := msg["message"].(map[string]any)
-			if !ok {
-				continue
-			}
-			role, _ := message["role"].(string)
-			if role != "assistant" {
-				continue
-			}
-			blocks, ok := message["blocks"].([]any)
-			if !ok {
-				continue
-			}
-			var parts []string
-			for _, b := range blocks {
-				block, ok := b.(map[string]any)
-				if !ok {
-					continue
-				}
-				if block["type"] == "text" {
-					if text, ok := block["text"].(string); ok && text != "" {
-						parts = append(parts, text)
-					}
-				}
-			}
-			if len(parts) > 0 {
-				lastAssistantText = strings.Join(parts, "")
-			}
-		case "error":
-			errMsg := "session returned an error"
-			if message, ok := msg["message"].(string); ok {
-				errMsg = message
-			}
-			return "", fmt.Errorf("%s", errMsg)
-		}
-	}
-
-	if lastAssistantText != "" {
-		return strings.TrimSpace(lastAssistantText), nil
-	}
 	return stripAnsi(strings.TrimSpace(stdout)), nil
 }
 

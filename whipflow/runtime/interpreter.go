@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"bufio"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,10 @@ import (
 	"github.com/ai-gateway/clawfirm/whipflow/ast"
 	"github.com/ai-gateway/clawfirm/whipflow/parser"
 )
+
+// errStopAfterSession is a sentinel returned when stop_after_session limit is reached.
+// It is treated as a successful partial execution, not an error.
+var errStopAfterSession = errors.New("whipflow: stopped after session limit")
 
 // ---------------------------------------------------------------------------
 // Interpreter
@@ -40,6 +45,11 @@ type SessionProgress struct {
 	// StreamText carries an incremental text delta during session execution.
 	// When non-empty, Done is false and this is a streaming update.
 	StreamText string
+	// Messages holds the full conversation history. Only set when Done == true
+	// and the session was executed by a NativeProvider.
+	Messages []any // []types.Message stored as any to avoid circular imports
+	// AgentName is the whipflow agent definition name for this session.
+	AgentName string
 }
 
 // Interpreter executes WhipFlow programs.
@@ -76,6 +86,9 @@ type Interpreter struct {
 
 	// Progress callback — called before (Done=false) and after (Done=true) each session.
 	onSessionProgress func(SessionProgress)
+
+	// stopAfterSession: if >= 0, execution stops after completing this session index.
+	stopAfterSession int
 }
 
 // InterpreterOption configures an Interpreter during construction.
@@ -123,13 +136,20 @@ func WithInitialInputs(inputs map[string]string) InterpreterOption {
 	return func(i *Interpreter) { i.initialInputs = inputs }
 }
 
+// WithStopAfterSession stops execution after completing session at the given
+// 0-based index. Useful for step-by-step debug execution.
+func WithStopAfterSession(idx int) InterpreterOption {
+	return func(i *Interpreter) { i.stopAfterSession = idx }
+}
+
 // NewInterpreter creates a new interpreter with the given environment and options.
 func NewInterpreter(env *RuntimeEnvironment, opts ...InterpreterOption) *Interpreter {
 	interp := &Interpreter{
-		env:           env,
-		toolRegistry:  NewToolRegistry(),
-		blocks:        make(map[string]*ast.BlockDefinition),
-		providerCache: make(map[string]Provider),
+		env:              env,
+		toolRegistry:     NewToolRegistry(),
+		blocks:           make(map[string]*ast.BlockDefinition),
+		providerCache:    make(map[string]Provider),
+		stopAfterSession: -1,
 	}
 	for _, opt := range opts {
 		opt(interp)
@@ -215,6 +235,12 @@ func (interp *Interpreter) Execute(program *ast.Program) (*ExecutionResult, erro
 		}
 	}()
 
+	// Treat stop-after-session as a clean partial success.
+	isPartialStop := execErr == errStopAfterSession
+	if isPartialStop {
+		execErr = nil
+	}
+
 	// Build the execution result.
 	ctx := interp.env.Context.CaptureContext()
 	result := &ExecutionResult{
@@ -234,9 +260,10 @@ func (interp *Interpreter) Execute(program *ast.Program) (*ExecutionResult, erro
 	if interp.stateStore != nil {
 		if execErr != nil {
 			_ = interp.stateStore.FailRun(interp.currentRunID, execErr.Error())
-		} else {
+		} else if !isPartialStop {
 			_ = interp.stateStore.CompleteRun(interp.currentRunID)
 		}
+		// isPartialStop: leave run as incomplete so retry_from_session can resume it.
 	}
 
 	if execErr != nil {
@@ -424,6 +451,11 @@ func (interp *Interpreter) executeSessionStatement(n *ast.SessionStatement) erro
 		providerName = spec.Agent.Provider
 	}
 
+	// Stop-after-session: if this session index exceeds the limit, halt cleanly.
+	if interp.stopAfterSession >= 0 && interp.sessionIndex > interp.stopAfterSession {
+		return errStopAfterSession
+	}
+
 	// Emit session-start progress.
 	if interp.onSessionProgress != nil {
 		interp.onSessionProgress(SessionProgress{
@@ -466,7 +498,11 @@ func (interp *Interpreter) executeSessionStatement(n *ast.SessionStatement) erro
 		}
 	}
 
-	// Emit session-done progress.
+	// Emit session-done progress (include message history for NativeProvider sessions).
+	agentName := ""
+	if spec.Agent != nil {
+		agentName = spec.Agent.Name
+	}
 	if interp.onSessionProgress != nil {
 		interp.onSessionProgress(SessionProgress{
 			Index:      interp.sessionIndex,
@@ -476,6 +512,8 @@ func (interp *Interpreter) executeSessionStatement(n *ast.SessionStatement) erro
 			Done:       true,
 			Output:     result.Output,
 			DurationMs: result.Metadata.Duration,
+			Messages:   result.Messages,
+			AgentName:  agentName,
 		})
 	}
 

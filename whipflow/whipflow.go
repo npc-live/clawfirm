@@ -49,7 +49,9 @@ type executeConfig struct {
 	nativeProviders         map[string]runtime.Provider
 	sessionProgressCallback func(runtime.SessionProgress)
 	initialInputs           map[string]string
-	retryFromSession        int // -1 means not set
+	retryFromSession        int                    // -1 means not set
+	stopAfterSession        int                    // -1 means disabled
+	replaySessions          []runtime.SessionRecord // explicit replay, bypasses state store
 }
 
 // WithRuntimeConfig sets the runtime configuration.
@@ -109,9 +111,22 @@ func WithRetryFromSession(idx int) Option {
 	return func(c *executeConfig) { c.retryFromSession = idx }
 }
 
+// WithStopAfterSession stops execution after completing the session at the
+// given 0-based index. Useful for step-by-step debug execution in the UI.
+func WithStopAfterSession(idx int) Option {
+	return func(c *executeConfig) { c.stopAfterSession = idx }
+}
+
+// WithReplaySessions provides pre-recorded session outputs to replay instead
+// of re-executing them. This lets callers use an external source (e.g. the
+// agent's message history) as the state store, rather than the SQLite store.
+func WithReplaySessions(sessions []runtime.SessionRecord) Option {
+	return func(c *executeConfig) { c.replaySessions = sessions }
+}
+
 // Execute runs a parsed WhipFlow program.
 func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, error) {
-	cfg := &executeConfig{retryFromSession: -1}
+	cfg := &executeConfig{retryFromSession: -1, stopAfterSession: -1}
 	for _, opt := range opts {
 		opt(cfg)
 	}
@@ -127,9 +142,16 @@ func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, er
 	}
 	interpOpts = append(interpOpts, runtime.WithToolRegistry(tr))
 
-	// State store for resume support.
+	// If explicit replay sessions are provided, use them directly and skip the
+	// state store entirely. This is the message-history-as-state-store path.
+	if len(cfg.replaySessions) > 0 {
+		interpOpts = append(interpOpts, runtime.WithReplaySessions(cfg.replaySessions))
+		env.Log("info", fmt.Sprintf("Using %d explicit replay sessions (message history path)", len(cfg.replaySessions)))
+	}
+
+	// State store for resume support (used only when no explicit replay sessions).
 	var store *runtime.StateStore
-	if cfg.stateStorePath != "" {
+	if cfg.stateStorePath != "" && len(cfg.replaySessions) == 0 {
 		var err error
 		store, err = runtime.NewStateStore(cfg.stateStorePath)
 		if err != nil {
@@ -179,6 +201,11 @@ func Execute(program *ast.Program, opts ...Option) (*runtime.ExecutionResult, er
 	// Pre-filled ask inputs.
 	if len(cfg.initialInputs) > 0 {
 		interpOpts = append(interpOpts, runtime.WithInitialInputs(cfg.initialInputs))
+	}
+
+	// Stop-after-session for step-by-step debug execution.
+	if cfg.stopAfterSession >= 0 {
+		interpOpts = append(interpOpts, runtime.WithStopAfterSession(cfg.stopAfterSession))
 	}
 
 	interp := runtime.NewInterpreter(env, interpOpts...)
