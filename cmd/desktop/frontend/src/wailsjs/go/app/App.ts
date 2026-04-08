@@ -188,6 +188,10 @@ export interface ToolExecutionInfo {
   result?: string;
   isError: boolean;
   timestamp: number;
+  partialSteps?: any[];
+  status?: string; // "running" | "done" | "error" | "interrupted"
+  startedAt?: number;
+  endedAt?: number;
 }
 
 export const GetToolExecutions = (
@@ -195,6 +199,12 @@ export const GetToolExecutions = (
   userID: string
 ): Promise<ToolExecutionInfo[]> =>
   callGo<ToolExecutionInfo[]>(PKG, STRUCT, "GetToolExecutions", channelID, userID);
+
+export const GetToolExecutionState = (
+  channelID: string,
+  userID: string
+): Promise<ToolExecutionInfo[]> =>
+  callGo<ToolExecutionInfo[]>(PKG, STRUCT, "GetToolExecutionState", channelID, userID);
 
 // ─── Skills ───────────────────────────────────────────────────────────────────
 

@@ -17,6 +17,7 @@ frontend:
 
 desktop:
 	@rm -rf cmd/desktop/frontend/wailsjs
+	cd cmd/desktop && wails generate module
 	@mkdir -p cmd/desktop/build/bin
 	cd cmd/desktop && wails build -o ../../$(BIN_DIR)/desktop
 
@@ -36,6 +37,7 @@ app: func-universal claw whip-universal browser-shortcut-universal media-underst
 	@cp claw-code/rust/target/release/claw app/assets/claw
 	@echo "✓ Embedded claw binary: app/assets/claw ($$(wc -c < app/assets/claw | tr -d ' ') bytes)"
 	@rm -rf cmd/desktop/frontend/wailsjs cmd/desktop/build/bin
+	cd cmd/desktop && wails generate module
 	cd cmd/desktop && wails build \
 		-ldflags "-X github.com/ai-gateway/clawfirm/app.Version=$(VERSION)" \
 		-platform darwin/universal \

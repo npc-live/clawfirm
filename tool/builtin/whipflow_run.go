@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+
+	"time"
 
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/tool"
@@ -93,6 +97,7 @@ type WhipflowSessionStep struct {
 	DurationMs int64  `json:"duration_ms,omitempty"`
 	Error      string `json:"error,omitempty"`
 	HasHistory bool   `json:"has_history,omitempty"` // true when message history was saved to DB
+	StreamText string `json:"stream_text,omitempty"` // incremental text delta for live streaming
 	// Messages holds the conversation turns for this session (set when Done=true and NativeProvider).
 	Messages []any `json:"messages,omitempty"`
 }
@@ -128,8 +133,6 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 			}
 		}
 	}
-
-	log.Printf("whipflow_run: source_len=%d file=%q user_inputs=%v\nsource:\n%s", len(source), filePath, userInputs, source)
 
 	if source == "" && filePath == "" {
 		return tool.ToolResult{
@@ -250,6 +253,63 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 		}
 	}
 
+	// Persist session steps to sidecar file so they survive app restart.
+	// The sidecar is read by GetToolExecutionState in app.go on reload.
+	var sidecarMu sync.Mutex
+	var sidecarSteps []WhipflowSessionStep
+	var lastSidecarWrite time.Time
+	var debouncePending bool
+	writeSidecar := func(step WhipflowSessionStep) {
+		sidecarMu.Lock()
+		// Merge: update existing index or append
+		found := false
+		for i, s := range sidecarSteps {
+			if s.Index == step.Index {
+				if step.StreamText != "" {
+					step.StreamText = s.StreamText + step.StreamText
+				}
+				sidecarSteps[i] = step
+				found = true
+				break
+			}
+		}
+		if !found {
+			sidecarSteps = append(sidecarSteps, step)
+		}
+		snapshot := make([]WhipflowSessionStep, len(sidecarSteps))
+		copy(snapshot, sidecarSteps)
+
+		// Decide whether to write: always on session start/done, debounce stream deltas (2s).
+		isStreamDelta := step.StreamText != "" && !step.Done
+		shouldWrite := !isStreamDelta
+		if isStreamDelta {
+			now := time.Now()
+			if now.Sub(lastSidecarWrite) >= 2*time.Second {
+				shouldWrite = true
+			} else if !debouncePending {
+				// Schedule a deferred write so crash during long streaming doesn't lose all progress.
+				debouncePending = true
+				go func() {
+					time.Sleep(2 * time.Second)
+					sidecarMu.Lock()
+					debouncePending = false
+					snap := make([]WhipflowSessionStep, len(sidecarSteps))
+					copy(snap, sidecarSteps)
+					sidecarMu.Unlock()
+					flushSidecar(id, snap)
+				}()
+			}
+		}
+		if shouldWrite {
+			lastSidecarWrite = time.Now()
+		}
+		sidecarMu.Unlock()
+
+		if shouldWrite {
+			flushSidecar(id, snapshot)
+		}
+	}
+
 	// Emit a ToolUpdate for each session start/end so the frontend can render
 	// per-session progress in real time. Also persist message history via MessageSaver.
 	execOpts = append(execOpts, whipflow.WithSessionProgressCallback(func(p whipflow.SessionProgress) {
@@ -257,18 +317,20 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 		if p.Done && len(p.Messages) > 0 && w.MessageSaver != nil {
 			w.MessageSaver(id, p.Index, p.AgentName, p.Messages)
 		}
+		step := WhipflowSessionStep{
+			Index:      p.Index,
+			Name:       p.Name,
+			Provider:   p.Provider,
+			Prompt:     p.Prompt,
+			Done:       p.Done,
+			Output:     p.Output,
+			DurationMs: p.DurationMs,
+			Error:      p.Error,
+			HasHistory: p.Done && len(p.Messages) > 0,
+			StreamText: p.StreamText,
+		}
+		writeSidecar(step)
 		if onUpdate != nil {
-			step := WhipflowSessionStep{
-				Index:      p.Index,
-				Name:       p.Name,
-				Provider:   p.Provider,
-				Prompt:     p.Prompt,
-				Done:       p.Done,
-				Output:     p.Output,
-				DurationMs: p.DurationMs,
-				Error:      p.Error,
-				HasHistory: p.Done && len(p.Messages) > 0,
-			}
 			// Include messages when session is done so frontend can render conversation history.
 			if p.Done && len(p.Messages) > 0 {
 				step.Messages = p.Messages
@@ -441,6 +503,20 @@ func makePreviewResult(a *whipflow.ComplexityAnalysis, source string) (tool.Tool
 		Content: []types.ContentBlock{&types.TextContent{Text: string(data)}},
 		Details: preview,
 	}, nil
+}
+
+// flushSidecar atomically writes session steps to the sidecar JSON file (write-to-tmp + rename).
+func flushSidecar(id string, steps []WhipflowSessionStep) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(home, ".clawfirm", "whipflow-steps")
+	_ = os.MkdirAll(dir, 0o755)
+	data, _ := json.Marshal(steps)
+	tmpPath := filepath.Join(dir, id+".json.tmp")
+	_ = os.WriteFile(tmpPath, data, 0o644)
+	_ = os.Rename(tmpPath, filepath.Join(dir, id+".json"))
 }
 
 // readWhipFile reads a .whip file and returns its content as a string.

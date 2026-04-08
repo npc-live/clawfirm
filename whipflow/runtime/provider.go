@@ -347,9 +347,20 @@ func (np *NativeProvider) ExecuteSessionStream(spec SessionSpec, cfg RuntimeConf
 	// Subscribe for streaming deltas if requested.
 	if onStream != nil {
 		unsub := a.Subscribe(func(ev types.AgentEvent) {
-			if ev.Type == types.EventMessageUpdate && ev.StreamEvent != nil &&
-				ev.StreamEvent.Type == types.StreamEventTextDelta && ev.StreamEvent.Delta != "" {
-				onStream(ev.StreamEvent.Delta)
+			switch ev.Type {
+			case types.EventMessageUpdate:
+				if ev.StreamEvent != nil && ev.StreamEvent.Type == types.StreamEventTextDelta && ev.StreamEvent.Delta != "" {
+					onStream(ev.StreamEvent.Delta)
+				}
+			case types.EventToolExecutionStart:
+				onStream(fmt.Sprintf("\n[tool: %s]\n", ev.ToolName))
+			case types.EventToolExecutionEnd:
+				if s, ok := ev.ToolResult.(string); ok && len(s) > 0 {
+					if len(s) > 200 {
+						s = s[:200] + "…"
+					}
+					onStream(s + "\n")
+				}
 			}
 		})
 		defer unsub()

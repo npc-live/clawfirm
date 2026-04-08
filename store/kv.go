@@ -46,5 +46,24 @@ func (s *KVStore) Delete(key string) error {
 	return err
 }
 
+// ScanPrefix returns all key-value pairs where key starts with prefix.
+// Values are raw JSON strings — callers should unmarshal as needed.
+func (s *KVStore) ScanPrefix(prefix string) (map[string]string, error) {
+	rows, err := s.db.sql.Query(`SELECT key, value FROM kv WHERE key LIKE ?`, prefix+"%")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]string)
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			return nil, err
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
+}
+
 // ErrNotFound is returned by Get when the key does not exist.
 var ErrNotFound = errors.New("store: key not found")

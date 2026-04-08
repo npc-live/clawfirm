@@ -72,6 +72,15 @@ type SessionInfo struct {
 	UserID    string `json:"userId"`
 }
 
+// ToolExecRecord tracks a single tool execution's lifecycle in the KV store.
+type ToolExecRecord struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Status    string `json:"status"` // "running" | "done" | "error" | "interrupted"
+	StartedAt int64  `json:"startedAt"`
+	EndedAt   int64  `json:"endedAt,omitempty"`
+}
+
 // App is the Wails application struct. All exported methods become RPC calls available to the frontend.
 type App struct {
 	ctx      context.Context
@@ -700,6 +709,11 @@ func (a *App) startGateway() error {
 		msgStore = db.Messages()
 	}
 
+	// Mark any "running" tool executions from a previous crash as "interrupted".
+	a.recoverInterruptedToolExecs()
+	// Clean up orphaned sidecar tmp files and old sidecars.
+	cleanupWhipflowSidecars()
+
 	for _, ac := range cfg.Agents {
 		prov, ok := providerMap[ac.Provider]
 		if !ok {
@@ -813,6 +827,20 @@ func (a *App) startGateway() error {
 							log.Printf("[%s] save tool result[%d]: %v", agentName, i, err)
 						}
 					}
+				case types.EventToolExecutionStart:
+					a.updateToolExec(storeChannelID, userID, ev.ToolCallID, func(r *ToolExecRecord) {
+						r.Name = ev.ToolName
+						r.Status = "running"
+						r.StartedAt = time.Now().UnixMilli()
+					})
+				case types.EventToolExecutionEnd:
+					a.updateToolExec(storeChannelID, userID, ev.ToolCallID, func(r *ToolExecRecord) {
+						r.Status = "done"
+						if ev.ToolIsError {
+							r.Status = "error"
+						}
+						r.EndedAt = time.Now().UnixMilli()
+					})
 				}
 			})
 			return ag
@@ -1452,6 +1480,9 @@ type ToolExecutionInfo struct {
 	IsError      bool             `json:"isError"`
 	Timestamp    int64            `json:"timestamp"`
 	PartialSteps []map[string]any `json:"partialSteps,omitempty"`
+	Status       string           `json:"status,omitempty"`    // "running" | "done" | "error" | "interrupted"
+	StartedAt    int64            `json:"startedAt,omitempty"`
+	EndedAt      int64            `json:"endedAt,omitempty"`
 }
 
 // GetToolExecutions returns tool call summaries extracted from stored messages.
@@ -1521,7 +1552,8 @@ func (a *App) GetToolExecutions(channelID, userID string) ([]ToolExecutionInfo, 
 		if info.Name == "whipflow_run" {
 			if home, err := os.UserHomeDir(); err == nil {
 				sidecarPath := filepath.Join(home, ".clawfirm", "whipflow-steps", info.ID+".json")
-				if data, err := os.ReadFile(sidecarPath); err == nil {
+				data, readErr := os.ReadFile(sidecarPath)
+				if readErr == nil {
 					var steps []map[string]any
 					if json.Unmarshal(data, &steps) == nil {
 						info.PartialSteps = steps
@@ -1532,6 +1564,200 @@ func (a *App) GetToolExecutions(channelID, userID string) ([]ToolExecutionInfo, 
 		out = append(out, info)
 	}
 	return out, nil
+}
+
+// ---------------------------------------------------------------------------
+// Tool execution ledger (KV-backed)
+// ---------------------------------------------------------------------------
+
+// toolExecKey returns the KV key for a channel+user's tool execution ledger.
+func toolExecKey(channelID, userID string) string {
+	return "tool_execs:" + channelID + ":" + userID
+}
+
+// loadToolExecs reads the tool execution ledger from KV. Returns empty slice on not-found.
+func (a *App) loadToolExecs(channelID, userID string) []ToolExecRecord {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+	if db == nil {
+		return nil
+	}
+	var records []ToolExecRecord
+	if err := db.KV().Get(toolExecKey(channelID, userID), &records); err != nil {
+		return nil
+	}
+	return records
+}
+
+// saveToolExecs writes the tool execution ledger to KV.
+func (a *App) saveToolExecs(channelID, userID string, records []ToolExecRecord) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+	if db == nil {
+		return
+	}
+	_ = db.KV().Set(toolExecKey(channelID, userID), records)
+}
+
+// updateToolExec applies fn to the record with the given id (creating it if needed), then saves.
+func (a *App) updateToolExec(channelID, userID, id string, fn func(*ToolExecRecord)) {
+	records := a.loadToolExecs(channelID, userID)
+	found := false
+	for i := range records {
+		if records[i].ID == id {
+			fn(&records[i])
+			found = true
+			break
+		}
+	}
+	if !found {
+		r := ToolExecRecord{ID: id}
+		fn(&r)
+		records = append(records, r)
+	}
+	a.saveToolExecs(channelID, userID, records)
+}
+
+// recoverInterruptedToolExecs marks any "running" tool executions as "interrupted".
+// Called once at startup before creating session managers.
+func (a *App) recoverInterruptedToolExecs() {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+	if db == nil {
+		return
+	}
+	entries, err := db.KV().ScanPrefix("tool_execs:")
+	if err != nil {
+		log.Printf("app: scan tool_execs: %v", err)
+		return
+	}
+	for key, raw := range entries {
+		var records []ToolExecRecord
+		if err := json.Unmarshal([]byte(raw), &records); err != nil {
+			continue
+		}
+		changed := false
+		for i := range records {
+			if records[i].Status == "running" {
+				records[i].Status = "interrupted"
+				records[i].EndedAt = time.Now().UnixMilli()
+				changed = true
+			}
+		}
+		if changed {
+			_ = db.KV().Set(key, records)
+		}
+	}
+}
+
+// GetToolExecutionState returns tool execution info with correct lifecycle status from the KV ledger.
+// For whipflow_run records, it also reads sidecar files for session steps.
+// For done/error records, it reads the ToolResultMessage from the message store for result text.
+func (a *App) GetToolExecutionState(channelID, userID string) ([]ToolExecutionInfo, error) {
+	records := a.loadToolExecs(channelID, userID)
+	if len(records) == 0 {
+		return nil, nil
+	}
+
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+
+	// Build a map of tool call ID → result text from messages (for done/error records).
+	resultByID := make(map[string]string)
+	errorByID := make(map[string]bool)
+	if db != nil {
+		msgs, err := db.Messages().ListMessages(store.QueryParams{
+			ChannelID: channelID,
+			UserID:    userID,
+			Limit:     200,
+		})
+		if err == nil {
+			for _, m := range msgs {
+				if tr, ok := m.(*types.ToolResultMessage); ok {
+					for _, b := range tr.Content {
+						if t, ok := b.(*types.TextContent); ok {
+							resultByID[tr.ToolCallID] = t.Text
+							break
+						}
+					}
+					errorByID[tr.ToolCallID] = tr.IsError
+				}
+			}
+		}
+	}
+
+	out := make([]ToolExecutionInfo, 0, len(records))
+	for _, r := range records {
+		info := ToolExecutionInfo{
+			ID:        r.ID,
+			Name:      r.Name,
+			IsError:   r.Status == "error",
+			Timestamp: r.StartedAt,
+			Status:    r.Status,
+			StartedAt: r.StartedAt,
+			EndedAt:   r.EndedAt,
+		}
+		// Fill result text from message store.
+		if text, ok := resultByID[r.ID]; ok {
+			info.Result = text
+		}
+		if isErr, ok := errorByID[r.ID]; ok {
+			info.IsError = isErr
+		}
+		// For whipflow_run: load sidecar steps.
+		if r.Name == "whipflow_run" {
+			if home, err := os.UserHomeDir(); err == nil {
+				sidecarPath := filepath.Join(home, ".clawfirm", "whipflow-steps", r.ID+".json")
+				data, readErr := os.ReadFile(sidecarPath)
+				if readErr == nil {
+					var steps []map[string]any
+					if json.Unmarshal(data, &steps) == nil {
+						info.PartialSteps = steps
+					}
+				}
+			}
+		}
+		out = append(out, info)
+	}
+	return out, nil
+}
+
+// cleanupWhipflowSidecars deletes .tmp orphans and sidecars older than 7 days.
+func cleanupWhipflowSidecars() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	dir := filepath.Join(home, ".clawfirm", "whipflow-steps")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().Add(-7 * 24 * time.Hour)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		path := filepath.Join(dir, name)
+		// Delete .tmp orphans unconditionally.
+		if strings.HasSuffix(name, ".tmp") {
+			_ = os.Remove(path)
+			continue
+		}
+		// Delete old sidecar files.
+		info, err := e.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().Before(cutoff) {
+			_ = os.Remove(path)
+		}
+	}
 }
 
 // GetHistory returns the last N messages for a channel+user.

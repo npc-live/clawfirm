@@ -4,7 +4,7 @@ export interface ToolExecution {
   id: string;
   name: string;
   args?: any;
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "interrupted";
   result?: any;
   partialResult?: any;
   startTime: number;
@@ -155,6 +155,9 @@ function StatusIndicator({ status }: { status: ToolExecution["status"] }) {
   }
   if (status === "done") {
     return <span className="text-emerald-400 text-[13px]">&#10003;</span>;
+  }
+  if (status === "interrupted") {
+    return <span className="text-amber-400 text-[13px]">&#9888;</span>;
   }
   return <span className="text-red-400 text-[13px]">&#10007;</span>;
 }
@@ -677,6 +680,8 @@ export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, on
                 ? "border-[rgba(200,90,42,0.25)] bg-[rgba(200,90,42,0.05)]"
                 : exec.status === "error"
                 ? "border-[rgba(255,69,58,0.25)] bg-[rgba(255,69,58,0.05)]"
+                : exec.status === "interrupted"
+                ? "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.05)]"
                 : "border-[rgba(61,57,41,0.08)] bg-[rgba(61,57,41,0.05)]"
             }`}
           >

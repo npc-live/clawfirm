@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutions, OpenWhipflowSession, type SkillInfo } from "../wailsjs/go/app/App";
+import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutionState, OpenWhipflowSession, type SkillInfo } from "../wailsjs/go/app/App";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
 import { ToolPanel, type ToolExecution, type WhipflowArgs, isWhipflowPreview } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";
@@ -112,17 +112,17 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
       }
     }).catch(() => {});
 
-    GetToolExecutions("webchat/" + agentName, sessionID).then((execs) => {
+    GetToolExecutionState("webchat/" + agentName, sessionID).then((execs) => {
       if (!execs || execs.length === 0) return;
       setToolExecutions(execs.map((e: any) => ({
         id: e.id,
         name: e.name,
         args: e.args,
-        status: e.isError ? "error" as const : "done" as const,
+        status: (e.status || (e.isError ? "error" : "done")) as "running" | "done" | "error" | "interrupted",
         result: e.result,
         partialResult: e.partialSteps && e.partialSteps.length > 0 ? e.partialSteps : undefined,
-        startTime: e.timestamp,
-        endTime: e.timestamp,
+        startTime: e.startedAt || e.timestamp,
+        endTime: e.endedAt || e.timestamp,
       })));
     }).catch(() => {});
   }, [agentName, sessionID]);
@@ -207,12 +207,24 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
         startTime: Date.now(),
       }]);
     } else if (msg.type === "tool_update") {
+      console.log("[tool_update]", msg.tool_name, msg.tool_call_id, "partial_result:", JSON.stringify(msg.partial_result)?.slice(0, 200));
       setToolExecutions((prev) => prev.map((t) => {
         if (t.id !== msg.tool_call_id) return t;
         // For whipflow_run, accumulate session steps as an array.
         if (t.name === "whipflow_run" && msg.partial_result != null) {
           const prevSteps: any[] = Array.isArray(t.partialResult) ? t.partialResult : [];
-          return { ...t, partialResult: [...prevSteps, msg.partial_result] };
+          const updated = { ...t, partialResult: [...prevSteps, msg.partial_result] };
+          // In step-by-step mode, mark tool as done when the target session completes
+          // (don't wait for tool_end which arrives late because whipflow.Execute
+          // continues processing non-session statements before returning).
+          if (msg.partial_result.done && t.id.startsWith("step-")) {
+            updated.status = "done" as const;
+            updated.endTime = Date.now();
+            // Reset streaming state so UI unlocks for next step
+            if (pendingRunTools.current > 0) pendingRunTools.current--;
+            setTimeout(() => setIsStreaming(false), 0);
+          }
+          return updated;
         }
         return { ...t, partialResult: msg.partial_result };
       }));
@@ -262,6 +274,35 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
     onOpen: handleOpen,
     onClose: handleClose,
   });
+
+  // Re-fetch tool execution state on WebSocket reconnect.
+  const prevWsStatus = useRef(wsStatus);
+  useEffect(() => {
+    if (prevWsStatus.current !== "open" && wsStatus === "open") {
+      // Just reconnected — refresh tool states from backend.
+      GetToolExecutionState("webchat/" + agentName, sessionID).then((execs) => {
+        if (!execs || execs.length === 0) return;
+        setToolExecutions((prev) => {
+          // Merge: use backend state but preserve any live partialResult from prior WS updates.
+          const byId = new Map(prev.map((t) => [t.id, t]));
+          return execs.map((e: any) => {
+            const existing = byId.get(e.id);
+            return {
+              id: e.id,
+              name: e.name,
+              args: existing?.args ?? e.args,
+              status: (e.status || (e.isError ? "error" : "done")) as "running" | "done" | "error" | "interrupted",
+              result: e.result || existing?.result,
+              partialResult: existing?.partialResult ?? (e.partialSteps?.length > 0 ? e.partialSteps : undefined),
+              startTime: e.startedAt || e.timestamp,
+              endTime: e.endedAt || e.timestamp,
+            };
+          });
+        });
+      }).catch(() => {});
+    }
+    prevWsStatus.current = wsStatus;
+  }, [wsStatus, agentName, sessionID]);
 
   // Auto-scroll.
   useEffect(() => {
@@ -551,6 +592,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
       <header className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(61,57,41,0.08)]">
         <button onClick={onBack} className="text-[rgba(61,57,41,0.4)] hover:text-[#3d3929] transition-colors">←</button>
         <h1 className="font-semibold text-[#3d3929] text-[15px] tracking-tight">{agentName}</h1>
+        <button
+          onClick={() => navigator.clipboard.writeText(sessionID)}
+          title="Copy thread ID"
+          className="text-[10px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.65)] font-mono bg-[rgba(61,57,41,0.05)] hover:bg-[rgba(61,57,41,0.1)] px-1.5 py-0.5 rounded transition-colors"
+        >
+          #{sessionID}
+        </button>
         <span className="flex items-center gap-1.5 text-[11px] text-[rgba(61,57,41,0.4)] ml-auto">
           <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
           {wsStatus}
