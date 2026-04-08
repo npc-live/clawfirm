@@ -202,6 +202,10 @@ export function OpenLogsFolder() {
   return window['go']['app']['App']['OpenLogsFolder']();
 }
 
+export function OpenWhipflowSession(arg1, arg2, arg3) {
+  return window['go']['app']['App']['OpenWhipflowSession'](arg1, arg2, arg3);
+}
+
 export function ReadCanvasFile(arg1) {
   return window['go']['app']['App']['ReadCanvasFile'](arg1);
 }

@@ -88,7 +88,11 @@ func TestIsFirstRun_NoConfig(t *testing.T) {
 	a, cleanup := newTestApp(t, nil)
 	defer cleanup()
 
-	if !a.IsFirstRun() {
+	first, err := a.IsFirstRun()
+	if err != nil {
+		t.Fatalf("IsFirstRun: %v", err)
+	}
+	if !first {
 		t.Error("expected IsFirstRun=true when no config file exists")
 	}
 }
@@ -102,7 +106,11 @@ func TestIsFirstRun_WithProviders(t *testing.T) {
 	a, cleanup := newTestApp(t, cfg)
 	defer cleanup()
 
-	if a.IsFirstRun() {
+	first, err := a.IsFirstRun()
+	if err != nil {
+		t.Fatalf("IsFirstRun: %v", err)
+	}
+	if first {
 		t.Error("expected IsFirstRun=false when providers are configured")
 	}
 }

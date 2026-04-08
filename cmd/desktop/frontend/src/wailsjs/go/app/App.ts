@@ -143,6 +143,13 @@ export const GetVersion = (): Promise<string> =>
 export const OpenLogsFolder = (): Promise<void> =>
   callGo<void>(PKG, STRUCT, "OpenLogsFolder");
 
+export const OpenWhipflowSession = (
+  toolExecID: string,
+  sessionIndex: number,
+  agentName: string
+): Promise<Record<string, string>> =>
+  callGo<Record<string, string>>(PKG, STRUCT, "OpenWhipflowSession", toolExecID, sessionIndex, agentName);
+
 export const GetWebhookBaseURL = (): Promise<string> =>
   callGo<string>(PKG, STRUCT, "GetWebhookBaseURL");
 

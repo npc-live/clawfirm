@@ -1,0 +1,2 @@
+let result = session "你是哪个AI模型？用一句话介绍自己，必须提到模型名称和版本。"
+print result

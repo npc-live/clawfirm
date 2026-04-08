@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutions, type SkillInfo } from "../wailsjs/go/app/App";
+import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutions, OpenWhipflowSession, type SkillInfo } from "../wailsjs/go/app/App";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
 import { ToolPanel, type ToolExecution, type WhipflowArgs, isWhipflowPreview } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";
@@ -41,9 +41,10 @@ interface Props {
   sessionID: string;
   onBack: () => void;
   onNewSession: () => void;
+  onOpenSession?: (agentName: string, sessionID: string) => void;
 }
 
-export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) {
+export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSession }: Props) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [wsURL, setWsURL] = useState<string | null>(null);
@@ -64,10 +65,19 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
   const [whipAskReady, setWhipAskReady] = useState(false);
   const [lastWhipflowArgs, setLastWhipflowArgs] = useState<WhipflowArgs | undefined>();
   const [activeTab, setActiveTab] = useState<"tools" | "preview">("tools");
+  // Step-by-step mode: tracks the current session index and total count.
+  const [stepByStep, setStepByStep] = useState<{ source: string; userInputs?: Record<string, string>; currentSession: number; totalSessions: number } | null>(null);
+  const stepByStepRef = useRef(false); // mirrors stepByStep !== null for use inside stable callbacks
+  const pendingRunTools = useRef(0);   // counts in-flight run_tool calls (no "done" event)
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persist current session so App.tsx can restore it on next launch.
+  useEffect(() => {
+    localStorage.setItem("clawfirm:lastSession", JSON.stringify({ agentName, sessionID }));
+  }, [agentName, sessionID]);
 
   // Resolve WebSocket URL and load existing history on mount.
   useEffect(() => {
@@ -189,13 +199,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           user_inputs: msg.tool_args.user_inputs,
         });
       }
-      setToolExecutions((prev) => [{
+      setToolExecutions((prev) => [...prev, {
         id: msg.tool_call_id!,
         name: msg.tool_name!,
         args: msg.tool_args,
         status: "running",
         startTime: Date.now(),
-      }, ...prev]);
+      }]);
     } else if (msg.type === "tool_update") {
       setToolExecutions((prev) => prev.map((t) => {
         if (t.id !== msg.tool_call_id) return t;
@@ -224,6 +234,18 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
           endTime: Date.now(),
         } : t
       ));
+      // run_tool calls don't produce a "done" event; reset isStreaming when the
+      // last pending run_tool completes.
+      if (pendingRunTools.current > 0) {
+        pendingRunTools.current--;
+        if (pendingRunTools.current === 0) {
+          setIsStreaming(false);
+        }
+      } else if (stepByStepRef.current) {
+        // In step-by-step mode the run_tool may have been started before
+        // pendingRunTools was incremented (race), so force-reset here too.
+        setIsStreaming(false);
+      }
     }
   }, []);
 
@@ -231,6 +253,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
   const handleClose = useCallback(() => {
     setWsStatus("closed");
     setIsStreaming(false);
+    pendingRunTools.current = 0;
   }, []);
 
   const { send } = useWebSocket({
@@ -383,11 +406,43 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
     setIsStreaming(false);
   }
 
+  async function handleContinueSession(toolExecID: string, sessionIndex: number, agentName: string) {
+    if (!onOpenSession) return;
+    try {
+      const result = await OpenWhipflowSession(toolExecID, sessionIndex, agentName);
+      if (result.agentName && result.sessionID) {
+        onOpenSession(result.agentName, result.sessionID);
+      }
+    } catch (e) {
+      console.error("OpenWhipflowSession failed:", e);
+    }
+  }
+
+  function handleRunUntilSession(stopAfter: number, source: string, userInputs?: Record<string, string>) {
+    if (wsStatus !== "open" || isStreaming) return;
+    const callID = "step-" + Date.now();
+    setIsStreaming(true);
+    setActiveTab("tools");
+    pendingRunTools.current++;
+    send(JSON.stringify({
+      type: "run_tool",
+      tool_name: "whipflow_run",
+      tool_id: callID,
+      tool_args: {
+        source,
+        mode: "execute",
+        stop_after_session: stopAfter,
+        ...(userInputs && Object.keys(userInputs).length > 0 ? { user_inputs: userInputs } : {}),
+      },
+    }));
+  }
+
   function handleRetryFromSession(sessionIndex: number, args: WhipflowArgs) {
     if (wsStatus !== "open" || isStreaming) return;
     const callID = "retry-session-" + Date.now();
     setIsStreaming(true);
     setActiveTab("tools");
+    pendingRunTools.current++;
     send(JSON.stringify({
       type: "run_tool",
       tool_name: "whipflow_run",
@@ -402,11 +457,73 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
     }));
   }
 
+  function handleStepByStep(source: string, userInputs?: Record<string, string>, totalSessions?: number) {
+    if (wsStatus !== "open" || isStreaming) return;
+    const callID = "step-0-" + Date.now();
+    setIsStreaming(true);
+    setActiveTab("tools");
+    stepByStepRef.current = true;
+    pendingRunTools.current++;
+    setStepByStep({ source, userInputs, currentSession: 0, totalSessions: totalSessions ?? -1 });
+    send(JSON.stringify({
+      type: "run_tool",
+      tool_name: "whipflow_run",
+      tool_id: callID,
+      tool_args: {
+        source,
+        mode: "execute",
+        stop_after_session: 0,
+        ...(userInputs && Object.keys(userInputs).length > 0 ? { user_inputs: userInputs } : {}),
+      },
+    }));
+  }
+
+  function handleStepByStepNext() {
+    if (!stepByStep || wsStatus !== "open" || isStreaming) return;
+    const next = stepByStep.currentSession + 1;
+    const callID = "step-" + next + "-" + Date.now();
+
+    // Collect completed session outputs from partialResult of all prior whipflow_run
+    // executions. These are passed as replay_outputs so the backend can replay
+    // sessions 0..next-1 from message history instead of a separate SQLite store.
+    const replayOutputs: { index: number; output: string }[] = [];
+    for (const exec of toolExecutions) {
+      if (exec.name !== "whipflow_run") continue;
+      const steps = Array.isArray(exec.partialResult) ? exec.partialResult : [];
+      for (const step of steps) {
+        if (step && step.done && typeof step.index === "number" && step.index < next && step.output) {
+          replayOutputs.push({ index: step.index, output: step.output });
+        }
+      }
+    }
+
+    setIsStreaming(true);
+    setActiveTab("tools");
+    pendingRunTools.current++;
+    setStepByStep({ ...stepByStep, currentSession: next });
+    send(JSON.stringify({
+      type: "run_tool",
+      tool_name: "whipflow_run",
+      tool_id: callID,
+      tool_args: {
+        source: stepByStep.source,
+        mode: "execute",
+        retry_from_session: next,
+        stop_after_session: next,
+        ...(replayOutputs.length > 0 ? { replay_outputs: replayOutputs } : {}),
+        ...(stepByStep.userInputs && Object.keys(stepByStep.userInputs).length > 0 ? { user_inputs: stepByStep.userInputs } : {}),
+      },
+    }));
+  }
+
   function handleConfirmWhipflow(source: string, userInputs?: Record<string, string>) {
     if (wsStatus !== "open") return;
+    stepByStepRef.current = false;
+    setStepByStep(null);
     const callID = "confirm-preview-" + Date.now();
     setIsStreaming(true);
     setActiveTab("tools");
+    pendingRunTools.current++;
     send(JSON.stringify({
       type: "run_tool",
       tool_name: "whipflow_run",
@@ -497,9 +614,25 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
                   <button
                     onClick={() => {
                       const code = whipPlanEditing ? whipPlanEditText : whipPlanCode;
+                      const callID = "step-preview-" + Date.now();
+                      setIsStreaming(true);
+                      setActiveTab("tools");
+                      pendingRunTools.current++;
+                      send(JSON.stringify({ type: "run_tool", tool_name: "whipflow_run", tool_id: callID, tool_args: { source: code, mode: "preview" } }));
+                    }}
+                    disabled={isStreaming || wsStatus !== "open"}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.65)] hover:bg-[rgba(61,57,41,0.2)] disabled:opacity-40 transition-colors"
+                    title="List sessions for step-by-step debug"
+                  >
+                    Step
+                  </button>
+                  <button
+                    onClick={() => {
+                      const code = whipPlanEditing ? whipPlanEditText : whipPlanCode;
                       const callID = "plan-" + Date.now();
                       setIsStreaming(true);
                       setActiveTab("tools");
+                      pendingRunTools.current++;
                       send(JSON.stringify({ type: "run_tool", tool_name: "whipflow_run", tool_id: callID, tool_args: { source: code, mode: "execute", user_inputs: whipAskValues } }));
                     }}
                     disabled={isStreaming || wsStatus !== "open" || !whipAskReady}
@@ -705,9 +838,39 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession }: Props) 
             </button>
           </div>
           {/* Tab content */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 flex flex-col">
+            {/* Step-by-step banner */}
+            {stepByStep && !isStreaming && activeTab === "tools" && (
+              <div className="flex-shrink-0 border-b border-[rgba(200,90,42,0.15)] bg-[rgba(200,90,42,0.06)] px-4 py-2.5 flex items-center gap-3">
+                <span className="text-[12px] text-[rgba(200,90,42,0.8)] font-medium">
+                  Session {stepByStep.currentSession + 1}{stepByStep.totalSessions > 0 ? ` / ${stepByStep.totalSessions}` : ""} done
+                </span>
+                <div className="flex-1" />
+                {(stepByStep.totalSessions < 0 || stepByStep.currentSession + 1 < stepByStep.totalSessions) && (
+                  <button
+                    onClick={handleStepByStepNext}
+                    disabled={isStreaming || wsStatus !== "open"}
+                    className="px-3 py-1 rounded-lg text-[11px] font-medium bg-[#c85a2a] text-white hover:bg-[#a84a22] disabled:opacity-40 transition-colors"
+                  >
+                    ▶ Next Step
+                  </button>
+                )}
+                {stepByStep.totalSessions > 0 && stepByStep.currentSession + 1 >= stepByStep.totalSessions && (
+                  <span className="text-[11px] text-emerald-500 font-medium">All sessions completed ✓</span>
+                )}
+                <button
+                  onClick={() => { stepByStepRef.current = false; setStepByStep(null); setIsStreaming(false); }}
+                  className="text-[10px] text-[rgba(61,57,41,0.3)] hover:text-[rgba(61,57,41,0.6)] transition-colors px-1"
+                  title="Exit step-by-step mode"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             {activeTab === "tools" ? (
-              <ToolPanel executions={toolExecutions} onRetryFromSession={handleRetryFromSession} onConfirmPreview={handleConfirmWhipflow} onEditPreview={handleEditPreview} whipflowArgs={lastWhipflowArgs} />
+              <div className="flex-1 min-h-0">
+                <ToolPanel executions={toolExecutions} onRetryFromSession={handleRetryFromSession} onConfirmPreview={handleConfirmWhipflow} onEditPreview={handleEditPreview} whipflowArgs={lastWhipflowArgs} onRunUntilSession={handleRunUntilSession} onContinueSession={onOpenSession ? handleContinueSession : undefined} onStepByStep={handleStepByStep} />
+              </div>
             ) : previewHtml ? (
               <div className="h-full p-3">
                 <HtmlPreview html={previewHtml} />

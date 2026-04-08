@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { IsFirstRun } from "./wailsjs/go/app/App";
+import { IsFirstRun, GetChatSessions, GetChannels } from "./wailsjs/go/app/App";
 import { SetupWizard } from "./components/SetupWizard";
 import { Dashboard } from "./components/Dashboard";
 import { ChatView } from "./components/ChatView";
+
+const LAST_SESSION_KEY = "clawfirm:lastSession";
 
 type View =
   | { name: "loading" }
@@ -14,11 +16,50 @@ export default function App() {
   const [view, setView] = useState<View>({ name: "loading" });
 
   useEffect(() => {
-    IsFirstRun()
-      .then((first) => {
-        setView(first ? { name: "setup" } : { name: "dashboard" });
-      })
-      .catch(() => setView({ name: "setup" }));
+    let cancelled = false;
+    const init = async () => {
+      // Retry until OnStartup finishes (cfg may be nil for a few hundred ms).
+      let first: boolean | null = null;
+      for (let i = 0; i < 30; i++) {
+        try {
+          first = await IsFirstRun();
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      }
+      if (cancelled) return;
+      if (first === null) { setView({ name: "setup" }); return; }
+      if (first) { setView({ name: "setup" }); return; }
+
+      // Try to restore last session.
+      try {
+        const channels = await GetChannels();
+        if (cancelled) return;
+        const knownAgents = new Set((channels ?? []).map((c) => c.name));
+
+        const saved = localStorage.getItem(LAST_SESSION_KEY);
+        if (saved) {
+          const { agentName, sessionID } = JSON.parse(saved);
+          if (agentName && sessionID && knownAgents.has(agentName)) {
+            setView({ name: "chat", agentName, sessionID });
+            return;
+          }
+          localStorage.removeItem(LAST_SESSION_KEY);
+        }
+        for (const ch of (channels ?? [])) {
+          const ids = await GetChatSessions(ch.name);
+          if (cancelled) return;
+          if (ids && ids.length > 0) {
+            setView({ name: "chat", agentName: ch.name, sessionID: ids[0] });
+            return;
+          }
+        }
+      } catch {}
+      if (!cancelled) setView({ name: "dashboard" });
+    };
+    init();
+    return () => { cancelled = true; };
   }, []);
 
   if (view.name === "loading") {
@@ -44,6 +85,7 @@ export default function App() {
         onNewSession={() =>
           setView({ name: "chat", agentName: view.agentName, sessionID: "s" + Date.now() })
         }
+        onOpenSession={(name, sid) => setView({ name: "chat", agentName: name, sessionID: sid })}
       />
     );
   }

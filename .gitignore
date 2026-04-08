@@ -6,6 +6,8 @@ mi
 # Compiled binaries
 clawfirm
 whip
+desktop
+run-whip
 
 # Desktop build artifacts (keep source, ignore build output)
 cmd/desktop/build/darwin/

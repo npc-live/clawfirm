@@ -53,6 +53,9 @@ interface Props {
   onRetryFromSession?: (sessionIndex: number, args: WhipflowArgs) => void;
   onConfirmPreview?: (source: string, userInputs?: Record<string, string>) => void;
   onEditPreview?: (source: string) => void;
+  onRunUntilSession?: (stopAfter: number, source: string, userInputs?: Record<string, string>) => void;
+  onContinueSession?: (toolExecID: string, sessionIndex: number, agentName: string) => void;
+  onStepByStep?: (source: string, userInputs?: Record<string, string>, totalSessions?: number) => void;
   whipflowArgs?: WhipflowArgs;
 }
 
@@ -70,6 +73,8 @@ interface WhipflowSessionStep {
   duration_ms?: number;
   error?: string;
   stream_text?: string;
+  has_history?: boolean; // message history was saved to DB — can continue conversation
+  messages?: any[]; // conversation turns from NativeProvider sessions
 }
 
 function isWhipflowStep(v: any): v is WhipflowSessionStep {
@@ -206,7 +211,7 @@ function WhipflowSource({ exec }: { exec: ToolExecution }) {
   );
 }
 
-function WhipflowSessionSteps({ exec, onRetryFromSession }: { exec: ToolExecution; onRetryFromSession?: (sessionIndex: number) => void }) {
+function WhipflowSessionSteps({ exec, onRetryFromSession, onContinueSession }: { exec: ToolExecution; onRetryFromSession?: (sessionIndex: number) => void; onContinueSession?: (sessionIndex: number) => void }) {
   // Collect all session step updates from partialResult (latest snapshot).
   // We accumulate updates in ChatView as an array in partialResult.
   const stepsMap = mergeSessionSteps(exec.partialResult);
@@ -228,13 +233,89 @@ function WhipflowSessionSteps({ exec, onRetryFromSession }: { exec: ToolExecutio
       </div>
       {/* Per-session cards */}
       {steps.map((step) => (
-        <SessionStepCard key={step.index} step={step} onRetry={onRetryFromSession ? () => onRetryFromSession(step.index) : undefined} />
+        <SessionStepCard
+          key={step.index}
+          step={step}
+          onRetry={onRetryFromSession ? () => onRetryFromSession(step.index) : undefined}
+          onContinue={onContinueSession ? () => onContinueSession(step.index) : undefined}
+        />
       ))}
     </div>
   );
 }
 
-function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry?: () => void }) {
+// Renders conversation messages from a NativeProvider session.
+function SessionMessages({ messages }: { messages: any[] }) {
+  const [open, setOpen] = useState(false);
+
+  // Extract displayable turns: user/assistant text + tool use/result.
+  const turns: { role: string; text: string; isToolUse?: boolean; isToolResult?: boolean; toolName?: string }[] = [];
+  for (const msg of messages) {
+    const role = msg.role ?? "unknown";
+    const content = msg.content;
+    if (typeof content === "string") {
+      turns.push({ role, text: content });
+    } else if (Array.isArray(content)) {
+      for (const block of content) {
+        if (block.type === "text" && block.text) {
+          turns.push({ role, text: block.text });
+        } else if (block.type === "tool_use") {
+          turns.push({ role, text: JSON.stringify(block.input ?? {}, null, 2), isToolUse: true, toolName: block.name });
+        } else if (block.type === "tool_result") {
+          const resultText = Array.isArray(block.content)
+            ? block.content.map((c: any) => c.text ?? "").join("")
+            : String(block.content ?? "");
+          turns.push({ role, text: resultText, isToolResult: true });
+        }
+      }
+    }
+  }
+
+  if (turns.length === 0) return null;
+
+  return (
+    <div className="mt-1">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="text-[10px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.55)] flex items-center gap-1 transition-colors"
+      >
+        <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
+        Conversation · {turns.filter(t => !t.isToolUse && !t.isToolResult).length} messages
+        {turns.some(t => t.isToolUse) && <span className="text-[rgba(200,90,42,0.5)]"> · {turns.filter(t => t.isToolUse).length} tool calls</span>}
+      </button>
+      {open && (
+        <div className="mt-1.5 space-y-1.5 max-h-64 overflow-y-auto">
+          {turns.map((turn, i) => (
+            <div key={i} className={`rounded-md px-2.5 py-1.5 text-[11px] ${
+              turn.isToolUse
+                ? "bg-[rgba(200,90,42,0.08)] border border-[rgba(200,90,42,0.15)]"
+                : turn.isToolResult
+                ? "bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)]"
+                : turn.role === "user"
+                ? "bg-[rgba(200,90,42,0.06)] border border-[rgba(200,90,42,0.1)] ml-4"
+                : "bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.08)]"
+            }`}>
+              <div className="flex items-center gap-1.5 mb-0.5">
+                {turn.isToolUse ? (
+                  <span className="text-[9px] font-mono text-[rgba(200,90,42,0.7)] uppercase tracking-wider">⚙ {turn.toolName}</span>
+                ) : turn.isToolResult ? (
+                  <span className="text-[9px] font-mono text-[rgba(61,57,41,0.4)] uppercase tracking-wider">↩ result</span>
+                ) : (
+                  <span className="text-[9px] font-mono text-[rgba(61,57,41,0.4)] uppercase tracking-wider">{turn.role}</span>
+                )}
+              </div>
+              <pre className="whitespace-pre-wrap break-words font-mono text-[rgba(61,57,41,0.7)] leading-relaxed line-clamp-4">
+                {turn.text.length > 300 ? turn.text.slice(0, 300) + "…" : turn.text}
+              </pre>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionStep; onRetry?: () => void; onContinue?: () => void }) {
   const [open, setOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const startRef = useRef(Date.now());
@@ -305,6 +386,16 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
             {step.duration_ms < 1000 ? `${step.duration_ms}ms` : `${(step.duration_ms / 1000).toFixed(1)}s`}
           </span>
         ) : null}
+        {/* Continue conversation button */}
+        {isDone && step.has_history && onContinue && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onContinue(); }}
+            className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.6)] hover:bg-[rgba(61,57,41,0.2)] transition-colors flex-shrink-0"
+            title="Open this session's conversation to continue"
+          >
+            Continue
+          </button>
+        )}
         {/* Retry button */}
         {(isDone || isError) && onRetry && (
           <button
@@ -372,6 +463,10 @@ function SessionStepCard({ step, onRetry }: { step: WhipflowSessionStep; onRetry
               </pre>
             </div>
           )}
+          {/* Conversation messages (NativeProvider sessions) */}
+          {step.messages && step.messages.length > 0 && (
+            <SessionMessages messages={step.messages} />
+          )}
         </div>
       )}
     </div>
@@ -386,10 +481,14 @@ function StepPreviewCard({
   preview,
   onConfirm,
   onEdit,
+  onRunUntilSession,
+  onStepByStep,
 }: {
   preview: WhipflowPreview;
   onConfirm?: () => void;
   onEdit?: () => void;
+  onRunUntilSession?: (stopAfter: number) => void;
+  onStepByStep?: (sessionCount: number) => void;
 }) {
   const [showSource, setShowSource] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -438,6 +537,15 @@ function StepPreviewCard({
             Running…
           </span>
         )}
+        {onStepByStep && !confirmed && (
+          <button
+            onClick={() => { setConfirmed(true); onStepByStep(analysis.session_count); }}
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.18)] transition-colors"
+            title="Execute one session at a time"
+          >
+            Next Step
+          </button>
+        )}
         {onEdit && !confirmed && (
           <button
             onClick={onEdit}
@@ -461,20 +569,29 @@ function StepPreviewCard({
         </pre>
       ) : (
         /* Step list */
-        <div className="px-3 py-2 space-y-1">
-          {analysis.steps.map((step) => (
-            <div key={step.index} className="flex items-start gap-2 py-1">
+        <div className="px-3 py-2 space-y-0.5">
+          {(analysis.steps ?? []).map((step) => (
+            <div key={step.index} className="flex items-center gap-2 py-1 group">
               <span className="text-[11px] font-mono text-[rgba(200,90,42,0.6)] flex-shrink-0 w-5 text-right">
                 {step.index + 1}.
               </span>
               <div className="flex-1 min-w-0">
                 {step.name && (
-                  <span className="text-[11px] font-medium text-[rgba(61,57,41,0.7)] mr-2">{step.name}</span>
+                  <span className="text-[11px] font-medium text-[rgba(61,57,41,0.7)] mr-1.5">{step.name}</span>
                 )}
-                <span className="text-[11px] text-[rgba(61,57,41,0.5)]">{step.prompt}</span>
+                <span className="text-[11px] text-[rgba(61,57,41,0.45)] truncate">{step.prompt}</span>
               </div>
               {step.agent && (
                 <span className="text-[9px] font-mono text-[rgba(61,57,41,0.3)] flex-shrink-0">{step.agent}</span>
+              )}
+              {onRunUntilSession && !confirmed && (
+                <button
+                  onClick={() => { setConfirmed(true); onRunUntilSession(step.index); }}
+                  className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[rgba(200,90,42,0.15)] text-[rgba(200,90,42,0.8)] hover:bg-[rgba(200,90,42,0.28)] transition-all"
+                  title={`Run sessions 1–${step.index + 1} only`}
+                >
+                  ▶ Run to here
+                </button>
               )}
             </div>
           ))}
@@ -541,7 +658,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 // Main ToolPanel
 // ---------------------------------------------------------------------------
 
-export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, onEditPreview, whipflowArgs }: Props) {
+export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, onEditPreview, onRunUntilSession, onContinueSession, onStepByStep, whipflowArgs }: Props) {
   return (
     <div className="flex flex-col h-full bg-[#ece5d8] text-[#3d3929]">
       {/* Task summary bar */}
@@ -583,15 +700,30 @@ export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, on
                     preview={tryParseJSON(exec.result) as WhipflowPreview}
                     onConfirm={onConfirmPreview ? () => {
                       const p = tryParseJSON(exec.result) as WhipflowPreview;
-                      onConfirmPreview(p.source, whipflowArgs?.user_inputs);
+                      const userInputs = (exec.args?.user_inputs as Record<string, string>) ?? whipflowArgs?.user_inputs;
+                      onConfirmPreview(p.source, userInputs);
                     } : undefined}
                     onEdit={onEditPreview ? () => {
                       const p = tryParseJSON(exec.result) as WhipflowPreview;
                       onEditPreview(p.source);
                     } : undefined}
+                    onRunUntilSession={onRunUntilSession ? (stopAfter) => {
+                      const p = tryParseJSON(exec.result) as WhipflowPreview;
+                      const userInputs = (exec.args?.user_inputs as Record<string, string>) ?? whipflowArgs?.user_inputs;
+                      onRunUntilSession(stopAfter, p.source, userInputs);
+                    } : undefined}
+                    onStepByStep={onStepByStep ? (sessionCount) => {
+                      const p = tryParseJSON(exec.result) as WhipflowPreview;
+                      const userInputs = (exec.args?.user_inputs as Record<string, string>) ?? whipflowArgs?.user_inputs;
+                      onStepByStep(p.source, userInputs, sessionCount);
+                    } : undefined}
                   />
                 ) : (
-                  <WhipflowSessionSteps exec={exec} onRetryFromSession={whipflowArgs && onRetryFromSession ? (idx) => onRetryFromSession(idx, whipflowArgs) : undefined} />
+                  <WhipflowSessionSteps
+                    exec={exec}
+                    onRetryFromSession={whipflowArgs && onRetryFromSession ? (idx) => onRetryFromSession(idx, whipflowArgs) : undefined}
+                    onContinueSession={onContinueSession ? (idx) => onContinueSession(exec.id, idx, whipflowArgs?.file?.split("/").pop()?.replace(".whip", "") ?? "") : undefined}
+                  />
                 )}
               </>
             ) : (

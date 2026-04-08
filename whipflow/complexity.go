@@ -32,7 +32,7 @@ type StepPreview struct {
 
 // AnalyzeComplexity walks the AST and classifies the program's complexity.
 func AnalyzeComplexity(program *ast.Program) *ComplexityAnalysis {
-	a := &ComplexityAnalysis{}
+	a := &ComplexityAnalysis{Steps: []StepPreview{}}
 	walkNodes(program.Statements, a)
 
 	// Classify tier.
@@ -100,6 +100,20 @@ func walkNode(n ast.Node, a *ComplexityAnalysis) {
 	switch v := n.(type) {
 	case *ast.AskStatement:
 		a.HasAsk = true
+
+	case *ast.LetBinding:
+		if sess, ok := v.Value.(*ast.SessionStatement); ok {
+			walkSession(sess, v.Name.Name, a)
+		} else if v.Value != nil {
+			walkNode(v.Value, a)
+		}
+
+	case *ast.ConstBinding:
+		if sess, ok := v.Value.(*ast.SessionStatement); ok {
+			walkSession(sess, v.Name.Name, a)
+		} else if v.Value != nil {
+			walkNode(v.Value, a)
+		}
 
 	case *ast.ParallelBlock:
 		a.HasParallel = true

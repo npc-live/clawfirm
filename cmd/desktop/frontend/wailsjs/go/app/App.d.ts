@@ -105,6 +105,8 @@ export function LogoutWhatsApp():Promise<void>;
 
 export function OpenLogsFolder():Promise<void>;
 
+export function OpenWhipflowSession(arg1:string,arg2:number,arg3:string):Promise<Record<string, string>>;
+
 export function ReadCanvasFile(arg1:string):Promise<string>;
 
 export function RemoveSkillPath(arg1:string,arg2:string):Promise<void>;

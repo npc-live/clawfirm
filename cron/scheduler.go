@@ -8,14 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ai-gateway/clawfirm/clawproc"
+	"github.com/ai-gateway/clawfirm/gateway"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
 	robfigcron "github.com/robfig/cron/v3"
 )
 
-// AgentBuilder creates a fresh ClawAgent for the named agent config.
-type AgentBuilder func(agentName string) (*clawproc.ClawAgent, error)
+// AgentBuilder creates a fresh AgentRunner for the named agent config.
+type AgentBuilder func(agentName string) (gateway.AgentRunner, error)
 
 // Scheduler manages cron jobs: scheduling, execution, and dynamic updates.
 type Scheduler struct {
@@ -394,7 +394,9 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 		}
 		return
 	}
-	defer ag.Close()
+	if c, ok := ag.(interface{ Close() error }); ok {
+		defer c.Close()
+	}
 
 	// Accumulate text output from agent events.
 	var mu sync.Mutex

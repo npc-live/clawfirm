@@ -24,6 +24,9 @@ func (m *mockRunner) PromptMessages(_ context.Context, _ []types.Message) error 
 	}()
 	return nil
 }
+func (m *mockRunner) ExecuteToolDirectly(_ context.Context, _, _ string, _ map[string]any, _ func(types.AgentEvent)) error {
+	return nil
+}
 func (m *mockRunner) Abort()                               {}
 func (m *mockRunner) WaitForIdle(_ context.Context) error  { return nil }
 func (m *mockRunner) ClearMessages()                       {}
