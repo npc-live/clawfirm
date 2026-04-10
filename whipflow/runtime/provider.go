@@ -10,7 +10,6 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ai-gateway/clawfirm/agent"
@@ -566,15 +565,8 @@ func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv fu
 	}
 
 	cmd := exec.CommandContext(ctx, binPath, args...)
-	// Run in its own process group so we can kill the entire tree on cancel.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		if cmd.Process != nil {
-			// Kill the entire process group (negative PID).
-			return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		}
-		return nil
-	}
+	// Kill the entire process tree on cancel (platform-specific).
+	setProcGroup(cmd)
 
 	// Strip CLAUDECODE so that nested claude invocations are not rejected
 	// when clawfirm itself is running inside a Claude Code terminal session.
