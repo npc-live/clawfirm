@@ -218,6 +218,8 @@ func (s *Session) SummarizeNow(ctx context.Context) {
 
 // Stop shuts down the session's processing goroutine and the underlying agent process.
 func (s *Session) Stop() {
+	// Abort first so any in-progress agent loop (and its tool calls) is cancelled.
+	s.agent.Abort()
 	s.cancel()
 	if c, ok := s.agent.(interface{ Close() error }); ok {
 		_ = c.Close()

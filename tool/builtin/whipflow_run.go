@@ -6,11 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
-
-	"time"
 
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/tool"
@@ -35,7 +31,16 @@ type WhipflowRun struct {
 
 func (w *WhipflowRun) Name() string        { return "whipflow_run" }
 func (w *WhipflowRun) Description() string {
-	return "Execute a WhipFlow (.whip) workflow from source code or a file path. If the workflow contains `ask` statements (user input variables), you MUST provide their values via user_inputs. Ask the user for these values BEFORE calling this tool."
+	return `Execute a WhipFlow (.whip) workflow from source code or a file path.
+
+If the workflow contains ask statements, provide their values via user_inputs.
+
+Step-by-step execution:
+- First call with mode="preview" to analyze the workflow.
+- To execute session N only: set mode="execute", stop_after_session=N.
+- To continue to next session: extract session_outputs from the previous tool result's JSON, pass them as replay_outputs, set retry_from_session=N and stop_after_session=N.
+- To retry session N: same as above but re-execute from session N.
+- Always pass replay_outputs from prior results when using retry_from_session.`
 }
 func (w *WhipflowRun) Label() string        { return "Run Workflow" }
 func (w *WhipflowRun) Schema() map[string]any {
@@ -67,6 +72,10 @@ func (w *WhipflowRun) Schema() map[string]any {
 			"stop_after_session": map[string]any{
 				"type":        "integer",
 				"description": "Stop execution after completing this session index (0-based, inclusive). Used for step-by-step debug mode.",
+			},
+			"parent_call_id": map[string]any{
+				"type":        "string",
+				"description": "The tool_call_id of the previous whipflow_run step in this execution chain. Set this when continuing or retrying a step-by-step execution so the chain can be tracked.",
 			},
 			"replay_outputs": map[string]any{
 				"type":        "array",
@@ -133,6 +142,9 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 			}
 		}
 	}
+
+	// Extract parent_call_id for chain tracking.
+	parentCallID, _ := params["parent_call_id"].(string)
 
 	if source == "" && filePath == "" {
 		return tool.ToolResult{
@@ -253,63 +265,6 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 		}
 	}
 
-	// Persist session steps to sidecar file so they survive app restart.
-	// The sidecar is read by GetToolExecutionState in app.go on reload.
-	var sidecarMu sync.Mutex
-	var sidecarSteps []WhipflowSessionStep
-	var lastSidecarWrite time.Time
-	var debouncePending bool
-	writeSidecar := func(step WhipflowSessionStep) {
-		sidecarMu.Lock()
-		// Merge: update existing index or append
-		found := false
-		for i, s := range sidecarSteps {
-			if s.Index == step.Index {
-				if step.StreamText != "" {
-					step.StreamText = s.StreamText + step.StreamText
-				}
-				sidecarSteps[i] = step
-				found = true
-				break
-			}
-		}
-		if !found {
-			sidecarSteps = append(sidecarSteps, step)
-		}
-		snapshot := make([]WhipflowSessionStep, len(sidecarSteps))
-		copy(snapshot, sidecarSteps)
-
-		// Decide whether to write: always on session start/done, debounce stream deltas (2s).
-		isStreamDelta := step.StreamText != "" && !step.Done
-		shouldWrite := !isStreamDelta
-		if isStreamDelta {
-			now := time.Now()
-			if now.Sub(lastSidecarWrite) >= 2*time.Second {
-				shouldWrite = true
-			} else if !debouncePending {
-				// Schedule a deferred write so crash during long streaming doesn't lose all progress.
-				debouncePending = true
-				go func() {
-					time.Sleep(2 * time.Second)
-					sidecarMu.Lock()
-					debouncePending = false
-					snap := make([]WhipflowSessionStep, len(sidecarSteps))
-					copy(snap, sidecarSteps)
-					sidecarMu.Unlock()
-					flushSidecar(id, snap)
-				}()
-			}
-		}
-		if shouldWrite {
-			lastSidecarWrite = time.Now()
-		}
-		sidecarMu.Unlock()
-
-		if shouldWrite {
-			flushSidecar(id, snapshot)
-		}
-	}
-
 	// Emit a ToolUpdate for each session start/end so the frontend can render
 	// per-session progress in real time. Also persist message history via MessageSaver.
 	execOpts = append(execOpts, whipflow.WithSessionProgressCallback(func(p whipflow.SessionProgress) {
@@ -317,20 +272,19 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 		if p.Done && len(p.Messages) > 0 && w.MessageSaver != nil {
 			w.MessageSaver(id, p.Index, p.AgentName, p.Messages)
 		}
-		step := WhipflowSessionStep{
-			Index:      p.Index,
-			Name:       p.Name,
-			Provider:   p.Provider,
-			Prompt:     p.Prompt,
-			Done:       p.Done,
-			Output:     p.Output,
-			DurationMs: p.DurationMs,
-			Error:      p.Error,
-			HasHistory: p.Done && len(p.Messages) > 0,
-			StreamText: p.StreamText,
-		}
-		writeSidecar(step)
 		if onUpdate != nil {
+			step := WhipflowSessionStep{
+				Index:      p.Index,
+				Name:       p.Name,
+				Provider:   p.Provider,
+				Prompt:     p.Prompt,
+				Done:       p.Done,
+				Output:     p.Output,
+				DurationMs: p.DurationMs,
+				Error:      p.Error,
+				HasHistory: p.Done && len(p.Messages) > 0,
+				StreamText: p.StreamText,
+			}
 			// Include messages when session is done so frontend can render conversation history.
 			if p.Done && len(p.Messages) > 0 {
 				step.Messages = p.Messages
@@ -435,10 +389,13 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 
 	// Structured result payload stored as tool result in message history.
 	// The agent can read session_outputs to pass as replay_outputs on retry.
+	// call_id and parent_call_id enable chain tracking for step-by-step execution.
 	type whipflowResult struct {
 		Success        bool            `json:"success"`
 		Sessions       int             `json:"sessions"`
 		DurationMs     int64           `json:"duration_ms"`
+		CallID         string          `json:"call_id"`
+		ParentCallID   string          `json:"parent_call_id,omitempty"`
 		SessionOutputs []sessionOutput `json:"session_outputs"`
 		Errors         []string        `json:"errors,omitempty"`
 	}
@@ -446,6 +403,8 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 		Success:        result.Success,
 		Sessions:       result.Metadata.SessionsCreated,
 		DurationMs:     result.Metadata.Duration,
+		CallID:         id,
+		ParentCallID:   parentCallID,
 		SessionOutputs: sessionOutputs,
 	}
 	for _, e := range result.Errors {
@@ -503,20 +462,6 @@ func makePreviewResult(a *whipflow.ComplexityAnalysis, source string) (tool.Tool
 		Content: []types.ContentBlock{&types.TextContent{Text: string(data)}},
 		Details: preview,
 	}, nil
-}
-
-// flushSidecar atomically writes session steps to the sidecar JSON file (write-to-tmp + rename).
-func flushSidecar(id string, steps []WhipflowSessionStep) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	dir := filepath.Join(home, ".clawfirm", "whipflow-steps")
-	_ = os.MkdirAll(dir, 0o755)
-	data, _ := json.Marshal(steps)
-	tmpPath := filepath.Join(dir, id+".json.tmp")
-	_ = os.WriteFile(tmpPath, data, 0o644)
-	_ = os.Rename(tmpPath, filepath.Join(dir, id+".json"))
 }
 
 // readWhipFile reads a .whip file and returns its content as a string.

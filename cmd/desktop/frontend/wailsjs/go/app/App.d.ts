@@ -73,7 +73,7 @@ export function GetSessions():Promise<Array<app.SessionInfo>>;
 
 export function GetSkillContent(arg1:string):Promise<string>;
 
-export function GetToolExecutions(arg1:string,arg2:string):Promise<Array<app.ToolExecutionInfo>>;
+export function GetToolExecutionState(arg1:string,arg2:string):Promise<Array<app.ToolExecutionInfo>>;
 
 export function GetVault():Promise<Array<app.VaultEntry>>;
 
@@ -86,6 +86,8 @@ export function GetWhatsAppQR():Promise<string>;
 export function GetWhatsAppStatus():Promise<string>;
 
 export function GetWhipFileContent(arg1:string):Promise<string>;
+
+export function GetWhipflowChain(arg1:string,arg2:string):Promise<Array<store.WhipflowChainEntry>>;
 
 export function InstallRemoteSkill(arg1:string,arg2:boolean):Promise<string>;
 
@@ -104,8 +106,6 @@ export function ListWhipFiles():Promise<Array<string>>;
 export function LogoutWhatsApp():Promise<void>;
 
 export function OpenLogsFolder():Promise<void>;
-
-export function OpenWhipflowSession(arg1:string,arg2:number,arg3:string):Promise<Record<string, string>>;
 
 export function ReadCanvasFile(arg1:string):Promise<string>;
 

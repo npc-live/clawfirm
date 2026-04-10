@@ -138,8 +138,8 @@ export function GetSkillContent(arg1) {
   return window['go']['app']['App']['GetSkillContent'](arg1);
 }
 
-export function GetToolExecutions(arg1, arg2) {
-  return window['go']['app']['App']['GetToolExecutions'](arg1, arg2);
+export function GetToolExecutionState(arg1, arg2) {
+  return window['go']['app']['App']['GetToolExecutionState'](arg1, arg2);
 }
 
 export function GetVault() {
@@ -164,6 +164,10 @@ export function GetWhatsAppStatus() {
 
 export function GetWhipFileContent(arg1) {
   return window['go']['app']['App']['GetWhipFileContent'](arg1);
+}
+
+export function GetWhipflowChain(arg1, arg2) {
+  return window['go']['app']['App']['GetWhipflowChain'](arg1, arg2);
 }
 
 export function InstallRemoteSkill(arg1, arg2) {
@@ -200,10 +204,6 @@ export function LogoutWhatsApp() {
 
 export function OpenLogsFolder() {
   return window['go']['app']['App']['OpenLogsFolder']();
-}
-
-export function OpenWhipflowSession(arg1, arg2, arg3) {
-  return window['go']['app']['App']['OpenWhipflowSession'](arg1, arg2, arg3);
 }
 
 export function ReadCanvasFile(arg1) {

@@ -143,13 +143,6 @@ export const GetVersion = (): Promise<string> =>
 export const OpenLogsFolder = (): Promise<void> =>
   callGo<void>(PKG, STRUCT, "OpenLogsFolder");
 
-export const OpenWhipflowSession = (
-  toolExecID: string,
-  sessionIndex: number,
-  agentName: string
-): Promise<Record<string, string>> =>
-  callGo<Record<string, string>>(PKG, STRUCT, "OpenWhipflowSession", toolExecID, sessionIndex, agentName);
-
 export const GetWebhookBaseURL = (): Promise<string> =>
   callGo<string>(PKG, STRUCT, "GetWebhookBaseURL");
 
@@ -188,17 +181,10 @@ export interface ToolExecutionInfo {
   result?: string;
   isError: boolean;
   timestamp: number;
-  partialSteps?: any[];
   status?: string; // "running" | "done" | "error" | "interrupted"
   startedAt?: number;
   endedAt?: number;
 }
-
-export const GetToolExecutions = (
-  channelID: string,
-  userID: string
-): Promise<ToolExecutionInfo[]> =>
-  callGo<ToolExecutionInfo[]>(PKG, STRUCT, "GetToolExecutions", channelID, userID);
 
 export const GetToolExecutionState = (
   channelID: string,

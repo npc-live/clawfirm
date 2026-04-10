@@ -11,12 +11,6 @@ export interface ToolExecution {
   endTime?: number;
 }
 
-export interface WhipflowArgs {
-  file?: string;
-  source?: string;
-  user_inputs?: Record<string, string>;
-}
-
 // ---------------------------------------------------------------------------
 // WhipFlow preview types (returned by mode="auto" / "preview")
 // ---------------------------------------------------------------------------
@@ -50,13 +44,8 @@ export function isWhipflowPreview(v: any): v is WhipflowPreview {
 
 interface Props {
   executions: ToolExecution[];
-  onRetryFromSession?: (sessionIndex: number, args: WhipflowArgs) => void;
-  onConfirmPreview?: (source: string, userInputs?: Record<string, string>) => void;
+  onCommand: (command: string) => void;
   onEditPreview?: (source: string) => void;
-  onRunUntilSession?: (stopAfter: number, source: string, userInputs?: Record<string, string>) => void;
-  onContinueSession?: (toolExecID: string, sessionIndex: number, agentName: string) => void;
-  onStepByStep?: (source: string, userInputs?: Record<string, string>, totalSessions?: number) => void;
-  whipflowArgs?: WhipflowArgs;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +203,7 @@ function WhipflowSource({ exec }: { exec: ToolExecution }) {
   );
 }
 
-function WhipflowSessionSteps({ exec, onRetryFromSession, onContinueSession }: { exec: ToolExecution; onRetryFromSession?: (sessionIndex: number) => void; onContinueSession?: (sessionIndex: number) => void }) {
+function WhipflowSessionSteps({ exec, onCommand }: { exec: ToolExecution; onCommand: (cmd: string) => void }) {
   // Collect all session step updates from partialResult (latest snapshot).
   // We accumulate updates in ChatView as an array in partialResult.
   const stepsMap = mergeSessionSteps(exec.partialResult);
@@ -239,8 +228,8 @@ function WhipflowSessionSteps({ exec, onRetryFromSession, onContinueSession }: {
         <SessionStepCard
           key={step.index}
           step={step}
-          onRetry={onRetryFromSession ? () => onRetryFromSession(step.index) : undefined}
-          onContinue={onContinueSession ? () => onContinueSession(step.index) : undefined}
+          onRetry={() => onCommand(`Retry session ${step.index}, keep results of sessions 0-${step.index - 1}.`)}
+          onContinue={step.has_history ? () => onCommand(`Open session ${step.index} conversation for follow-up.`) : undefined}
         />
       ))}
     </div>
@@ -390,7 +379,7 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
           </span>
         ) : null}
         {/* Continue conversation button */}
-        {isDone && step.has_history && onContinue && (
+        {isDone && onContinue && (
           <button
             onClick={(e) => { e.stopPropagation(); onContinue(); }}
             className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.6)] hover:bg-[rgba(61,57,41,0.2)] transition-colors flex-shrink-0"
@@ -482,16 +471,12 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
 
 function StepPreviewCard({
   preview,
-  onConfirm,
+  onCommand,
   onEdit,
-  onRunUntilSession,
-  onStepByStep,
 }: {
   preview: WhipflowPreview;
-  onConfirm?: () => void;
+  onCommand: (cmd: string) => void;
   onEdit?: () => void;
-  onRunUntilSession?: (stopAfter: number) => void;
-  onStepByStep?: (sessionCount: number) => void;
 }) {
   const [showSource, setShowSource] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -504,11 +489,6 @@ function StepPreviewCard({
   const tierColor =
     analysis.tier === "simple" ? "text-emerald-500" :
     analysis.tier === "medium" ? "text-amber-500" : "text-red-400";
-
-  function handleConfirm() {
-    setConfirmed(true);
-    onConfirm?.();
-  }
 
   return (
     <div className="mt-2 rounded-xl border border-[rgba(200,90,42,0.2)] bg-[rgba(200,90,42,0.04)] overflow-hidden">
@@ -523,9 +503,9 @@ function StepPreviewCard({
           {analysis.has_ask && " · user input"}
         </span>
         <div className="flex-1" />
-        {onConfirm && !confirmed && (
+        {!confirmed && (
           <button
-            onClick={handleConfirm}
+            onClick={() => { setConfirmed(true); onCommand("Execute this workflow now."); }}
             className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#c85a2a] text-white hover:bg-[#a84a22] transition-colors"
           >
             Run
@@ -540,9 +520,9 @@ function StepPreviewCard({
             Running…
           </span>
         )}
-        {onStepByStep && !confirmed && (
+        {!confirmed && (
           <button
-            onClick={() => { setConfirmed(true); onStepByStep(analysis.session_count); }}
+            onClick={() => { setConfirmed(true); onCommand("Execute session 0 only (step-by-step mode)."); }}
             className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.18)] transition-colors"
             title="Execute one session at a time"
           >
@@ -587,9 +567,9 @@ function StepPreviewCard({
               {step.agent && (
                 <span className="text-[9px] font-mono text-[rgba(61,57,41,0.3)] flex-shrink-0">{step.agent}</span>
               )}
-              {onRunUntilSession && !confirmed && (
+              {!confirmed && (
                 <button
-                  onClick={() => { setConfirmed(true); onRunUntilSession(step.index); }}
+                  onClick={() => { setConfirmed(true); onCommand(`Run sessions 0 to ${step.index} (stop after session ${step.index}).`); }}
                   className="opacity-0 group-hover:opacity-100 flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-[rgba(200,90,42,0.15)] text-[rgba(200,90,42,0.8)] hover:bg-[rgba(200,90,42,0.28)] transition-all"
                   title={`Run sessions 1–${step.index + 1} only`}
                 >
@@ -661,7 +641,7 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 // Main ToolPanel
 // ---------------------------------------------------------------------------
 
-export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, onEditPreview, onRunUntilSession, onContinueSession, onStepByStep, whipflowArgs }: Props) {
+export function ToolPanel({ executions, onCommand, onEditPreview }: Props) {
   return (
     <div className="flex flex-col h-full bg-[#ece5d8] text-[#3d3929]">
       {/* Task summary bar */}
@@ -703,31 +683,16 @@ export function ToolPanel({ executions, onRetryFromSession, onConfirmPreview, on
                 {exec.result && isWhipflowPreview(tryParseJSON(exec.result)) ? (
                   <StepPreviewCard
                     preview={tryParseJSON(exec.result) as WhipflowPreview}
-                    onConfirm={onConfirmPreview ? () => {
-                      const p = tryParseJSON(exec.result) as WhipflowPreview;
-                      const userInputs = (exec.args?.user_inputs as Record<string, string>) ?? whipflowArgs?.user_inputs;
-                      onConfirmPreview(p.source, userInputs);
-                    } : undefined}
+                    onCommand={onCommand}
                     onEdit={onEditPreview ? () => {
                       const p = tryParseJSON(exec.result) as WhipflowPreview;
                       onEditPreview(p.source);
-                    } : undefined}
-                    onRunUntilSession={onRunUntilSession ? (stopAfter) => {
-                      const p = tryParseJSON(exec.result) as WhipflowPreview;
-                      const userInputs = (exec.args?.user_inputs as Record<string, string>) ?? whipflowArgs?.user_inputs;
-                      onRunUntilSession(stopAfter, p.source, userInputs);
-                    } : undefined}
-                    onStepByStep={onStepByStep ? (sessionCount) => {
-                      const p = tryParseJSON(exec.result) as WhipflowPreview;
-                      const userInputs = (exec.args?.user_inputs as Record<string, string>) ?? whipflowArgs?.user_inputs;
-                      onStepByStep(p.source, userInputs, sessionCount);
                     } : undefined}
                   />
                 ) : (
                   <WhipflowSessionSteps
                     exec={exec}
-                    onRetryFromSession={whipflowArgs && onRetryFromSession ? (idx) => onRetryFromSession(idx, whipflowArgs) : undefined}
-                    onContinueSession={onContinueSession ? (idx) => onContinueSession(exec.id, idx, whipflowArgs?.file?.split("/").pop()?.replace(".whip", "") ?? "") : undefined}
+                    onCommand={onCommand}
                   />
                 )}
               </>

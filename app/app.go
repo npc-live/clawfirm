@@ -711,8 +711,6 @@ func (a *App) startGateway() error {
 
 	// Mark any "running" tool executions from a previous crash as "interrupted".
 	a.recoverInterruptedToolExecs()
-	// Clean up orphaned sidecar tmp files and old sidecars.
-	cleanupWhipflowSidecars()
 
 	for _, ac := range cfg.Agents {
 		prov, ok := providerMap[ac.Provider]
@@ -833,6 +831,32 @@ func (a *App) startGateway() error {
 						r.Status = "running"
 						r.StartedAt = time.Now().UnixMilli()
 					})
+					// Record whipflow chain entry on start.
+					if ev.ToolName == "whipflow_run" && db != nil {
+						parentID := ""
+						sessionIdx := -1
+						if args, ok := ev.ToolArgs.(map[string]any); ok {
+							if p, ok := args["parent_call_id"].(string); ok {
+								parentID = p
+							}
+							if raw, ok := args["stop_after_session"]; ok {
+								switch v := raw.(type) {
+								case float64:
+									sessionIdx = int(v)
+								case int:
+									sessionIdx = v
+								}
+							}
+						}
+						_ = db.WhipflowChain().Insert(store.WhipflowChainEntry{
+							ChannelID:  storeChannelID,
+							UserID:     userID,
+							CallID:     ev.ToolCallID,
+							ParentID:   parentID,
+							SessionIdx: sessionIdx,
+							Status:     "running",
+						})
+					}
 				case types.EventToolExecutionEnd:
 					a.updateToolExec(storeChannelID, userID, ev.ToolCallID, func(r *ToolExecRecord) {
 						r.Status = "done"
@@ -841,6 +865,14 @@ func (a *App) startGateway() error {
 						}
 						r.EndedAt = time.Now().UnixMilli()
 					})
+					// Update whipflow chain status on end.
+					if ev.ToolName == "whipflow_run" && db != nil {
+						status := "done"
+						if ev.ToolIsError {
+							status = "error"
+						}
+						_ = db.WhipflowChain().UpdateStatus(ev.ToolCallID, status)
+					}
 				}
 			})
 			return ag
@@ -1473,97 +1505,15 @@ func (a *App) AbortCurrentTurn(agentName, sessionID string) {
 
 // ToolExecutionInfo is a summary of one tool call + result for the frontend.
 type ToolExecutionInfo struct {
-	ID           string           `json:"id"`
-	Name         string           `json:"name"`
-	Args         any              `json:"args,omitempty"`
-	Result       string           `json:"result,omitempty"`
-	IsError      bool             `json:"isError"`
-	Timestamp    int64            `json:"timestamp"`
-	PartialSteps []map[string]any `json:"partialSteps,omitempty"`
-	Status       string           `json:"status,omitempty"`    // "running" | "done" | "error" | "interrupted"
-	StartedAt    int64            `json:"startedAt,omitempty"`
-	EndedAt      int64            `json:"endedAt,omitempty"`
-}
-
-// GetToolExecutions returns tool call summaries extracted from stored messages.
-func (a *App) GetToolExecutions(channelID, userID string) ([]ToolExecutionInfo, error) {
-	a.mu.RLock()
-	db := a.db
-	a.mu.RUnlock()
-	if db == nil {
-		return nil, nil
-	}
-	msgs, err := db.Messages().ListMessages(store.QueryParams{
-		ChannelID: channelID,
-		UserID:    userID,
-		Limit:     200,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(msgs) == 0 && channelID != "webchat" {
-		msgs, err = db.Messages().ListMessages(store.QueryParams{
-			ChannelID: "webchat",
-			UserID:    userID,
-			Limit:     200,
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Build id → ToolExecutionInfo from AssistantMessage tool calls.
-	byID := make(map[string]*ToolExecutionInfo)
-	var order []string
-	for _, m := range msgs {
-		switch msg := m.(type) {
-		case *types.AssistantMessage:
-			for _, b := range msg.Content {
-				tc, ok := b.(*types.ToolCall)
-				if !ok {
-					continue
-				}
-				info := &ToolExecutionInfo{
-					ID:        tc.ID,
-					Name:      tc.Name,
-					Args:      tc.Arguments,
-					Timestamp: msg.Timestamp,
-				}
-				byID[tc.ID] = info
-				order = append(order, tc.ID)
-			}
-		case *types.ToolResultMessage:
-			if info, ok := byID[msg.ToolCallID]; ok {
-				info.IsError = msg.IsError
-				for _, b := range msg.Content {
-					if t, ok := b.(*types.TextContent); ok {
-						info.Result = t.Text
-						break
-					}
-				}
-			}
-		}
-	}
-
-	out := make([]ToolExecutionInfo, 0, len(order))
-	for _, id := range order {
-		info := *byID[id]
-		// Restore whipflow session steps from sidecar file (written by tailWhipflowProgress).
-		if info.Name == "whipflow_run" {
-			if home, err := os.UserHomeDir(); err == nil {
-				sidecarPath := filepath.Join(home, ".clawfirm", "whipflow-steps", info.ID+".json")
-				data, readErr := os.ReadFile(sidecarPath)
-				if readErr == nil {
-					var steps []map[string]any
-					if json.Unmarshal(data, &steps) == nil {
-						info.PartialSteps = steps
-					}
-				}
-			}
-		}
-		out = append(out, info)
-	}
-	return out, nil
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Args      any    `json:"args,omitempty"`
+	Result    string `json:"result,omitempty"`
+	IsError   bool   `json:"isError"`
+	Timestamp int64  `json:"timestamp"`
+	Status    string `json:"status,omitempty"`    // "running" | "done" | "error" | "interrupted"
+	StartedAt int64  `json:"startedAt,omitempty"`
+	EndedAt   int64  `json:"endedAt,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
@@ -1654,7 +1604,6 @@ func (a *App) recoverInterruptedToolExecs() {
 }
 
 // GetToolExecutionState returns tool execution info with correct lifecycle status from the KV ledger.
-// For whipflow_run records, it also reads sidecar files for session steps.
 // For done/error records, it reads the ToolResultMessage from the message store for result text.
 func (a *App) GetToolExecutionState(channelID, userID string) ([]ToolExecutionInfo, error) {
 	records := a.loadToolExecs(channelID, userID)
@@ -1708,56 +1657,21 @@ func (a *App) GetToolExecutionState(channelID, userID string) ([]ToolExecutionIn
 		if isErr, ok := errorByID[r.ID]; ok {
 			info.IsError = isErr
 		}
-		// For whipflow_run: load sidecar steps.
-		if r.Name == "whipflow_run" {
-			if home, err := os.UserHomeDir(); err == nil {
-				sidecarPath := filepath.Join(home, ".clawfirm", "whipflow-steps", r.ID+".json")
-				data, readErr := os.ReadFile(sidecarPath)
-				if readErr == nil {
-					var steps []map[string]any
-					if json.Unmarshal(data, &steps) == nil {
-						info.PartialSteps = steps
-					}
-				}
-			}
-		}
 		out = append(out, info)
 	}
 	return out, nil
 }
 
-// cleanupWhipflowSidecars deletes .tmp orphans and sidecars older than 7 days.
-func cleanupWhipflowSidecars() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
+
+// GetWhipflowChain returns the whipflow execution chain for a channel+user session.
+func (a *App) GetWhipflowChain(channelID, userID string) ([]store.WhipflowChainEntry, error) {
+	a.mu.RLock()
+	db := a.db
+	a.mu.RUnlock()
+	if db == nil {
+		return nil, nil
 	}
-	dir := filepath.Join(home, ".clawfirm", "whipflow-steps")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	cutoff := time.Now().Add(-7 * 24 * time.Hour)
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		name := e.Name()
-		path := filepath.Join(dir, name)
-		// Delete .tmp orphans unconditionally.
-		if strings.HasSuffix(name, ".tmp") {
-			_ = os.Remove(path)
-			continue
-		}
-		// Delete old sidecar files.
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().Before(cutoff) {
-			_ = os.Remove(path)
-		}
-	}
+	return db.WhipflowChain().ListBySession(channelID, userID)
 }
 
 // GetHistory returns the last N messages for a channel+user.
@@ -1805,48 +1719,6 @@ func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) 
 	return out, nil
 }
 
-// OpenWhipflowSession loads the saved messages from a whipflow session and creates
-// a new regular chat session under the given agentName pre-populated with those
-// messages. Returns {"agentName": "...", "sessionID": "..."} for navigation.
-func (a *App) OpenWhipflowSession(toolExecID string, sessionIndex int, agentName string) (map[string]string, error) {
-	a.mu.RLock()
-	db := a.db
-	a.mu.RUnlock()
-	if db == nil {
-		return nil, fmt.Errorf("database not available")
-	}
-
-	// Load messages saved by the MessageSaver callback.
-	msgs, err := db.Messages().ListMessages(store.QueryParams{
-		ChannelID: "whipflow/" + toolExecID,
-		UserID:    strconv.Itoa(sessionIndex),
-		Limit:     500,
-	})
-	if err != nil || len(msgs) == 0 {
-		return nil, fmt.Errorf("no history found for session %d of tool %s", sessionIndex, toolExecID)
-	}
-
-	// Create a new chat session for the agent, pre-populated with these messages.
-	newSessionID := fmt.Sprintf("whipflow-%s-%d", toolExecID[:min(8, len(toolExecID))], sessionIndex)
-	chID := "webchat/" + agentName
-	for _, m := range msgs {
-		if err := db.Messages().SaveMessage(chID, newSessionID, m); err != nil {
-			log.Printf("app: OpenWhipflowSession copy message: %v", err)
-		}
-	}
-
-	return map[string]string{
-		"agentName": agentName,
-		"sessionID": newSessionID,
-	}, nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // GetSessions returns a list of active session keys from all registered agents.
 func (a *App) GetSessions() []SessionInfo {

@@ -708,7 +708,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
               <div className={`absolute inset-0 overflow-y-auto ${tab === "tools" ? "" : "hidden"}`}>
                 {toolExecutions.length === 0
                   ? <p className="text-center text-[11px] text-[rgba(61,57,41,0.3)] mt-10">No tool activity yet</p>
-                  : <ToolPanel executions={toolExecutions} />
+                  : <ToolPanel executions={toolExecutions} onCommand={() => {}} />
                 }
               </div>
 

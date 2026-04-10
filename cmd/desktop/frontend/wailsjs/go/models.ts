@@ -213,7 +213,9 @@ export namespace app {
 	    result?: string;
 	    isError: boolean;
 	    timestamp: number;
-	    partialSteps?: any[];
+	    status?: string;
+	    startedAt?: number;
+	    endedAt?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ToolExecutionInfo(source);
@@ -227,7 +229,9 @@ export namespace app {
 	        this.result = source["result"];
 	        this.isError = source["isError"];
 	        this.timestamp = source["timestamp"];
-	        this.partialSteps = source["partialSteps"];
+	        this.status = source["status"];
+	        this.startedAt = source["startedAt"];
+	        this.endedAt = source["endedAt"];
 	    }
 	}
 	export class VaultEntry {
@@ -680,6 +684,33 @@ export namespace store {
 		    }
 		    return a;
 		}
+	}
+	
+	export class WhipflowChainEntry {
+	    id: number;
+	    channelId: string;
+	    userId: string;
+	    callId: string;
+	    parentId?: string;
+	    sessionIdx: number;
+	    status: string;
+	    createdAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WhipflowChainEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.channelId = source["channelId"];
+	        this.userId = source["userId"];
+	        this.callId = source["callId"];
+	        this.parentId = source["parentId"];
+	        this.sessionIdx = source["sessionIdx"];
+	        this.status = source["status"];
+	        this.createdAt = source["createdAt"];
+	    }
 	}
 
 }

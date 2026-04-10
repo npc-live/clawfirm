@@ -79,84 +79,6 @@ func NewHandler(registry *gateway.AgentRegistry, defaultAgent string) *Handler {
 	return &Handler{registry: registry, defaultAgent: defaultAgent}
 }
 
-// extractWhipflowReplayOutputs scans the agent's message history for the most
-// recent whipflow_run tool result and extracts session_outputs for use as
-// replay_outputs in a subsequent retry call. This implements the
-// "message history as state store" pattern: no separate SQLite store needed.
-func extractWhipflowReplayOutputs(messages []types.Message) []map[string]any {
-	// Walk in reverse to find the most recent whipflow_run tool call ID.
-	var lastWhipflowCallID string
-	for i := len(messages) - 1; i >= 0; i-- {
-		am, ok := messages[i].(*types.AssistantMessage)
-		if !ok {
-			continue
-		}
-		for _, b := range am.Content {
-			tc, ok := b.(*types.ToolCall)
-			if ok && tc.Name == "whipflow_run" {
-				lastWhipflowCallID = tc.ID
-				break
-			}
-		}
-		if lastWhipflowCallID != "" {
-			break
-		}
-	}
-	if lastWhipflowCallID == "" {
-		return nil
-	}
-	// Find the matching tool result.
-	for _, m := range messages {
-		tr, ok := m.(*types.ToolResultMessage)
-		if !ok || tr.ToolCallID != lastWhipflowCallID {
-			continue
-		}
-		// The tool result content is a JSON string with session_outputs.
-		for _, b := range tr.Content {
-			tc, ok := b.(*types.TextContent)
-			if !ok {
-				continue
-			}
-			// Try to find the JSON result blob (appended after human-readable text).
-			const marker = "\nJSON result (for replay_outputs on retry):\n"
-			idx := len(tc.Text)
-			if i := indexOf(tc.Text, marker); i >= 0 {
-				idx = i + len(marker)
-			} else {
-				idx = 0 // try parsing the whole text as JSON
-			}
-			var result struct {
-				SessionOutputs []map[string]any `json:"session_outputs"`
-			}
-			if err := json.Unmarshal([]byte(tc.Text[idx:]), &result); err == nil && len(result.SessionOutputs) > 0 {
-				return result.SessionOutputs
-			}
-		}
-		// Also check Details if it's already the structured type.
-		if tr.Details != nil {
-			if b, err := json.Marshal(tr.Details); err == nil {
-				var result struct {
-					SessionOutputs []map[string]any `json:"session_outputs"`
-				}
-				if err := json.Unmarshal(b, &result); err == nil && len(result.SessionOutputs) > 0 {
-					return result.SessionOutputs
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// indexOf returns the index of substr in s, or -1 if not found.
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
-}
-
 // ServeHTTP handles WebSocket upgrade for both URL patterns.
 // agentName is read from {agentName} path value; falls back to defaultAgent.
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -251,19 +173,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				args := msg.ToolArgs
 				if args == nil {
 					args = map[string]any{}
-				}
-				// For whipflow_run with retry_from_session: extract previous session
-				// outputs from the agent's message history and inject as replay_outputs,
-				// so the whipflow runtime uses message history as its state store instead
-				// of a separate SQLite database.
-				if msg.ToolName == "whipflow_run" {
-					if _, hasRetry := args["retry_from_session"]; hasRetry {
-						if _, alreadyHasReplay := args["replay_outputs"]; !alreadyHasReplay {
-							if replayOutputs := extractWhipflowReplayOutputs(sess.State().Messages); len(replayOutputs) > 0 {
-								args["replay_outputs"] = replayOutputs
-							}
-						}
-					}
 				}
 				// Execute through the agent so the tool call and result are injected
 				// into the conversation history and persisted via the normal event path.
