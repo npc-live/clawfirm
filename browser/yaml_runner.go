@@ -150,6 +150,13 @@ func RunYAMLCommand(adapterPath, commandName string, argValues []string, cdpPort
 	}
 	defer cdpClient.Close()
 
+	// Verify login state before running any steps.
+	if adapter.LoginCheck.Cookie != "" {
+		if err := verifyLogin(cdpClient, adapter); err != nil {
+			return nil, err
+		}
+	}
+
 	// Connect agent-browser to the CDP port directly (not a per-tab WebSocket
 	// URL). This lets agent-browser pick/manage the tab internally and avoids
 	// "Session with given id not found" errors from stale ws URLs.
@@ -169,6 +176,11 @@ func RunYAMLCommand(adapterPath, commandName string, argValues []string, cdpPort
 		}
 	}
 
+	// Save session cookies for future restoration.
+	if _, err := CaptureSession(cdpClient, adapter.Platform); err != nil {
+		log.Printf("browser: warning: failed to save session for %s: %v", adapter.Platform, err)
+	}
+
 	// Build output.
 	if extractedRows != nil {
 		return extractedRows, nil
@@ -184,6 +196,50 @@ func RunYAMLCommand(adapterPath, commandName string, argValues []string, cdpPort
 		return out, nil
 	}
 	return nil, nil
+}
+
+// verifyLogin checks that the required login cookie exists in the browser.
+// If missing, it attempts to restore a previously saved session. Returns an
+// error only if login cannot be established.
+func verifyLogin(client *CDPClient, adapter *AdapterYAML) error {
+	cookieName := adapter.LoginCheck.Cookie
+
+	if hasLoginCookie(client, cookieName) {
+		log.Printf("browser: %s login verified (cookie %s found)", adapter.Platform, cookieName)
+		return nil
+	}
+
+	// Cookie not found — try restoring a saved session.
+	log.Printf("browser: %s cookie %s not found, attempting session restore...", adapter.Platform, cookieName)
+	restored, err := RestoreSession(client, adapter.Platform)
+	if err != nil {
+		log.Printf("browser: warning: session restore failed for %s: %v", adapter.Platform, err)
+	}
+
+	if restored && hasLoginCookie(client, cookieName) {
+		log.Printf("browser: %s session restored successfully", adapter.Platform)
+		return nil
+	}
+
+	return fmt.Errorf(
+		"%s: not logged in (cookie %q not found).\n"+
+			"Please ensure Chrome is using the correct profile (~/.social-cli/chrome-profile) with an active %s login.\n"+
+			"You can log in manually at %s, then retry.",
+		adapter.Platform, cookieName, adapter.Platform, adapter.LoginURL)
+}
+
+// hasLoginCookie checks if the named cookie exists in the browser.
+func hasLoginCookie(client *CDPClient, cookieName string) bool {
+	cookies, err := client.GetAllCookies()
+	if err != nil {
+		return false
+	}
+	for _, c := range cookies {
+		if c.Name == cookieName {
+			return true
+		}
+	}
+	return false
 }
 
 func executeStep(
@@ -458,10 +514,26 @@ func truncStr(s string, n int) string {
 }
 
 // ensureChromeRunning checks if Chrome CDP is reachable on the given port.
-// If not, it launches Chrome with the social-cli profile and waits for CDP.
+// If not, it checks whether Chrome is already running without CDP (profile
+// conflict risk) and either prompts the user or launches Chrome with the
+// social-cli profile.
 func ensureChromeRunning(cdpPort int) error {
 	if isCDPReachable(cdpPort) {
 		return nil
+	}
+
+	// If Chrome is already running without CDP, launching a new instance
+	// would use a temporary profile (due to profile lock), losing all
+	// login sessions. Abort with a helpful message instead.
+	if isChromeProcessRunning() {
+		home, _ := os.UserHomeDir()
+		return fmt.Errorf(
+			"Chrome is running but CDP is not enabled on port %d.\n"+
+				"The existing Chrome holds the profile lock, so launching a new instance would use a temporary profile without your login sessions.\n\n"+
+				"Please restart Chrome with:\n"+
+				"  /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=%d --user-data-dir=%s/.social-cli/chrome-profile &\n\n"+
+				"Or close Chrome entirely and retry (we will launch it with the correct flags).",
+			cdpPort, cdpPort, home)
 	}
 
 	chromePath := findChromePath()
@@ -475,6 +547,7 @@ func ensureChromeRunning(cdpPort int) error {
 		profileDir = filepath.Join(home, ".clawfirm", "chrome-profile")
 	}
 
+	log.Printf("browser: launching Chrome with profile %s", profileDir)
 	cmd := exec.Command(chromePath,
 		fmt.Sprintf("--remote-debugging-port=%d", cdpPort),
 		"--user-data-dir="+profileDir,
@@ -494,6 +567,20 @@ func ensureChromeRunning(cdpPort int) error {
 		}
 	}
 	return fmt.Errorf("Chrome launched but CDP not ready on port %d after 10s", cdpPort)
+}
+
+// isChromeProcessRunning checks if a Chrome process is already running.
+func isChromeProcessRunning() bool {
+	switch runtime.GOOS {
+	case "darwin":
+		out, err := exec.Command("pgrep", "-x", "Google Chrome").Output()
+		return err == nil && len(strings.TrimSpace(string(out))) > 0
+	case "linux":
+		out, err := exec.Command("pgrep", "-f", "chrome|chromium").Output()
+		return err == nil && len(strings.TrimSpace(string(out))) > 0
+	default:
+		return false
+	}
 }
 
 func isCDPReachable(port int) bool {
