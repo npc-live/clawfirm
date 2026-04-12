@@ -1,0 +1,417 @@
+{
+  "report_metadata": {
+    "project_name": "Ondo Finance",
+    "project_url": "https://ondo.finance",
+    "asset_class": "US Treasuries & Money Market Funds",
+    "chains": ["Ethereum", "Polygon", "Solana"],
+    "report_date": "2026-03-30",
+    "report_depth": "deep",
+    "subscriber_tier": "institutional",
+    "data_sources": [
+      "DefiLlama",
+      "Etherscan",
+      "Ondo Finance Docs",
+      "CoinMarketCap",
+      "RWA.xyz",
+      "Immunefi",
+      "Code4rena",
+      "CertiK Skynet"
+    ]
+  },
+
+  "on_chain_metrics": {
+    "total_value_locked": {
+      "current_tvl_usd": 2500000000,
+      "current_tvl_label": "$2.5B",
+      "as_of": "2026-02",
+      "trend_90_day": {
+        "direction": "up",
+        "start_value_usd": 1930000000,
+        "end_value_usd": 2500000000,
+        "percent_change": 29.5,
+        "description": "TVL doubled from ~$1B in early 2025 to $2.5B by Feb 2026. Sharp growth driven by Solana expansion and tokenized equities launch."
+      },
+      "breakdown": {
+        "ethereum_tvl_usd": 1500000000,
+        "ousg_tvl_usd": 820000000,
+        "ondo_global_markets_tvl_usd": 700000000,
+        "other_chains_and_products": 480000000
+      },
+      "confidence": 0.85,
+      "notes": "TVL figures aggregated from DefiLlama and Ondo announcements. Exact real-time breakdown across all chains requires live API query."
+    },
+
+    "token_supply": {
+      "ondo_governance_token": {
+        "ticker": "ONDO",
+        "max_supply": 10000000000,
+        "allocation": {
+          "ecosystem_growth": "52.1%",
+          "protocol_development": "33.0%",
+          "private_sales": "12.9%",
+          "community_access_sale": "2.0%"
+        },
+        "major_unlock": {
+          "date": "2026-01",
+          "percent_unlocked": "57%",
+          "description": "57% of total supply became tradable in January 2026 unlock event"
+        },
+        "confidence": 0.95
+      },
+      "ousg": {
+        "ticker": "OUSG",
+        "supply_model": "elastic — minted/burned on demand against USDC deposits",
+        "current_nav_per_token_usd": 113.32,
+        "on_chain_market_cap_usd": 671077347,
+        "confidence": 0.80,
+        "notes": "NAV per token from Etherscan snapshot (Nov 2025). Supply grows with deposits; no fixed cap."
+      },
+      "usdy": {
+        "ticker": "USDY",
+        "supply_model": "elastic — minted on deposit, burned on redemption",
+        "current_price_usd": 1.12,
+        "yield_apy": "3.69%",
+        "confidence": 0.80,
+        "notes": "Price appreciates as yield accrues. Also available as rUSDY (rebasing, pegged to $1.00)."
+      }
+    },
+
+    "smart_contract_addresses": {
+      "ethereum": {
+        "ousg_token": "0x1B19C19393e2d034D8Ff31ff34c81252FcBbee92",
+        "rousg_token": "0x54043c656F0FAd0652D9Ae2603cDF347c5578d00",
+        "ousg_instant_manager": "0x93358db73B6cd4b98D89c8F5f230E81a95c2643a",
+        "ousg_manager_legacy": "0xF16c188c2D411627d39655A60409eC6707D3d5e8",
+        "ousg_oracle": "0x9Cad45a8BF0Ed41Ff33074449B357C7a1fAb4094",
+        "ondo_id_registry": "0xcf6958D69d535FD03BD6Df3F4fe6CDcd127D97df",
+        "usdy_token": "0x96F6eF951840721AdBF46Ac996b59E0235CB985C",
+        "rusdy_token": "0xaf37c1167910ebC994e266949387d2c7C326b879",
+        "usdy_instant_manager": "0xa42613C243b67BF6194Ac327795b926B4b491f15",
+        "usdy_redemption_oracle": "0xA0219AA5B31e65Bc920B5b6DFb8EdF0988121De0",
+        "usdy_blocklist": "0xd8c8174691d936E2C80114EC449037b13421B0a8",
+        "ondo_governance_token": "0xfAbA6f8e4a5E8Ab82F62fe7C39859FA577269BE3",
+        "gm_token_manager": "0x2c158BC456e027b2AfFCCadF1BDBD9f5fC4c5C8c",
+        "usdon_stablecoin": "0xAcE8E719899F6E91831B18AE746C9A965c2119F1",
+        "synthetic_shares_oracle": "0x9BC39DB6fbB44B91a48b8D5A6C208B82B1741bE6",
+        "management_multisig": "0xAEd4caF2E535D964165B4392342F71bAc77e8367",
+        "multisig_2": "0x677FD4ED8aE623f2f625DeB2d64F2070e46Ca1a1"
+      },
+      "polygon": {
+        "ousg_token": "0xbA11C5effA33c4D6F8f593CFA394241CfE925811",
+        "cash_manager": "0x6B7443808ACFCD48f1DE212C2557462fA86Ee945",
+        "registry": "0x7cD852c0D7613aA869e632929560f310D4059AC1"
+      },
+      "solana": {
+        "ousg_mint": "i7u4r16TcsJTgq1kAG8opmVZyVnAKBwLKu6ZPMwzxNc"
+      },
+      "mantle": {
+        "usdy_token": "0x5bE26527e817998A7206475496fDE1E68957c5A6",
+        "musd_token": "0xab575258d37EaA5C8956EfABe71F4eE8F6397cF3"
+      },
+      "confidence": 0.95,
+      "source": "https://docs.ondo.finance/addresses"
+    },
+
+    "unique_holders": {
+      "ousg_ethereum": {
+        "count": 60,
+        "as_of": "2025-11",
+        "notes": "Low holder count reflects KYC-gated institutional product (Qualified Purchasers / Accredited Investors only)"
+      },
+      "usdy_ethereum": {
+        "count": "Unverified — requires live Etherscan query",
+        "notes": "USDY has broader non-US retail access; likely higher holder count than OUSG"
+      },
+      "ondo_token_ethereum": {
+        "count": "Unverified — requires live Etherscan query",
+        "notes": "Governance token with wide exchange listings; significantly higher holder count expected"
+      },
+      "cross_chain_total": "Unverified — requires aggregation across Ethereum, Polygon, Solana, Mantle, Sui, Aptos, etc.",
+      "confidence": 0.55
+    },
+
+    "transaction_volume": {
+      "usdy_24h_volume_usd": 220405,
+      "ondo_token_24h_volume_usd": 65848045,
+      "ousg_daily_volume": "Unverified — primarily OTC / instant manager mints and redemptions, not exchange-traded",
+      "monthly_volume": "Unverified — requires off-chain disclosure or DefiLlama API aggregation",
+      "confidence": 0.50,
+      "notes": "OUSG trades mainly through Ondo's instant manager (mint/redeem), not on DEXes. ONDO governance token has high derivatives/perps volume."
+    },
+
+    "liquidity_pools": {
+      "ondo_token_dex": {
+        "primary_pair": "ONDO/WETH on Uniswap V3 (Ethereum)",
+        "depth": "Unverified — requires live pool query"
+      },
+      "usdy_dex": {
+        "solana_dexes": ["Orca", "Raydium"],
+        "ethereum_dex": "Uniswap (limited)",
+        "depth": "Moderate liquidity challenges noted; scaling via multi-chain deployment"
+      },
+      "ousg_dex": {
+        "availability": "Not actively traded on DEXes; minting/redemption via OUSGInstantManager contract",
+        "notes": "Institutional product — liquidity provided through protocol's instant mint/redeem mechanism"
+      },
+      "confidence": 0.50,
+      "notes": "Liquidity gaps remain a challenge as Ondo scales. Bridge via LayerZero OFT standard across chains."
+    },
+
+    "protocol_revenue": {
+      "current_fee_rate": "0.15% annual management fee (waived until July 2026)",
+      "actual_revenue_collected": "Near-zero — fees waived for growth phase",
+      "monetization_timeline": "H2 2026 — Ondo preparing to begin fee collection",
+      "fee_sharing": "Recently introduced fee-sharing program for ONDO token holders",
+      "confidence": 0.75,
+      "notes": "Currently in growth-first mode. No direct revenue redistribution to token holders yet. DAO treasury funded from operational revenues."
+    },
+
+    "treasury_balance": {
+      "value": "Unverified — requires off-chain disclosure",
+      "known_info": {
+        "sweep_fund_seed": "$200M seed capital (State Street + Galaxy Asset Management partnership)",
+        "dao_treasury": "DAO treasury exists but balance not publicly disclosed on-chain"
+      },
+      "confidence": 0.30
+    }
+  },
+
+  "asset_backing": {
+    "asset_type": {
+      "ousg": "Short-term US Government Treasuries, GSE securities, bank deposits, USDC (for liquidity)",
+      "usdy": "Short-term US Treasuries, iShares Short Treasury Bond ETF shares, bank demand deposits",
+      "confidence": 0.95
+    },
+    "asset_description": "OUSG portfolio primarily holds BlackRock BUIDL fund, with allocations to Franklin Templeton, WisdomTree, Fidelity, and Wellington/FundBridge vehicles. USDY is backed by US Treasuries and bank deposits, offering ~3.69% APY.",
+
+    "custodian_trustee": {
+      "ousg_fund_custodian": "Coinbase (USDC-to-USD conversion); underlying assets held by BlackRock, Fidelity, Franklin Templeton, WisdomTree",
+      "usdy_custodian": "US-registered custodial broker-dealers",
+      "ondo_global_markets": "US-registered custodial broker-dealers (SPV: Ondo Global Markets BVI Limited)",
+      "21shares_trust_custodian": "Coinbase Custody Trust Company, LLC (SOC 1 Type 2 & SOC 2 Type 2 attestations)",
+      "confidence": 0.85
+    },
+
+    "proof_of_reserves": {
+      "mechanism": "Multi-layered: daily third-party attestations + independent fund administration + on-chain oracle pricing",
+      "attestation_provider": "Ankura Trust Company (daily attestations for Ondo Global Markets)",
+      "fund_administrator": "NAV Consulting (daily read-only access to fund accounts)",
+      "on_chain_component": "Ondo Chain validators verify off-chain data (asset prices via price feeds, proof of reserves via custodians) — enshrined in consensus",
+      "oracle_integration": "Chainlink Data Feeds as primary pricing layer for tokenized equities (live since Feb 2026)",
+      "confidence": 0.80
+    },
+
+    "latest_attestation": {
+      "attestation_type": "Daily attestations by Ankura Trust Company",
+      "available_since": "2025-10-01",
+      "frequency": "Daily",
+      "auditor": "Ankura Trust Company (attestation); annual financial audits by independent audit firm (name not publicly disclosed)",
+      "confidence": 0.75,
+      "notes": "Full financial audits conducted annually; results shared with authorized requesting parties. Public attestation portal available online."
+    },
+
+    "redemption_mechanism": {
+      "ousg": {
+        "type": "Instant mint/redeem 24/7/365",
+        "settlement_asset": "USDC or PYUSD",
+        "min_instant_transaction": "$5,000",
+        "min_non_instant_investment": "$100,000",
+        "min_non_instant_redemption": "$50,000",
+        "daily_limit": "Amount shown on website (varies by liquidity)",
+        "smart_contract": "OUSGInstantManager verifies KYC via OndoIDRegistry before processing"
+      },
+      "usdy": {
+        "type": "Bank wire redemption (non-US accounts only) or API via Ondo Global Markets",
+        "settlement_asset": "USD (bank wire)",
+        "min_early_redemption": "$100,000 (before token minting)",
+        "processing_time": "1-5 business days after request",
+        "secondary_market": "Can sell on DEXes (Orca, Raydium, Uniswap) if available"
+      },
+      "confidence": 0.90
+    },
+
+    "lockup_periods": {
+      "ousg": {
+        "lockup": "None — instant liquidity",
+        "maturity": "Open-ended fund; no maturity date"
+      },
+      "usdy": {
+        "restricted_period": "40-50 days from deposit (US regulatory compliance)",
+        "description": "Temporary Global Certificate issued within 2-3 business days; tokens minted after restricted period ends",
+        "maturity": "Open-ended; no fixed maturity"
+      },
+      "confidence": 0.90
+    }
+  },
+
+  "smart_contract_security": {
+    "audits": [
+      {
+        "product": "Ondo Global Markets",
+        "audits": [
+          {"firm": "Spearbit / Cantina", "date": "2025-06", "scope": "Ondo Global Markets core contracts"},
+          {"firm": "Cyfrin", "date": "2025-07", "scope": "Ondo Global Markets v2.0"},
+          {"firm": "FYEO", "date": "2025-09", "scope": "GM Solana contracts"},
+          {"firm": "Cantina", "date": "2025-10", "scope": "USDon Converter, Bridge Registrar"},
+          {"firm": "FYEO", "date": "2025-11", "scope": "GM Solana (follow-up)"},
+          {"firm": "Cantina", "date": "2025-11", "scope": "Synthetic Shares"},
+          {"firm": "Cantina", "date": "2025-12", "scope": "Limit Order Protocol"},
+          {"firm": "Cantina", "date": "2025-12", "scope": "General review"},
+          {"firm": "Zellic", "date": "2025-12", "scope": "GM Solana"},
+          {"firm": "Cantina", "date": "2026-02", "scope": "Limit Order Protocol (follow-up)"}
+        ]
+      },
+      {
+        "product": "Ondo Funds & USDY (Ethereum)",
+        "audits": [
+          {"firm": "Spearbit / Cantina", "date": "2025-03", "scope": "Funds and USDY"},
+          {"firm": "Halborn", "date": "2025-02", "scope": "Funds and USDY"},
+          {"firm": "Code4rena", "date": "2024-04", "scope": "Competitive audit"},
+          {"firm": "Cyfrin", "date": "2024-04", "scope": "Funds and USDY"},
+          {"firm": "Code4rena", "date": "2023-09", "scope": "Competitive audit"},
+          {"firm": "Zokyo", "date": "2023-08", "scope": "Funds and USDY"},
+          {"firm": "Nethermind", "date": "2023-04", "scope": "Oracle-related contracts"},
+          {"firm": "Code4rena", "date": "2023-01", "scope": "Competitive audit"}
+        ]
+      },
+      {
+        "product": "Ondo Funds & USDY (Noble / Cosmos)",
+        "audits": [
+          {"firm": "Halborn", "date": "2024-06", "scope": "Noble chain integration"},
+          {"firm": "Halborn", "date": "2024-07", "scope": "Additional Aura Module"}
+        ]
+      },
+      {
+        "product": "Deprecated Products",
+        "audits": [
+          {"firm": "ABDK", "date": "2022-05"},
+          {"firm": "Quantstamp", "date": "2022-01"},
+          {"firm": "Quantstamp", "date": "2021-09"},
+          {"firm": "Peckshield", "date": "2021-05"},
+          {"firm": "CertiK", "date": "2021-04"}
+        ]
+      }
+    ],
+    "certik_score": {
+      "score": 93.58,
+      "rating": "AAA",
+      "confidence": 0.90
+    },
+    "confidence": 0.95,
+
+    "known_vulnerabilities": {
+      "disclosed_incidents": [
+        {
+          "date": "2022-01-26",
+          "severity": "High",
+          "description": "Vulnerability in Tranche Token / UniswapStrategy contracts that could have allowed draining ~$50M. Feature was not enabled at time of disclosure.",
+          "discoverer": "Ashiq Amien (iosiro)",
+          "bounty_paid": "$25,000",
+          "remediation": "Fixed same day; no user funds at risk",
+          "status": "Resolved"
+        }
+      ],
+      "past_exploits": "None — no funds have been lost to exploits",
+      "confidence": 0.85
+    },
+
+    "upgrade_proxy_pattern": {
+      "pattern": "OpenZeppelin Transparent Upgradeable Proxy",
+      "is_upgradeable": true,
+      "proxy_admin": "Dedicated ProxyAdmin contracts per product",
+      "controlled_by": "Gnosis Safe (Safe) multisig wallets",
+      "description": "All core token contracts (OUSG, rOUSG, USDY, rUSDY) use Transparent Proxy. Admin can upgrade implementation, manage KYC registry, pause/unpause, blocklist addresses. Factory contracts (e.g., rUSDYFactory) deploy new upgradeable instances.",
+      "centralization_risk": "Acknowledged by Ondo — admins have broad setter access, burn capabilities, token retrieval, and multicall functions",
+      "confidence": 0.90
+    },
+
+    "admin_multisig": {
+      "type": "Gnosis Safe (GnosisSafeProxy)",
+      "addresses": {
+        "management_multisig": "0xAEd4caF2E535D964165B4392342F71bAc77e8367",
+        "multisig_2": "0x677FD4ED8aE623f2f625DeB2d64F2070e46Ca1a1"
+      },
+      "signer_count": "Unverified — requires on-chain Safe query for threshold and signer list",
+      "governance_transition": "Long-term shift toward DAO governance via ONDO token holders (on-chain proposals)",
+      "confidence": 0.70,
+      "notes": "Exact multisig threshold (e.g., 3-of-5, 4-of-7) not publicly documented. Recommend querying Safe API for current signer config."
+    },
+
+    "bug_bounty": {
+      "platform": "Immunefi",
+      "url": "https://immunefi.com/bug-bounty/ondofinance/",
+      "max_reward_usd": 1000000,
+      "min_critical_reward_usd": 50000,
+      "reward_calculation": "10% of funds directly affected (for critical smart contract bugs)",
+      "payout_currency": "USDC on Ethereum",
+      "requires_kyc": true,
+      "requires_poc": true,
+      "policy": "Primacy of Impact — reports accepted even if affected asset is out-of-scope, as long as impact is in-scope",
+      "confidence": 0.95
+    }
+  },
+
+  "regulatory_and_legal": {
+    "ousg_structure": {
+      "entity": "Ondo I LP (private fund)",
+      "general_partner": "Ondo I GP LLC (Delaware)",
+      "investment_manager": "Ondo Capital Management LLC",
+      "registration": "Section 3(c)(7) Investment Company Act of 1940 exemption",
+      "investor_requirements": "Qualified Purchasers and verified Accredited Investors",
+      "aml_compliance": "Customer due diligence for AML/CFT/sanctions"
+    },
+    "usdy_structure": {
+      "entity": "Ondo USDY LLC (folded into Ondo Global Markets as of 2025-12-15)",
+      "registration": "Money services business registered with FinCEN",
+      "offering": "Regulation S — non-US persons only",
+      "compliance": "Bank Secrecy Act compliance"
+    },
+    "ondo_global_markets": {
+      "entity": "Ondo Global Markets (BVI) Limited",
+      "structure": "Dedicated SPV, wholly separate from Ondo Finance Inc. and Ondo Foundation",
+      "governance": "Board of Directors with independent director",
+      "asset_segregation": "Full segregation of assets, accounting, and operations"
+    },
+    "sec_status": {
+      "investigation": "SEC closed two-year investigation in November 2025 — no charges recommended",
+      "confidence": 0.90
+    },
+    "confidence": 0.85
+  },
+
+  "partnerships_and_integrations": {
+    "asset_managers": ["BlackRock (BUIDL)", "Franklin Templeton", "WisdomTree", "Fidelity", "Wellington / FundBridge"],
+    "custody": ["Coinbase Custody", "Copper", "BitGo"],
+    "oracle": "Chainlink Data Feeds (primary pricing layer since Feb 2026)",
+    "bridge": "LayerZero OFT (Omnichain Fungible Token) standard",
+    "chains_supported": ["Ethereum", "Polygon", "Solana", "Mantle", "Sui", "Aptos", "Sei", "Noble (Cosmos)", "XRP Ledger", "Arbitrum"],
+    "upcoming": {
+      "sweep_fund": "$200M seed (State Street + Galaxy Asset Management) — launching 2026",
+      "ondo_chain": "Purpose-built L1 with enshrined oracles and proof of reserves in consensus"
+    },
+    "confidence": 0.85
+  },
+
+  "risk_summary": {
+    "strengths": [
+      "Largest tokenized US Treasuries issuer by TVL ($2.5B+)",
+      "Extensive audit history (25+ audits from 10+ firms)",
+      "SEC investigation closed with no charges",
+      "Institutional-grade custodians (BlackRock, Coinbase, Fidelity)",
+      "Daily third-party attestations (Ankura Trust)",
+      "Active $1M bug bounty program on Immunefi",
+      "Multi-chain deployment with LayerZero bridging"
+    ],
+    "risks": [
+      "Smart contracts are upgradeable with centralized admin control (Gnosis Safe multisig — exact threshold unknown)",
+      "Fees currently waived — protocol generates near-zero revenue; sustainability depends on H2 2026 monetization",
+      "57% token supply unlocked Jan 2026 — significant dilution/selling pressure risk",
+      "USDY has 40-50 day lock-up period limiting instant liquidity",
+      "Liquidity depth on DEXes remains a challenge",
+      "Multisig signer composition and threshold not publicly documented",
+      "KYC-gated products limit composability within permissionless DeFi"
+    ],
+    "overall_risk_rating": "Medium",
+    "confidence": 0.80
+  }
+}

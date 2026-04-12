@@ -65,7 +65,7 @@ type Session struct {
 	entry         *store.SessionEntry    // nil if no store
 	sessStore     *store.SessionStore    // nil if no store
 	summarizer    ConversationSummarizer // nil if not configured
-	onUserMessage func(msg types.Message)
+	onUserMessage func(msg types.Message) error
 }
 
 type sinkEntry struct {
@@ -78,8 +78,8 @@ var sinkSeq atomic.Uint64
 // newSession creates and starts a Session.
 func newSession(key, channelID, userID string, a AgentRunner,
 	entry *store.SessionEntry, ss *store.SessionStore,
-	summarizer ConversationSummarizer, onUserMessage func(types.Message),
-	onAgentEvent func(types.AgentEvent)) *Session {
+	summarizer ConversationSummarizer, onUserMessage func(types.Message) error,
+	onAgentEvent func(types.AgentEvent) error) *Session {
 	s := &Session{
 		key:           key,
 		channelID:     channelID,
@@ -107,7 +107,9 @@ func newSession(key, channelID, userID string, a AgentRunner,
 
 		// Forward to the persistence callback (if configured).
 		if onAgentEvent != nil {
-			onAgentEvent(ev)
+			if err := onAgentEvent(ev); err != nil {
+				s.emitSaveError(err.Error())
+			}
 		}
 
 		// Track token usage per turn (EventTurnEnd carries the single assistant message).
@@ -342,12 +344,29 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 
 	userMsg := &types.UserMessage{Role: "user", Content: blocks}
 	if s.onUserMessage != nil {
-		s.onUserMessage(userMsg)
+		if err := s.onUserMessage(userMsg); err != nil {
+			s.emitSaveError(err.Error())
+		}
 	}
 	if err := s.agent.PromptMessages(ctx, []types.Message{userMsg}); err != nil {
 		return
 	}
 	_ = s.agent.WaitForIdle(ctx)
+}
+
+// emitSaveError sends a save_error event to all registered sinks so the
+// frontend can notify the user that a message failed to persist.
+func (s *Session) emitSaveError(text string) {
+	ev := types.AgentEvent{
+		Type:      types.EventSaveError,
+		ErrorText: text,
+	}
+	s.mu.Lock()
+	entries := append([]sinkEntry{}, s.sinks...)
+	s.mu.Unlock()
+	for _, e := range entries {
+		e.fn(ev)
+	}
 }
 
 // encodeBase64 returns the standard base64 encoding of b.

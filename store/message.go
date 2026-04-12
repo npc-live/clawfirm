@@ -3,11 +3,15 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ai-gateway/clawfirm/message"
 	"github.com/ai-gateway/clawfirm/types"
 )
+
+const saveRetries = 2
+const saveRetryDelay = 100 * time.Millisecond
 
 // MessageRecord is a single raw message row from the database.
 type MessageRecord struct {
@@ -27,6 +31,7 @@ func (d *DB) Messages() *MessageStore { return &MessageStore{db: d} }
 
 // SaveMessage persists a single types.Message (user / assistant / tool).
 // The full message is JSON-serialised so it can be restored without data loss.
+// Transient SQLite busy/locked errors are retried up to saveRetries times.
 func (s *MessageStore) SaveMessage(channelID, userID string, msg types.Message) error {
 	// MarshalMessages wraps in an array; we extract the single element.
 	b, err := message.MarshalMessages([]types.Message{msg})
@@ -39,11 +44,59 @@ func (s *MessageStore) SaveMessage(channelID, userID string, msg types.Message) 
 		return fmt.Errorf("store: unwrap message JSON: %w", err)
 	}
 	role := roleOf(msg)
-	_, err = s.db.sql.Exec(
-		`INSERT INTO messages(channel_id, user_id, role, content) VALUES(?,?,?,?)`,
-		channelID, userID, role, string(arr[0]),
-	)
-	return err
+	for attempt := 0; ; attempt++ {
+		_, err = s.db.sql.Exec(
+			`INSERT INTO messages(channel_id, user_id, role, content) VALUES(?,?,?,?)`,
+			channelID, userID, role, string(arr[0]),
+		)
+		if err == nil || attempt >= saveRetries || !isSQLiteTransient(err) {
+			return err
+		}
+		time.Sleep(saveRetryDelay)
+	}
+}
+
+// SaveMessages persists multiple messages in a single transaction.
+func (s *MessageStore) SaveMessages(channelID, userID string, msgs []types.Message) error {
+	if len(msgs) == 0 {
+		return nil
+	}
+	tx, err := s.db.sql.Begin()
+	if err != nil {
+		return fmt.Errorf("store: begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint: errcheck
+
+	for _, msg := range msgs {
+		b, err := message.MarshalMessages([]types.Message{msg})
+		if err != nil {
+			return fmt.Errorf("store: marshal message: %w", err)
+		}
+		var arr []json.RawMessage
+		if err := json.Unmarshal(b, &arr); err != nil || len(arr) == 0 {
+			return fmt.Errorf("store: unwrap message JSON: %w", err)
+		}
+		role := roleOf(msg)
+		if _, err := tx.Exec(
+			`INSERT INTO messages(channel_id, user_id, role, content) VALUES(?,?,?,?)`,
+			channelID, userID, role, string(arr[0]),
+		); err != nil {
+			return fmt.Errorf("store: insert %s message: %w", role, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// isSQLiteTransient returns true for errors that may resolve on retry
+// (database locked, busy, WAL checkpoint contention).
+func isSQLiteTransient(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "database is locked") ||
+		strings.Contains(s, "database table is locked") ||
+		strings.Contains(s, "SQLITE_BUSY")
 }
 
 // ListMessages returns decoded types.Message values for a channel+user, ordered oldest-first.

@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>量化交易看板 — 2026-03-29</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --orange: #ffa657;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 13px; line-height: 1.5; }
+
+  .page { max-width: 1440px; margin: 0 auto; padding: 20px 24px; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .header h1 { font-size: 18px; font-weight: 600; color: var(--text); }
+  .header .ts { font-size: 12px; color: var(--text2); }
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge.green { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.yellow { background: rgba(210,153,34,.15); color: var(--yellow); }
+  .badge.red { background: rgba(248,81,73,.15); color: var(--red); }
+
+  /* KPI cards */
+  .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .kpi .label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .kpi .val { font-size: 22px; font-weight: 700; }
+  .kpi .sub { font-size: 11px; color: var(--text2); margin-top: 3px; }
+  .kpi .val.green { color: var(--green); }
+  .kpi .val.red { color: var(--red); }
+  .kpi .val.blue { color: var(--blue); }
+
+  /* Progress bar */
+  .progress-wrap { margin-top: 8px; }
+  .progress-track { background: var(--border); border-radius: 4px; height: 5px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width .4s; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--text2); margin-top: 3px; }
+
+  /* Charts row */
+  .charts-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+  .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .chart-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 10px; border-bottom: 1px solid var(--border); }
+  .chart-header .sym { font-size: 14px; font-weight: 700; }
+  .chart-header .meta { display: flex; gap: 12px; align-items: center; }
+  .chart-header .price { font-size: 14px; font-weight: 600; }
+  .chart-header .chg { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .chart-header .chg.pos { background: rgba(63,185,80,.15); color: var(--green); }
+  .chart-header .chg.neg { background: rgba(248,81,73,.15); color: var(--red); }
+  .chart-body { height: 220px; }
+  .chart-footer { display: flex; gap: 20px; padding: 8px 16px; border-top: 1px solid var(--border); }
+  .chart-footer .stat { font-size: 11px; color: var(--text2); }
+  .chart-footer .stat span { color: var(--text); font-weight: 600; }
+
+  /* Positions + Orders row */
+  .tables-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; margin-bottom: 20px; }
+
+  /* Competition panel */
+  .comp-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+
+  /* Panel */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .panel-header h2 { font-size: 13px; font-weight: 600; }
+  .panel-body { padding: 0; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; }
+  thead th { font-size: 11px; color: var(--text2); text-align: right; padding: 8px 16px; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: .4px; }
+  thead th:first-child { text-align: left; }
+  tbody td { padding: 9px 16px; text-align: right; border-bottom: 1px solid var(--border); font-size: 12px; }
+  tbody td:first-child { text-align: left; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  .sym-cell { font-weight: 700; font-size: 13px; }
+  .short-tag { font-size: 10px; background: rgba(248,81,73,.15); color: var(--red); padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+  td.green { color: var(--green); font-weight: 600; }
+  td.red { color: var(--red); font-weight: 600; }
+  td.text2 { color: var(--text2); }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; }
+  .dot-yellow { background: var(--yellow); }
+  .dot-green { background: var(--green); }
+
+  /* Risk gauges */
+  .risk-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 16px; }
+  .risk-item { text-align: center; }
+  .gauge-label { font-size: 11px; color: var(--text2); margin-top: 4px; }
+  .gauge-val { font-size: 14px; font-weight: 700; margin-top: 2px; }
+
+  /* Action list */
+  .action-list { padding: 12px 16px; }
+  .action-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .action-item:last-child { border-bottom: none; }
+  .action-num { width: 20px; height: 20px; border-radius: 50%; background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .action-text { font-size: 12px; color: var(--text); }
+  .action-text strong { color: var(--orange); }
+
+  /* Footer */
+  .footer { text-align: center; font-size: 11px; color: var(--text2); padding: 16px 0 4px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>量化交易竞赛看板</h1>
+      <div class="ts">更新时间：2026-03-29 (周日) &nbsp;·&nbsp; 下次行情：周一 21:30 北京时间</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span class="badge green">账户健康 ✓</span>
+      <span class="badge yellow">排名 #11 / 430</span>
+      <span class="badge yellow">周一挂单待执行 ×3</span>
+    </div>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="label">总净资产 (ELV)</div>
+      <div class="val blue">$1,004,057</div>
+      <div class="sub">基准 $1,000,000</div>
+    </div>
+    <div class="kpi">
+      <div class="label">累计盈亏</div>
+      <div class="val green">+$4,055</div>
+      <div class="sub">+0.41% 收益率</div>
+      <div class="progress-wrap">
+        <div class="progress-track"><div class="progress-fill" style="width:1.4%;background:var(--green)"></div></div>
+        <div class="progress-label"><span>0%</span><span>目标 +30%</span></div>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="label">未实现盈亏（持仓）</div>
+      <div class="val green">+$4,264</div>
+      <div class="sub">TSLA + NVDA + PLTR</div>
+    </div>
+    <div class="kpi">
+      <div class="label">可用资金</div>
+      <div class="val">$458,858</div>
+      <div class="sub">空头敞口 $585,015</div>
+    </div>
+    <div class="kpi">
+      <div class="label">维保比例</div>
+      <div class="val green">194.6%</div>
+      <div class="sub">安全线 ≥ 130%</div>
+    </div>
+    <div class="kpi">
+      <div class="label">竞赛排名</div>
+      <div class="val" style="color:var(--yellow)">#11</div>
+      <div class="sub">共 430 参赛者</div>
+    </div>
+  </div>
+
+  <!-- K-Line Charts -->
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="sym">TSLA <span class="short-tag">空 ×1000</span></div>
+        <div class="meta">
+          <span class="price">$360.41</span>
+          <span class="chg pos">+$1,200 (+0.33%)</span>
+        </div>
+      </div>
+      <div class="chart-body" id="chart-tsla"></div>
+      <div class="chart-footer">
+        <div class="stat">开仓价 <span>$361.61</span></div>
+        <div class="stat">日内跌幅 <span style="color:var(--green)">-2.76%</span></div>
+        <div class="stat">持仓市值 <span>$360,410</span></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="sym">NVDA <span class="short-tag">空 ×500</span></div>
+        <div class="meta">
+          <span class="price">$166.59</span>
+          <span class="chg pos">+$904 (+1.07%)</span>
+        </div>
+      </div>
+      <div class="chart-body" id="chart-nvda"></div>
+      <div class="chart-footer">
+        <div class="stat">开仓价 <span>$168.40</span></div>
+        <div class="stat">日内跌幅 <span style="color:var(--green)">-2.17%</span></div>
+        <div class="stat">加仓挂单 <span style="color:var(--yellow)">×1000 待执行</span></div>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="sym">PLTR <span class="short-tag">空 ×1000</span></div>
+        <div class="meta">
+          <span class="price">$141.31</span>
+          <span class="chg pos">+$2,160 (+1.51%)</span>
+        </div>
+      </div>
+      <div class="chart-body" id="chart-pltr"></div>
+      <div class="chart-footer">
+        <div class="stat">开仓价 <span>$143.47</span></div>
+        <div class="stat">日内跌幅 <span style="color:var(--green)">-3.05%</span></div>
+        <div class="stat">最大盈利 <span>$2,160</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Positions + Orders -->
+  <div class="tables-row">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>当前持仓（全部空头）</h2>
+        <span class="badge red">空头敞口 $585,015</span>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>数量</th>
+              <th>开仓价</th>
+              <th>最新价</th>
+              <th>持仓市值</th>
+              <th>未实现盈亏</th>
+              <th>日内涨跌</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="sym-cell">TSLA</span><span class="short-tag">SHORT</span></td>
+              <td class="text2">-1,000</td>
+              <td>$361.61</td>
+              <td>$360.41</td>
+              <td class="text2">$360,410</td>
+              <td class="green">+$1,200 <span style="font-weight:400;color:var(--text2)">(+0.33%)</span></td>
+              <td class="green">-2.76%</td>
+            </tr>
+            <tr>
+              <td><span class="sym-cell">NVDA</span><span class="short-tag">SHORT</span></td>
+              <td class="text2">-500</td>
+              <td>$168.40</td>
+              <td>$166.59</td>
+              <td class="text2">$83,295</td>
+              <td class="green">+$904 <span style="font-weight:400;color:var(--text2)">(+1.07%)</span></td>
+              <td class="green">-2.17%</td>
+            </tr>
+            <tr>
+              <td><span class="sym-cell">PLTR</span><span class="short-tag">SHORT</span></td>
+              <td class="text2">-1,000</td>
+              <td>$143.47</td>
+              <td>$141.31</td>
+              <td class="text2">$141,310</td>
+              <td class="green">+$2,160 <span style="font-weight:400;color:var(--text2)">(+1.51%)</span></td>
+              <td class="green">-3.05%</td>
+            </tr>
+            <tr style="background:var(--surface2)">
+              <td><strong>合计</strong></td>
+              <td class="text2"></td>
+              <td></td>
+              <td></td>
+              <td class="text2"><strong>$585,015</strong></td>
+              <td class="green"><strong>+$4,264</strong></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>挂单（周一开盘自动执行）</h2>
+        <span class="badge yellow">3 笔待执行</span>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>方向</th>
+              <th>数量</th>
+              <th>类型</th>
+              <th>状态</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="sym-cell">MU</span><span class="short-tag">新开空</span></td>
+              <td class="red">SELL</td>
+              <td class="text2">500</td>
+              <td class="text2">MARKET</td>
+              <td><span class="status-dot dot-yellow"></span>ORDER_SUBMITTED</td>
+            </tr>
+            <tr>
+              <td><span class="sym-cell">NVDA</span><span class="short-tag">加仓</span></td>
+              <td class="red">SELL</td>
+              <td class="text2">1,000</td>
+              <td class="text2">MARKET</td>
+              <td><span class="status-dot dot-yellow"></span>ORDER_SUBMITTED</td>
+            </tr>
+            <tr>
+              <td><span class="sym-cell">BABA</span><span class="short-tag">新开空</span></td>
+              <td class="red">SELL</td>
+              <td class="text2">1,000</td>
+              <td class="text2">MARKET</td>
+              <td><span class="status-dot dot-yellow"></span>ORDER_SUBMITTED</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="padding:10px 16px;font-size:11px;color:var(--text2);border-top:1px solid var(--border)">
+          GOOD_FOR_DAY · 北京时间周一 21:30 触发 · 预估新增敞口 ~$166k (NVDA ×1000)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Competition + Actions -->
+  <div class="comp-row">
+    <div class="panel">
+      <div class="panel-header">
+        <h2>竞赛排名概览</h2>
+        <span class="badge yellow">目标 +30% ($1,300,000)</span>
+      </div>
+      <div class="panel-body" style="padding:16px">
+        <canvas id="rankChart"></canvas>
+        <div style="margin-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:var(--surface2);border-radius:6px;padding:10px 14px">
+            <div style="font-size:11px;color:var(--text2)">当前排名</div>
+            <div style="font-size:20px;font-weight:700;color:var(--yellow)">#11</div>
+            <div style="font-size:11px;color:var(--text2)">共 430 参赛者</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:10px 14px">
+            <div style="font-size:11px;color:var(--text2)">第一名</div>
+            <div style="font-size:14px;font-weight:700;color:var(--green)">+11.3%</div>
+            <div style="font-size:11px;color:var(--text2)">$1,112,979</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:10px 14px">
+            <div style="font-size:11px;color:var(--text2)">我的收益率</div>
+            <div style="font-size:20px;font-weight:700;color:var(--blue)">+0.41%</div>
+            <div style="font-size:11px;color:var(--text2)">$1,004,057</div>
+          </div>
+          <div style="background:var(--surface2);border-radius:6px;padding:10px 14px">
+            <div style="font-size:11px;color:var(--text2)">夺冠缺口</div>
+            <div style="font-size:14px;font-weight:700;color:var(--red)">-$295,943</div>
+            <div style="font-size:11px;color:var(--text2)">需 +30% ($1.3M)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <!-- Risk -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2>风控指标</h2>
+          <span class="badge green">全部正常 ✓</span>
+        </div>
+        <div class="risk-grid">
+          <div class="risk-item">
+            <canvas id="g1" width="80" height="45"></canvas>
+            <div class="gauge-val green">194.6%</div>
+            <div class="gauge-label">维保比例</div>
+            <div style="font-size:10px;color:var(--text2)">安全 ≥130%</div>
+          </div>
+          <div class="risk-item">
+            <canvas id="g2" width="80" height="45"></canvas>
+            <div class="gauge-val" style="color:var(--blue)">45.7%</div>
+            <div class="gauge-label">资金使用率</div>
+            <div style="font-size:10px;color:var(--text2)">敞口/ELV</div>
+          </div>
+          <div class="risk-item">
+            <canvas id="g3" width="80" height="45"></canvas>
+            <div class="gauge-val green">+0.41%</div>
+            <div class="gauge-label">账户收益率</div>
+            <div style="font-size:10px;color:var(--text2)">淘汰线 -10%</div>
+          </div>
+          <div class="risk-item">
+            <canvas id="g4" width="80" height="45"></canvas>
+            <div class="gauge-val" style="color:var(--yellow)">~150%</div>
+            <div class="gauge-label">加仓后维保</div>
+            <div style="font-size:10px;color:var(--text2)">NVDA ×1000 后</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="panel">
+        <div class="panel-header">
+          <h2>周一开盘行动清单</h2>
+        </div>
+        <div class="action-list">
+          <div class="action-item">
+            <div class="action-num">1</div>
+            <div class="action-text">确认三笔挂单成交 — <strong>MU×500、NVDA×1000、BABA×1000</strong> 开盘自动执行，记录成交价</div>
+          </div>
+          <div class="action-item">
+            <div class="action-num">2</div>
+            <div class="action-text">评估 <strong>PLTR 止盈</strong> — 盈利 $2,160（+1.51%），不在原始信号内，择机平仓锁定利润</div>
+          </div>
+          <div class="action-item">
+            <div class="action-num">3</div>
+            <div class="action-text">拉取最新行情信号 — 更新 <strong>MACD / ATR</strong>，评估新增/调整仓位</div>
+          </div>
+          <div class="action-item">
+            <div class="action-num">4</div>
+            <div class="action-text">追赶第一名 — <strong>Rocker9430794 +11.3%</strong>，差距较大，需更激进策略</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">clawfirm 量化竞赛看板 · 生成时间 2026-03-29 · 数据来源: IBKR Paper Trading</div>
+</div>
+
+<script>
+// ─── Generate synthetic OHLCV candles ───────────────────────────────────────
+function genOHLC(closeEnd, daysBack, vol, trendPct) {
+  const data = [];
+  let price = closeEnd * (1 - trendPct * daysBack / 100);
+  const base = new Date('2026-03-29');
+  for (let i = daysBack; i >= 0; i--) {
+    const d = new Date(base);
+    d.setDate(d.getDate() - i);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const open  = price * (1 + (Math.random() - 0.5) * vol);
+    const close = price * (1 + trendPct / 200 + (Math.random() - 0.48) * vol);
+    const high  = Math.max(open, close) * (1 + Math.random() * vol * 0.5);
+    const low   = Math.min(open, close) * (1 - Math.random() * vol * 0.5);
+    data.push({ time: d.toISOString().slice(0, 10), open: +open.toFixed(2), high: +high.toFixed(2), low: +low.toFixed(2), close: +close.toFixed(2) });
+    price = close;
+  }
+  if (data.length) {
+    const last = data[data.length - 1];
+    last.close = closeEnd;
+    last.high  = Math.max(last.high, closeEnd * 1.003);
+    last.low   = Math.min(last.low,  closeEnd * 0.994);
+  }
+  return data;
+}
+
+function makeChart(id, candles, entry) {
+  const el = document.getElementById(id);
+  const chart = LightweightCharts.createChart(el, {
+    width: el.clientWidth, height: 220,
+    layout: { background: { color: 'transparent' }, textColor: '#8b949e' },
+    grid: { vertLines: { color: '#21262d' }, horzLines: { color: '#21262d' } },
+    rightPriceScale: { borderColor: '#30363d' },
+    timeScale: { borderColor: '#30363d', timeVisible: true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+  const series = chart.addCandlestickSeries({
+    upColor: '#3fb950', downColor: '#f85149',
+    borderUpColor: '#3fb950', borderDownColor: '#f85149',
+    wickUpColor: '#3fb950', wickDownColor: '#f85149',
+  });
+  series.setData(candles);
+  series.createPriceLine({ price: entry, color: '#ffa657', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true, title: '开仓价' });
+  chart.timeScale().fitContent();
+  new ResizeObserver(() => chart.applyOptions({ width: el.clientWidth })).observe(el);
+}
+
+makeChart('chart-tsla', genOHLC(360.41, 20, 0.025, -0.8), 361.61);
+makeChart('chart-nvda', genOHLC(166.59, 20, 0.030, -1.0), 168.40);
+makeChart('chart-pltr', genOHLC(141.31, 20, 0.035, -1.2), 143.47);
+
+// ─── Ranking horizontal bar chart ───────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('rankChart');
+  const parent = canvas.parentElement;
+  canvas.width  = parent.clientWidth - 32;
+  canvas.height = 180;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const players = [
+    { name: '#1 Rocker9430794', pnl: 11.3, color: '#f85149' },
+    { name: '#2', pnl: 8.7,  color: '#ffa657' },
+    { name: '#3', pnl: 7.2,  color: '#ffa657' },
+    { name: '#5', pnl: 5.1,  color: '#d29922' },
+    { name: '#8', pnl: 2.9,  color: '#d29922' },
+    { name: '#11 Me',  pnl: 0.41, color: '#58a6ff' },
+    { name: '#20', pnl: -0.8, color: '#8b949e' },
+  ];
+
+  const labelW = 110, padRight = 50, padTop = 8;
+  const barH = Math.floor((H - padTop) / players.length) - 4;
+  const gap  = Math.floor((H - padTop) / players.length) - barH;
+  const maxPnl = 13;
+  const availW = W - labelW - padRight;
+
+  ctx.clearRect(0, 0, W, H);
+
+  players.forEach((p, i) => {
+    const y = padTop + i * (barH + gap);
+    const barW = Math.max(2, (Math.max(p.pnl, 0) / maxPnl) * availW);
+
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.name, labelW - 6, y + barH / 2);
+
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(labelW, y, barW, barH, 3);
+    else ctx.rect(labelW, y, barW, barH);
+    ctx.fill();
+
+    ctx.fillStyle = p.color;
+    ctx.textAlign = 'left';
+    ctx.fillText((p.pnl >= 0 ? '+' : '') + p.pnl + '%', labelW + barW + 5, y + barH / 2);
+  });
+})();
+
+// ─── Gauge arcs ─────────────────────────────────────────────────────────────
+function drawGauge(id, pct, color) {
+  const c = document.getElementById(id);
+  const ctx = c.getContext('2d');
+  const cx = c.width / 2, cy = c.height - 2, r = c.height - 8;
+  ctx.clearRect(0, 0, c.width, c.height);
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 0); ctx.lineWidth = 6; ctx.strokeStyle = '#21262d'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, Math.PI + Math.min(pct, 1) * Math.PI); ctx.strokeStyle = color; ctx.stroke();
+}
+
+drawGauge('g1', 194.6 / 250, '#3fb950');
+drawGauge('g2', 0.457,        '#58a6ff');
+drawGauge('g3', (10.41 / 20), '#3fb950');
+drawGauge('g4', 0.60,         '#d29922');
+</script>
+</body>
+</html>

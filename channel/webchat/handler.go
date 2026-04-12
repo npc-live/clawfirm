@@ -255,5 +255,10 @@ func handleAgentEvent(write func(any), ev types.AgentEvent) {
 			StopReason: stop,
 			Timestamp:  time.Now().UnixMilli(),
 		})
+	case types.EventSaveError:
+		write(serverMessage{
+			Type:    "error",
+			Content: ev.ErrorText,
+		})
 	}
 }

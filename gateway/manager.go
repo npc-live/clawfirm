@@ -34,11 +34,14 @@ type ManagerConfig struct {
 
 	// OnUserMessage is called immediately before a user message is sent to the agent.
 	// Use this to persist the user message before the agent processes it.
-	OnUserMessage func(channelID, userID string, msg types.Message)
+	// Returning a non-nil error signals a save failure; the session may emit
+	// an EventSaveError to connected sinks.
+	OnUserMessage func(channelID, userID string, msg types.Message) error
 
 	// OnAgentEvent is called for every agent event emitted during a session.
 	// Use this to persist assistant messages and tool results.
-	OnAgentEvent func(channelID, userID string, ev types.AgentEvent)
+	// Returning a non-nil error causes the session to emit an EventSaveError.
+	OnAgentEvent func(channelID, userID string, ev types.AgentEvent) error
 }
 
 // SessionManager creates, caches, and expires Sessions.
@@ -127,13 +130,13 @@ func (m *SessionManager) GetOrCreate(channelID, userID string) (*Session, error)
 		}
 	}
 
-	var onUser func(types.Message)
+	var onUser func(types.Message) error
 	if m.cfg.OnUserMessage != nil {
-		onUser = func(msg types.Message) { m.cfg.OnUserMessage(channelID, userID, msg) }
+		onUser = func(msg types.Message) error { return m.cfg.OnUserMessage(channelID, userID, msg) }
 	}
-	var onEvent func(types.AgentEvent)
+	var onEvent func(types.AgentEvent) error
 	if m.cfg.OnAgentEvent != nil {
-		onEvent = func(ev types.AgentEvent) { m.cfg.OnAgentEvent(channelID, userID, ev) }
+		onEvent = func(ev types.AgentEvent) error { return m.cfg.OnAgentEvent(channelID, userID, ev) }
 	}
 	s := newSession(key, channelID, userID, m.factory(channelID, userID), entry, m.cfg.SessionStore, m.cfg.Summarizer, onUser, onEvent)
 	m.sessions[key] = s

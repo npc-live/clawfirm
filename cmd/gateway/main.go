@@ -83,10 +83,12 @@ func main() {
 		})
 
 		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
-			OnUserMessage: func(channelID, userID string, msg types.Message) {
+			OnUserMessage: func(channelID, userID string, msg types.Message) error {
 				if err := msgStore.SaveMessage(channelID, userID, msg); err != nil {
 					log.Printf("[%s] save user message: %v", agentName, err)
+					return err
 				}
+				return nil
 			},
 		})
 		registry.Register(ac.Name, mgr)

@@ -1,0 +1,470 @@
+{
+  "metadata": {
+    "project_name": "Ondo Finance",
+    "project_url": "https://ondo.finance",
+    "asset_class": "US Treasuries & Money Market Funds",
+    "chains": ["Ethereum", "Polygon", "Solana", "BNB Chain"],
+    "report_type": "regulatory_legal_profile",
+    "report_depth": "deep",
+    "subscriber_tier": "institutional",
+    "generated_at": "2026-03-30",
+    "data_freshness": "2026-Q1"
+  },
+
+  "legal_structure": {
+    "parent_entity": {
+      "legal_name": "Ondo Finance Inc.",
+      "jurisdiction": "Delaware, USA",
+      "entity_type": "Corporation",
+      "role": "Technology & service provider; holds equity in subsidiaries"
+    },
+    "issuing_entities": [
+      {
+        "product": "OUSG (Ondo Short-Term US Government Treasuries)",
+        "issuer_legal_name": "Ondo I LP",
+        "jurisdiction": "Delaware, USA",
+        "entity_type": "Limited Partnership (GP/LP model)",
+        "general_partner": "Ondo I GP LLC (Delaware LLC, wholly owned by Ondo Finance Inc.)",
+        "investment_manager": "Ondo Capital Management LLC (Delaware LLC, SEC-registered investment adviser)",
+        "description": "Investors become limited partners by acquiring OUSG tokens, each representing a unitized LP interest."
+      },
+      {
+        "product": "USDY (US Dollar Yield Token)",
+        "issuer_legal_name": "Ondo USDY LLC",
+        "jurisdiction": "USA",
+        "entity_type": "Limited Liability Company (bankruptcy-remote SPV)",
+        "registrations": ["FinCEN-registered Money Services Business"],
+        "description": "Separate legal entity with independent board (including independent director), segregated assets and books from Ondo Finance Inc."
+      },
+      {
+        "product": "Ondo Global Markets (Tokenized Stocks & ETFs)",
+        "issuer_legal_name": "Ondo Global Markets (BVI) Limited",
+        "jurisdiction": "British Virgin Islands",
+        "entity_type": "BVI Business Company (bankruptcy-remote SPV)",
+        "governing_law": "Swiss law (tokenholder rights under Sales Terms)",
+        "description": "Dedicated SPV, wholly separate from Ondo Finance Inc. and Ondo Foundation. Governed by Board of Directors with independent director. Full segregation of assets, accounting, and operations."
+      }
+    ],
+    "spv_trust_structure": {
+      "ousg": {
+        "structure": "GP/LP Fund (Section 3(c)(7) of the Investment Company Act of 1940)",
+        "bankruptcy_remoteness": "Structured as private fund; assets segregated within LP structure",
+        "gp_entity": "Ondo I GP LLC"
+      },
+      "usdy": {
+        "structure": "Bankruptcy-remote LLC",
+        "bankruptcy_remoteness": "Maximized via: (1) separate legal entity, (2) distinct Board of Directors with independent director, (3) segregated assets, (4) separate books and accounts. Structured to minimize risk of substantive consolidation in event of Ondo Finance bankruptcy.",
+        "overcollateralization": "Minimum 3% first-loss position (e.g., $103 of bank deposits & T-bills backing $100 of USDY issued). Monitored daily, must exceed minimum at end of every quarter."
+      },
+      "global_markets": {
+        "structure": "BVI SPV issuing structured notes (debt instruments)",
+        "bankruptcy_remoteness": "Dedicated SPV with independent director, full asset/operational segregation from Ondo Finance Inc. and Ondo Foundation group",
+        "backing": "1:1 (plus buffer) by corresponding underlying securities held via regulated custodial broker-dealer"
+      }
+    },
+    "securities_registration_status": {
+      "ousg": {
+        "us_securities_act_1933": "Exempt — Rule 506(c) of Regulation D",
+        "us_investment_company_act_1940": "Exempt — Section 3(c)(7) (qualified purchasers)",
+        "sec_form_d_filed": true,
+        "sec_registration": "Not registered (exempt offering)"
+      },
+      "usdy": {
+        "us_securities_act_1933": "Exempt — Regulation S (offshore transactions, non-US persons only)",
+        "fincen": "Registered as Money Services Business",
+        "sec_registration": "Not registered (exempt offering)"
+      },
+      "global_markets": {
+        "us_securities_act_1933": "Exempt — Regulation S (non-US persons only)",
+        "sec_registration_statement": "Confidential S-1 filing submitted February 2026 (pending effectiveness). Would make OGM first issuer of transferable tokenized stocks subject to SEC reporting requirements.",
+        "eu_eea": "Base Prospectus approved by Liechtenstein FMA (November 2025), passported across all 27 EU member states plus Iceland, Norway, and Liechtenstein (30 markets)",
+        "adgm": "Approved by ADGM Financial Services Regulatory Authority (FSRA) for trading on Binance's regulated Multilateral Trading Facility (March 2026)"
+      }
+    },
+    "kyc_aml_requirements": {
+      "ousg": {
+        "kyc_required": true,
+        "aml_cft_screening": true,
+        "sanctions_screening": true,
+        "administered_by": "General Partner (Ondo I GP LLC)",
+        "smart_contract_enforcement": true,
+        "transfer_restriction": "40-day hold period before transfer; recipients must also pass KYC/AML"
+      },
+      "usdy": {
+        "kyc_required": true,
+        "aml_cft_screening": true,
+        "sanctions_screening": true,
+        "administered_by": "Ondo USDY LLC",
+        "onboarding_timeline": "3-4 business days (may be longer in high-demand periods)",
+        "smart_contract_enforcement": true,
+        "transfer_restriction": "40-day hold period before transfer; recipients must also pass KYC/AML"
+      },
+      "global_markets": {
+        "kyc_required": true,
+        "aml_cft_screening": true,
+        "sanctions_screening": true,
+        "smart_contract_enforcement": true
+      }
+    },
+    "investor_accreditation_requirements": {
+      "ousg": {
+        "investor_type": "Accredited Investors AND Qualified Purchasers only",
+        "accredited_investor_definition": "As defined in Regulation D under the Securities Act of 1933",
+        "qualified_purchaser_definition": "As defined in Section 2(a)(51) of the Investment Company Act of 1940",
+        "retail_eligible": false,
+        "us_investors_eligible": true
+      },
+      "usdy": {
+        "investor_type": "Non-US persons (individuals and institutions)",
+        "eea_uk_restriction": "Qualified investors only (in EEA and UK)",
+        "switzerland_restriction": "Professional clients only",
+        "retail_eligible": "Yes (for qualifying non-US persons in non-restricted jurisdictions)",
+        "us_investors_eligible": false
+      },
+      "global_markets": {
+        "investor_type": "Non-US persons",
+        "eea_restriction": "Retail eligible (via FMA-approved Base Prospectus)",
+        "adgm_restriction": "Available to UAE-based financial institutions, intermediaries, and counterparties",
+        "retail_eligible": "Yes in EU/EEA (via prospectus), jurisdiction-dependent elsewhere",
+        "us_investors_eligible": false
+      }
+    },
+    "geofencing_restricted_countries": {
+      "universally_prohibited": [
+        "Iran",
+        "Cuba",
+        "North Korea",
+        "Syria",
+        "Crimea (Ukraine)",
+        "Donetsk People's Republic (DNR)",
+        "Luhansk People's Republic (LNR)",
+        "Kherson region (Ukraine)",
+        "Zaporizhzhia region (Ukraine)",
+        "City of Sevastopol",
+        "Any US-sanctioned country"
+      ],
+      "sanctions_lists_screened": [
+        "US Government (OFAC SDN list)",
+        "United Kingdom Government",
+        "European Union",
+        "United Nations"
+      ],
+      "usdy_specific": {
+        "prohibited": "United States (all states, possessions, territories); US persons under Rule 902 of Regulation S",
+        "restricted_persons": "Certain additional jurisdictions require evidence of eligible status and certification"
+      },
+      "global_markets_specific": {
+        "prohibited": "United States; US persons under Rule 902 of Regulation S",
+        "notes": "Tokens may not be resold to any US person or into the United States unless pursuant to an effective registration statement or valid exemption"
+      },
+      "enforcement": "Smart contract-level geofencing; on-chain eligibility verification before transaction execution"
+    }
+  },
+
+  "compliance": {
+    "regulatory_licenses_held": [
+      {
+        "license": "SEC-Registered Investment Adviser",
+        "entity": "Ondo Capital Management LLC",
+        "regulator": "U.S. Securities and Exchange Commission (SEC)",
+        "sec_adviser_crd": "325197",
+        "source": "https://adviserinfo.sec.gov/firm/summary/325197"
+      },
+      {
+        "license": "SEC-Registered Broker-Dealer",
+        "entity": "Oasis Pro Markets (acquired by Ondo Finance)",
+        "regulator": "SEC / FINRA",
+        "status": "Active (acquisition completed July 2025)"
+      },
+      {
+        "license": "Alternative Trading System (ATS)",
+        "entity": "Oasis Pro Markets (acquired by Ondo Finance)",
+        "regulator": "SEC",
+        "status": "Active"
+      },
+      {
+        "license": "SEC-Registered Transfer Agent",
+        "entity": "Oasis Pro Markets (acquired by Ondo Finance)",
+        "regulator": "SEC",
+        "status": "Active"
+      },
+      {
+        "license": "FinCEN-Registered Money Services Business",
+        "entity": "Ondo USDY LLC",
+        "regulator": "FinCEN (U.S. Treasury Department)"
+      },
+      {
+        "license": "Base Prospectus Approval (EU/EEA)",
+        "entity": "Ondo Global Markets (BVI) Limited",
+        "regulator": "Financial Market Authority Liechtenstein (FMA)",
+        "date": "November 2025",
+        "scope": "Passported to all 27 EU member states + Iceland, Norway, Liechtenstein (30 markets)"
+      },
+      {
+        "license": "ADGM FSRA Authorization for MTF Trading",
+        "entity": "Ondo Global Markets tokenized stocks on Binance MTF",
+        "regulator": "Abu Dhabi Global Market — Financial Services Regulatory Authority (FSRA)",
+        "date": "March 2026"
+      }
+    ],
+    "pending_sec_filings": [
+      {
+        "filing_type": "Confidential Registration Statement (S-1 equivalent)",
+        "entity": "Ondo Global Markets (BVI) Limited",
+        "filed": "February 2026",
+        "status": "Pending effectiveness",
+        "significance": "Would make OGM the first issuer of transferable tokenized stocks subject to SEC reporting requirements globally"
+      }
+    ],
+    "regulatory_actions_and_warnings": {
+      "sec_investigation": {
+        "opened": "October 2023",
+        "closed": "November/December 2025",
+        "outcome": "Closed without charges, fines, or forced business model changes",
+        "scope": "Examined compliance with US securities laws for tokenized Treasury products and whether ONDO token is a security",
+        "notes": "Investigation was initiated under former SEC Chair Gary Gensler; closed under SEC Chair Paul Atkins"
+      },
+      "pending_actions": "None known as of 2026-03-30",
+      "pending_warnings": "None known as of 2026-03-30",
+      "pending_lawsuits": "None known as of 2026-03-30"
+    },
+    "legal_opinions": {
+      "status": "Not publicly disclosed",
+      "notes": "Ondo states consultation with legal, tax, and regulatory specialists; General Counsel Mark Janoff is publicly active in regulatory discussions. Specific external legal opinions have not been published.",
+      "flag": "MISSING — No publicly available legal opinions from external counsel on token classification or regulatory status"
+    },
+    "bankruptcy_remoteness": {
+      "usdy": {
+        "rating": "Strong",
+        "mechanisms": [
+          "Separate legal entity (Ondo USDY LLC)",
+          "Distinct Board of Directors with independent director",
+          "Full asset segregation from Ondo Finance Inc.",
+          "Separate books and accounts",
+          "Control agreements with Ankura Trust and all custodians/banks",
+          "Collateral agent (Ankura Trust) empowered to seize assets upon default events"
+        ],
+        "default_triggers": [
+          "Failure to repay redemptions",
+          "Failure to keep USDY adequately capitalized",
+          "Ondo USDY LLC filing for bankruptcy"
+        ]
+      },
+      "global_markets": {
+        "rating": "Strong",
+        "mechanisms": [
+          "Dedicated BVI SPV",
+          "Independent director on Board",
+          "Full segregation of assets, accounting, and operations from Ondo Finance Inc. and Ondo Foundation",
+          "Ankura Trust as Security Agent with first-priority security interest"
+        ]
+      },
+      "ousg": {
+        "rating": "Moderate",
+        "mechanisms": [
+          "GP/LP fund structure",
+          "Section 3(c)(7) private fund exemption",
+          "Assets held in segregated fund"
+        ],
+        "notes": "GP and investment manager are wholly owned subsidiaries of Ondo Finance Inc., creating some affiliate risk"
+      }
+    },
+    "insurance_coverage": {
+      "status": "Not explicitly disclosed",
+      "notes": "Underlying assets (US Treasuries) are backed by full faith and credit of the US government. Custodians (Morgan Stanley, Clear Street, BNY Mellon) carry standard SIPC and institutional insurance. No specific wrap or blanket insurance policy on Ondo's tokenized products has been publicly disclosed.",
+      "flag": "MISSING — No publicly disclosed insurance policy specifically covering Ondo's tokenized assets or smart contract risk"
+    }
+  },
+
+  "counterparty_risk": {
+    "product_type": "US Treasuries & Money Market Funds (not private credit)",
+    "note": "Ondo's primary products (OUSG, USDY) invest in US government securities and institutional money market funds — there are no private credit borrowers, originators, or loan pools.",
+    "custodians": [
+      {
+        "entity": "Morgan Stanley",
+        "role": "Custodian for USDY underlying assets (US Treasury bills and bank demand deposits)",
+        "tier": "Tier 1 global bank"
+      },
+      {
+        "entity": "Clear Street",
+        "role": "Custodian for OUSG ETF-related assets",
+        "tier": "Regulated prime brokerage"
+      },
+      {
+        "entity": "BNY Mellon",
+        "role": "Custodian for BlackRock BUIDL fund (primary underlying holding of OUSG)",
+        "tier": "Tier 1 global custodian"
+      }
+    ],
+    "verification_and_security_agents": [
+      {
+        "entity": "Ankura Trust Company",
+        "roles": [
+          "Verification Agent — daily review/verification of underlying securities existence and amounts",
+          "Security Agent — holds first-priority security interest in collateral for benefit of tokenholders",
+          "Collateral Agent (USDY) — empowered to seize and liquidate assets upon default events"
+        ],
+        "reporting": "Daily transparency reports, monthly reconciliation, annual financial audits by independent audit firm"
+      }
+    ],
+    "fund_administrators": [
+      {
+        "entity": "NAV Consulting",
+        "role": "Fund administration for OUSG"
+      }
+    ],
+    "underlying_asset_managers": [
+      {
+        "entity": "BlackRock",
+        "product": "BUIDL (USD Institutional Digital Liquidity Fund)",
+        "role": "Primary investment vehicle for OUSG. Holds US Treasury bills, cash, and repurchase agreements.",
+        "percentage_of_ousg": "Majority of OUSG assets"
+      },
+      {
+        "entity": "Franklin Templeton",
+        "product": "BENJI",
+        "role": "Secondary investment vehicle for OUSG"
+      },
+      {
+        "entity": "WisdomTree",
+        "product": "WTGXX",
+        "role": "Secondary investment vehicle for OUSG"
+      }
+    ],
+    "fiat_on_off_ramp": {
+      "entity": "Coinbase",
+      "role": "Primary USDC-to-USD exchange for OUSG subscriptions"
+    },
+    "concentration_risk": {
+      "ousg": "High concentration in BlackRock BUIDL (majority of fund assets). Diversified with Franklin Templeton BENJI, WisdomTree WTGXX, and cash equivalents.",
+      "usdy": "99%+ allocation to short-term US Treasuries held via regulated custodians. Concentration in US government credit risk (minimal).",
+      "global_markets": "Diversified across 200+ tokenized stocks/ETFs. Single-name concentration risk depends on investor allocation."
+    },
+    "historical_default_rates": {
+      "status": "Not applicable",
+      "notes": "Underlying assets are US Treasuries and institutional money market funds. US government has never defaulted on Treasury obligations. BlackRock BUIDL and other money market vehicles have maintained stable NAV."
+    },
+    "key_counterparty_dependencies": [
+      "Custody: Morgan Stanley, Clear Street, BNY Mellon",
+      "Fund management: BlackRock, Franklin Templeton, WisdomTree",
+      "Verification/Security: Ankura Trust",
+      "Fiat rails: Coinbase (USDC conversion)",
+      "Broker-dealer infrastructure: Oasis Pro Markets (Ondo-owned)",
+      "Smart contract risk: Ethereum, Solana, Polygon, BNB Chain"
+    ],
+    "risk_warnings": [
+      "Redemption delays possible during market volatility, closures, or partner disruptions",
+      "Off-chain/on-chain settlement mismatch risk",
+      "Cross-chain bridge and oracle dependencies as Ondo expands to multiple chains",
+      "Token price may temporarily dislocate from NAV during stress events"
+    ]
+  },
+
+  "platform_metrics": {
+    "total_value_locked": ">$600M (as of March 2026)",
+    "cumulative_trading_volume": ">$11B",
+    "asset_holders": "Tens of thousands",
+    "tokenized_stocks": "200+ (Ondo Global Markets)",
+    "chains_live": ["Ethereum", "Solana", "BNB Chain"],
+    "launch_date_global_markets": "September 2025"
+  },
+
+  "sources": [
+    {
+      "title": "Ondo Finance — Official Website",
+      "url": "https://ondo.finance"
+    },
+    {
+      "title": "Ondo Docs — Legal & Regulatory (Global Markets)",
+      "url": "https://docs.ondo.finance/ondo-global-markets/legal-and-regulatory"
+    },
+    {
+      "title": "Ondo Docs — Trust & Transparency (Global Markets)",
+      "url": "https://docs.ondo.finance/ondo-global-markets/trust-and-transparency"
+    },
+    {
+      "title": "Ondo Docs — OUSG Regulatory Compliance",
+      "url": "https://docs.ondo.finance/qualified-access-products/ousg/regulatory-compliance"
+    },
+    {
+      "title": "Ondo Docs — USDY Eligibility",
+      "url": "https://docs.ondo.finance/general-access-products/usdy/faq/eligibility"
+    },
+    {
+      "title": "Ondo Docs — Global Markets Eligibility",
+      "url": "https://docs.ondo.finance/ondo-global-markets/eligibility"
+    },
+    {
+      "title": "SEC Closes Ondo Investigation (CoinDesk)",
+      "url": "https://www.coindesk.com/markets/2025/12/08/ondo-token-gains-as-sec-ends-investigation-into-rwa-tokenization-platform"
+    },
+    {
+      "title": "SEC Ends Two-Year Investigation Into Ondo (Crypto In America)",
+      "url": "https://www.cryptoinamerica.com/p/sec-ends-two-year-investigation-into"
+    },
+    {
+      "title": "Ondo Global Markets Files SEC Registration Statement",
+      "url": "https://ondo.finance/blog/ondo-global-markets-files-registration-statement-with-sec"
+    },
+    {
+      "title": "Ondo Finance to Acquire Oasis Pro (Official Blog)",
+      "url": "https://blog.ondo.finance/ondo-finance-to-acquire-oasis-pro/"
+    },
+    {
+      "title": "Ondo Capital Management LLC — SEC IAPD",
+      "url": "https://adviserinfo.sec.gov/firm/summary/325197"
+    },
+    {
+      "title": "Ondo Finance — Roadmap for Tokenized Securities (SEC Filing)",
+      "url": "https://www.sec.gov/files/ctf-written-input-ondo-finance-120425.pdf"
+    },
+    {
+      "title": "Ondo Finance Wins EU Approval (Liechtenstein FMA)",
+      "url": "https://www.lbank.com/how-to-buy-news/article/ondo-finance-88887"
+    },
+    {
+      "title": "ADGM Approves Ondo Tokenized Stocks on Binance (CoinDesk)",
+      "url": "https://www.coindesk.com/business/2026/03/03/ondo-finance-tokenized-stocks-platform-on-binance-wins-regulatory-approval-in-abu-dhabi"
+    },
+    {
+      "title": "Ondo Docs — Trust & Security",
+      "url": "https://docs.ondo.finance/trust-and-security"
+    },
+    {
+      "title": "RWA.xyz — OUSG Asset Profile",
+      "url": "https://app.rwa.xyz/assets/OUSG"
+    },
+    {
+      "title": "Ondo Finalizes Oasis Pro Acquisition (Blockworks)",
+      "url": "https://blockworks.co/news/ondo-finance-finalizes-oasis-pro-acquisition"
+    }
+  ],
+
+  "flags_and_gaps": [
+    {
+      "field": "legal_opinions",
+      "severity": "medium",
+      "note": "No publicly available legal opinions from external counsel on token classification, Reg D/Reg S compliance, or securities status. Ondo references consultation with legal specialists but has not published opinions."
+    },
+    {
+      "field": "insurance_coverage",
+      "severity": "medium",
+      "note": "No specific insurance policy disclosed covering Ondo's tokenized products, smart contract risk, or operational errors. Custodian-level (SIPC) and government-level (FDIC for bank deposits) protections exist at the infrastructure layer."
+    },
+    {
+      "field": "audit_reports",
+      "severity": "low",
+      "note": "Ondo references annual financial audits by independent audit firms but specific audit reports are not publicly linked. Monthly Ankura reconciliation reports provide ongoing verification."
+    },
+    {
+      "field": "ousg_affiliate_risk",
+      "severity": "low",
+      "note": "OUSG's GP (Ondo I GP LLC) and investment manager (Ondo Capital Management LLC) are wholly owned subsidiaries of Ondo Finance Inc., creating affiliate dependency not present in the more structurally independent USDY and Global Markets SPVs."
+    },
+    {
+      "field": "bvi_jurisdiction_risk",
+      "severity": "low",
+      "note": "Ondo Global Markets (BVI) Limited is incorporated in the British Virgin Islands with Swiss-law governing documents. Enforcement of tokenholder rights may face jurisdictional complexity compared to US-domiciled structures."
+    }
+  ]
+}

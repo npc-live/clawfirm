@@ -14,6 +14,7 @@ const (
 	EventToolExecutionStart  AgentEventType = "tool_execution_start"
 	EventToolExecutionUpdate AgentEventType = "tool_execution_update"
 	EventToolExecutionEnd    AgentEventType = "tool_execution_end"
+	EventSaveError           AgentEventType = "save_error"
 )
 
 // CumulativeUsage tracks aggregate token usage across all turns in an agent loop.
@@ -49,4 +50,7 @@ type AgentEvent struct {
 	ToolResult    any    `json:"toolResult,omitempty"`
 	ToolIsError   bool   `json:"toolIsError,omitempty"`
 	PartialResult any    `json:"partialResult,omitempty"`
+
+	// save_error: persistence failure notification
+	ErrorText string `json:"errorText,omitempty"`
 }

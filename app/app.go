@@ -807,24 +807,9 @@ func (a *App) startGateway() error {
 					log.Printf("[%s] session %s/%s: restored %d messages", agentName, storeChannelID, userID, len(history))
 				}
 			}
-			// Persist assistant messages and tool results as they arrive.
+			// Track tool executions and whipflow chains.
 			ag.Subscribe(func(ev types.AgentEvent) {
-				if msgStore == nil {
-					return
-				}
 				switch ev.Type {
-				case types.EventMessageEnd:
-					if ev.AssistantMsg != nil {
-						if err := msgStore.SaveMessage(storeChannelID, userID, ev.AssistantMsg); err != nil {
-							log.Printf("[%s] save assistant message: %v", agentName, err)
-						}
-					}
-				case types.EventTurnEnd:
-					for i := range ev.ToolResults {
-						if err := msgStore.SaveMessage(storeChannelID, userID, &ev.ToolResults[i]); err != nil {
-							log.Printf("[%s] save tool result[%d]: %v", agentName, i, err)
-						}
-					}
 				case types.EventToolExecutionStart:
 					a.updateToolExec(storeChannelID, userID, ev.ToolCallID, func(r *ToolExecRecord) {
 						r.Name = ev.ToolName
@@ -909,14 +894,43 @@ func (a *App) startGateway() error {
 			DefaultResetMode:   resetMode,
 			DefaultResetHour:   ac.ResetAtHour,
 			DefaultIdleMinutes: ac.IdleMinutes,
-			OnUserMessage: func(_, uid string, msg types.Message) {
+			OnUserMessage: func(_, uid string, msg types.Message) error {
 				if msgStore == nil {
-					return
+					return nil
 				}
 				storeChannelID := "webchat/" + agentName
 				if err := msgStore.SaveMessage(storeChannelID, uid, msg); err != nil {
 					log.Printf("[%s] save user message: %v", agentName, err)
+					return fmt.Errorf("保存消息失败，请重试")
 				}
+				return nil
+			},
+			OnAgentEvent: func(_, uid string, ev types.AgentEvent) error {
+				if msgStore == nil {
+					return nil
+				}
+				storeChannelID := "webchat/" + agentName
+				switch ev.Type {
+				case types.EventMessageEnd:
+					if ev.AssistantMsg != nil {
+						if err := msgStore.SaveMessage(storeChannelID, uid, ev.AssistantMsg); err != nil {
+							log.Printf("[%s] save assistant message: %v", agentName, err)
+							return fmt.Errorf("保存回复失败")
+						}
+					}
+				case types.EventTurnEnd:
+					if len(ev.ToolResults) > 0 {
+						msgs := make([]types.Message, len(ev.ToolResults))
+						for i := range ev.ToolResults {
+							msgs[i] = &ev.ToolResults[i]
+						}
+						if err := msgStore.SaveMessages(storeChannelID, uid, msgs); err != nil {
+							log.Printf("[%s] save tool results: %v", agentName, err)
+							return fmt.Errorf("保存工具结果失败")
+						}
+					}
+				}
+				return nil
 			},
 		})
 		registry.Register(ac.Name, mgr)
