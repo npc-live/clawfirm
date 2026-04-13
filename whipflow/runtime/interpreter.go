@@ -190,9 +190,13 @@ func (interp *Interpreter) Execute(program *ast.Program) (*ExecutionResult, erro
 			}
 			vars := make(map[string]any)
 			if rec.VariablesJSON != "" {
-				_ = json.Unmarshal([]byte(rec.VariablesJSON), &vars)
+				if err := json.Unmarshal([]byte(rec.VariablesJSON), &vars); err != nil {
+					interp.env.Log("warn", fmt.Sprintf("replay session %d: failed to unmarshal variables: %v", idx, err))
+				}
 			}
-			_ = interp.stateStore.RecordSession(runID, idx, rec.Prompt, result, vars)
+			if err := interp.stateStore.RecordSession(runID, idx, rec.Prompt, result, vars); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("replay session %d: failed to persist record: %v", idx, err))
+			}
 		}
 	}
 
@@ -259,9 +263,13 @@ func (interp *Interpreter) Execute(program *ast.Program) (*ExecutionResult, erro
 	// Finalize the run record.
 	if interp.stateStore != nil {
 		if execErr != nil {
-			_ = interp.stateStore.FailRun(interp.currentRunID, execErr.Error())
+			if err := interp.stateStore.FailRun(interp.currentRunID, execErr.Error()); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("failed to mark run #%d as failed: %v", interp.currentRunID, err))
+			}
 		} else if !isPartialStop {
-			_ = interp.stateStore.CompleteRun(interp.currentRunID)
+			if err := interp.stateStore.CompleteRun(interp.currentRunID); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("failed to mark run #%d as completed: %v", interp.currentRunID, err))
+			}
 		}
 		// isPartialStop: leave run as incomplete so retry_from_session can resume it.
 	}
@@ -538,21 +546,29 @@ func (interp *Interpreter) executeSessionStatement(n *ast.SessionStatement) erro
 	if n.Name != nil {
 		if err := interp.env.Context.DeclareVariable(n.Name.Name, result, false, n.Span); err != nil {
 			// If the variable already exists, update it.
-			_ = interp.env.Context.SetVariable(n.Name.Name, result)
+			if err2 := interp.env.Context.SetVariable(n.Name.Name, result); err2 != nil {
+				interp.env.Log("warn", fmt.Sprintf("session %q: failed to set variable: %v", n.Name.Name, err2))
+			}
 		}
 	}
 
 	// Also store as "$last" for implicit access.
 	if interp.env.Context.HasVariable("$last") {
-		_ = interp.env.Context.SetVariable("$last", result)
+		if err := interp.env.Context.SetVariable("$last", result); err != nil {
+			interp.env.Log("warn", fmt.Sprintf("failed to update $last: %v", err))
+		}
 	} else {
-		_ = interp.env.Context.DeclareVariable("$last", result, false, n.Span)
+		if err := interp.env.Context.DeclareVariable("$last", result, false, n.Span); err != nil {
+			interp.env.Log("warn", fmt.Sprintf("failed to declare $last: %v", err))
+		}
 	}
 
 	// Persist to state store.
 	if interp.stateStore != nil {
 		vars := interp.env.Context.GetAllVariables()
-		_ = interp.stateStore.RecordSession(interp.currentRunID, interp.sessionIndex, prompt, result, vars)
+		if err := interp.stateStore.RecordSession(interp.currentRunID, interp.sessionIndex, prompt, result, vars); err != nil {
+			interp.env.Log("warn", fmt.Sprintf("session %d: failed to persist to state store: %v", interp.sessionIndex, err))
+		}
 	}
 
 	interp.sessionIndex++
@@ -693,9 +709,13 @@ func (interp *Interpreter) evaluateExpression(expr ast.Node) RuntimeValue {
 		// Execute left, then right. The left result becomes "$last".
 		leftVal := interp.evaluateExpression(n.Left)
 		if interp.env.Context.HasVariable("$last") {
-			_ = interp.env.Context.SetVariable("$last", leftVal)
+			if err := interp.env.Context.SetVariable("$last", leftVal); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("arrow: failed to update $last: %v", err))
+			}
 		} else {
-			_ = interp.env.Context.DeclareVariable("$last", leftVal, false, n.Span)
+			if err := interp.env.Context.DeclareVariable("$last", leftVal, false, n.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("arrow: failed to declare $last: %v", err))
+			}
 		}
 		return interp.evaluateExpression(n.Right)
 
@@ -974,7 +994,9 @@ func (interp *Interpreter) executeBlockCall(block *ast.BlockDefinition, args []a
 	// Store return value as $last.
 	if returnValue != nil {
 		if interp.env.Context.HasVariable("$last") {
-			_ = interp.env.Context.SetVariable("$last", returnValue)
+			if err := interp.env.Context.SetVariable("$last", returnValue); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("block return: failed to update $last: %v", err))
+			}
 		}
 	}
 
@@ -1126,7 +1148,9 @@ func (interp *Interpreter) executeRepeatBlock(n *ast.RepeatBlock) error {
 
 		// Declare the index variable if specified.
 		if n.IndexVar != nil {
-			_ = interp.env.Context.DeclareVariable(n.IndexVar.Name, float64(i), false, n.Span)
+			if err := interp.env.Context.DeclareVariable(n.IndexVar.Name, float64(i), false, n.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("repeat: failed to declare index var %q: %v", n.IndexVar.Name, err))
+			}
 		}
 
 		err := interp.executeBodyWithBreakContinue(n.Body)
@@ -1162,10 +1186,14 @@ func (interp *Interpreter) executeForEachBlock(n *ast.ForEachBlock) error {
 		interp.env.Context.PushScope()
 
 		if n.ItemVar != nil {
-			_ = interp.env.Context.DeclareVariable(n.ItemVar.Name, item, false, n.Span)
+			if err := interp.env.Context.DeclareVariable(n.ItemVar.Name, item, false, n.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("foreach: failed to declare item var %q: %v", n.ItemVar.Name, err))
+			}
 		}
 		if n.IndexVar != nil {
-			_ = interp.env.Context.DeclareVariable(n.IndexVar.Name, float64(i), false, n.Span)
+			if err := interp.env.Context.DeclareVariable(n.IndexVar.Name, float64(i), false, n.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("foreach: failed to declare index var %q: %v", n.IndexVar.Name, err))
+			}
 		}
 
 		err := interp.executeBodyWithBreakContinue(n.Body)
@@ -1266,7 +1294,9 @@ func (interp *Interpreter) executeLoopBlock(n *ast.LoopBlock) error {
 		interp.env.Context.PushScope()
 
 		if n.IterationVar != nil {
-			_ = interp.env.Context.DeclareVariable(n.IterationVar.Name, float64(i), false, n.Span)
+			if err := interp.env.Context.DeclareVariable(n.IterationVar.Name, float64(i), false, n.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("loop: failed to declare iteration var %q: %v", n.IterationVar.Name, err))
+			}
 		}
 
 		err := interp.executeBodyWithBreakContinue(n.Body)
@@ -1447,7 +1477,9 @@ func (interp *Interpreter) executeTryBlock(n *ast.TryBlock) error {
 	if tryErr != nil && len(n.CatchBody) > 0 {
 		interp.env.Context.PushScope()
 		if n.ErrorVar != nil {
-			_ = interp.env.Context.DeclareVariable(n.ErrorVar.Name, tryErr.Error(), false, n.Span)
+			if err := interp.env.Context.DeclareVariable(n.ErrorVar.Name, tryErr.Error(), false, n.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("catch: failed to declare error var %q: %v", n.ErrorVar.Name, err))
+			}
 		}
 		for _, stmt := range n.CatchBody {
 			if err := interp.executeStatement(stmt); err != nil {
@@ -1469,7 +1501,9 @@ func (interp *Interpreter) executeTryBlock(n *ast.TryBlock) error {
 
 func (interp *Interpreter) executeFinallyBody(body []ast.Node) {
 	for _, stmt := range body {
-		_ = interp.executeStatement(stmt)
+		if err := interp.executeStatement(stmt); err != nil {
+			interp.env.Log("warn", fmt.Sprintf("finally: statement error (ignored): %v", err))
+		}
 	}
 }
 
@@ -1511,7 +1545,9 @@ func (interp *Interpreter) executeAskStatement(n *ast.AskStatement) error {
 
 	// Save the user input if state store is available.
 	if interp.stateStore != nil && interp.currentRunID > 0 && n.Variable != nil {
-		_ = interp.stateStore.SaveUserInput(interp.currentRunID, n.Variable.Name, answer)
+		if err := interp.stateStore.SaveUserInput(interp.currentRunID, n.Variable.Name, answer); err != nil {
+			interp.env.Log("warn", fmt.Sprintf("ask: failed to save user input %q: %v", n.Variable.Name, err))
+		}
 	}
 
 	if n.Variable != nil {
@@ -1589,7 +1625,9 @@ func (interp *Interpreter) executeSkillInvocation(n *ast.SkillInvocation) error 
 			}
 			if n.OutputVar != nil {
 				if err := interp.env.Context.DeclareVariable(n.OutputVar.Name, result, false, n.Span); err != nil {
-					_ = interp.env.Context.SetVariable(n.OutputVar.Name, result)
+					if err2 := interp.env.Context.SetVariable(n.OutputVar.Name, result); err2 != nil {
+						interp.env.Log("warn", fmt.Sprintf("skill %q: failed to set output var %q: %v", n.SkillName.Name, n.OutputVar.Name, err2))
+					}
 				}
 			}
 			return nil
@@ -1633,7 +1671,9 @@ func (interp *Interpreter) pipeMap(input RuntimeValue, op *ast.PipeOperation) Ru
 	for _, item := range items {
 		interp.env.Context.PushScope()
 		if op.ItemVar != nil {
-			_ = interp.env.Context.DeclareVariable(op.ItemVar.Name, item, false, op.Span)
+			if err := interp.env.Context.DeclareVariable(op.ItemVar.Name, item, false, op.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("pipe map: failed to declare item var %q: %v", op.ItemVar.Name, err))
+			}
 		}
 
 		var result RuntimeValue
@@ -1655,7 +1695,9 @@ func (interp *Interpreter) pipeFilter(input RuntimeValue, op *ast.PipeOperation)
 	for _, item := range items {
 		interp.env.Context.PushScope()
 		if op.ItemVar != nil {
-			_ = interp.env.Context.DeclareVariable(op.ItemVar.Name, item, false, op.Span)
+			if err := interp.env.Context.DeclareVariable(op.ItemVar.Name, item, false, op.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("pipe filter: failed to declare item var %q: %v", op.ItemVar.Name, err))
+			}
 		}
 
 		var result RuntimeValue
@@ -1684,10 +1726,14 @@ func (interp *Interpreter) pipeReduce(input RuntimeValue, op *ast.PipeOperation)
 	for i := 1; i < len(items); i++ {
 		interp.env.Context.PushScope()
 		if op.AccVar != nil {
-			_ = interp.env.Context.DeclareVariable(op.AccVar.Name, accumulator, false, op.Span)
+			if err := interp.env.Context.DeclareVariable(op.AccVar.Name, accumulator, false, op.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("pipe reduce: failed to declare accumulator var %q: %v", op.AccVar.Name, err))
+			}
 		}
 		if op.ItemVar != nil {
-			_ = interp.env.Context.DeclareVariable(op.ItemVar.Name, items[i], false, op.Span)
+			if err := interp.env.Context.DeclareVariable(op.ItemVar.Name, items[i], false, op.Span); err != nil {
+				interp.env.Log("warn", fmt.Sprintf("pipe reduce: failed to declare item var %q: %v", op.ItemVar.Name, err))
+			}
 		}
 
 		var result RuntimeValue
@@ -1722,7 +1768,9 @@ func (interp *Interpreter) pipePmap(input RuntimeValue, op *ast.PipeOperation) R
 			// A production implementation would use isolated sub-interpreters.
 			interp.env.Context.PushScope()
 			if op.ItemVar != nil {
-				_ = interp.env.Context.DeclareVariable(op.ItemVar.Name, val, false, op.Span)
+				if err := interp.env.Context.DeclareVariable(op.ItemVar.Name, val, false, op.Span); err != nil {
+					interp.env.Log("warn", fmt.Sprintf("pipe pmap: failed to declare item var %q: %v", op.ItemVar.Name, err))
+				}
 			}
 
 			var result RuntimeValue

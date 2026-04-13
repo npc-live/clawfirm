@@ -410,7 +410,12 @@ func (w *WhipflowRun) Execute(ctx context.Context, id string, params map[string]
 	for _, e := range result.Errors {
 		wResult.Errors = append(wResult.Errors, fmt.Sprintf("[%s] %s", e.Type, e.Message))
 	}
-	resultJSON, _ := json.Marshal(wResult)
+	resultJSON, err := json.Marshal(wResult)
+	if err != nil {
+		return tool.ToolResult{
+			Content: []types.ContentBlock{&types.TextContent{Text: fmt.Sprintf("Failed to marshal result: %v", err)}},
+		}, nil
+	}
 
 	// Human-readable text summary for agent consumption.
 	var sb strings.Builder

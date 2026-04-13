@@ -4,6 +4,7 @@
 package parser
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -532,7 +533,10 @@ func (p *Parser) parseParallelModifiers() (joinStrategy ast.Node, anyCount *ast.
 				joinStrategy = p.parseExpression()
 			case "any":
 				numTok := p.advance()
-				val, _ := strconv.ParseFloat(numTok.Value, 64)
+				val, err := strconv.ParseFloat(numTok.Value, 64)
+				if err != nil {
+					p.addError(fmt.Sprintf("invalid number for 'any': %s", numTok.Value), numTok.Span)
+				}
 				anyCount = &ast.NumberLiteral{Span: numTok.Span, Value: val, Raw: numTok.Value}
 			case "on-fail":
 				onFail = p.parseExpression()
@@ -583,7 +587,10 @@ func (p *Parser) parseLoopBlock() ast.Node {
 				p.expect(token.COLON)
 				if keyTok.Value == "max" {
 					numTok := p.advance()
-					val, _ := strconv.ParseFloat(numTok.Value, 64)
+					val, err := strconv.ParseFloat(numTok.Value, 64)
+					if err != nil {
+						p.addError(fmt.Sprintf("invalid number for 'max': %s", numTok.Value), numTok.Span)
+					}
 					maxIterations = &ast.NumberLiteral{Span: numTok.Span, Value: val, Raw: numTok.Value}
 				} else {
 					p.parseExpression()
@@ -627,7 +634,10 @@ func (p *Parser) parseRepeatBlock() ast.Node {
 	var count ast.Node
 	if p.check(token.NUMBER) {
 		numTok := p.advance()
-		val, _ := strconv.ParseFloat(numTok.Value, 64)
+		val, err := strconv.ParseFloat(numTok.Value, 64)
+		if err != nil {
+			p.addError(fmt.Sprintf("invalid number for 'repeat': %s", numTok.Value), numTok.Span)
+		}
 		count = &ast.NumberLiteral{Span: numTok.Span, Value: val, Raw: numTok.Value}
 	} else if p.check(token.IDENTIFIER) {
 		idTok := p.advance()
@@ -1289,7 +1299,10 @@ func (p *Parser) buildInterpolatedString(tok token.Token) ast.Node {
 
 func (p *Parser) parseNumberLiteral() ast.Node {
 	tok := p.advance()
-	val, _ := strconv.ParseFloat(tok.Value, 64)
+	val, err := strconv.ParseFloat(tok.Value, 64)
+	if err != nil {
+		p.addError(fmt.Sprintf("invalid number literal: %s", tok.Value), tok.Span)
+	}
 	return &ast.NumberLiteral{
 		Span:  tok.Span,
 		Value: val,

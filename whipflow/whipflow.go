@@ -235,7 +235,10 @@ func RunFile(path string, opts ...Option) (*runtime.ExecutionResult, error) {
 	}
 
 	// Default state store in ~/.clawfirm/whipflow-state.db
-	homeDir, _ := os.UserHomeDir()
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("whipflow: cannot determine home directory: %w", err)
+	}
 	defaultStorePath := filepath.Join(homeDir, ".clawfirm", "whipflow-state.db")
 
 	allOpts := []Option{
