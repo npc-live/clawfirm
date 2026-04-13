@@ -15,6 +15,7 @@ const (
 	EventToolExecutionUpdate AgentEventType = "tool_execution_update"
 	EventToolExecutionEnd    AgentEventType = "tool_execution_end"
 	EventSaveError           AgentEventType = "save_error"
+	EventAgentError          AgentEventType = "agent_error"
 )
 
 // CumulativeUsage tracks aggregate token usage across all turns in an agent loop.

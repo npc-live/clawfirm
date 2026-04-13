@@ -392,7 +392,9 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 			case "tool_use":
 				if acc, ok := toolAccums[cbs.Index]; ok {
 					var args map[string]any
-					_ = json.Unmarshal([]byte(acc.args.String()), &args)
+					if err := json.Unmarshal([]byte(acc.args.String()), &args); err != nil {
+						log.Printf("[anthropic-stream] malformed tool args for %s: %v", acc.name, err)
+					}
 					if args == nil {
 						args = map[string]any{}
 					}
@@ -444,7 +446,9 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 					Message string `json:"message"`
 				} `json:"error"`
 			}
-			_ = json.Unmarshal([]byte(sseEv.Data), &errBody)
+			if err := json.Unmarshal([]byte(sseEv.Data), &errBody); err != nil {
+				log.Printf("[anthropic-stream] failed to parse error event: %v", err)
+			}
 			errMsg := errBody.Error.Message
 			if errMsg == "" {
 				errMsg = sseEv.Data

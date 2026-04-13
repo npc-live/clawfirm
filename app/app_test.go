@@ -309,8 +309,10 @@ func TestAbortCurrentTurn_NoGateway(t *testing.T) {
 	a, cleanup := newTestApp(t, nil)
 	defer cleanup()
 
-	// Should not panic when gateway is not running.
-	a.AbortCurrentTurn("nonexistent", "session1")
+	// Should return error when gateway is not running.
+	if err := a.AbortCurrentTurn("nonexistent", "session1"); err == nil {
+		t.Error("expected error when gateway is not running")
+	}
 }
 
 // ── GetHistory empty ─────────────────────────────────────────────────────────

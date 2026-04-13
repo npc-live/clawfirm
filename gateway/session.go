@@ -125,7 +125,9 @@ func newSession(key, channelID, userID string, a AgentRunner,
 					ModelProvider:    am.Provider,
 				}
 				if delta.InputTokens > 0 || delta.OutputTokens > 0 {
-					_ = s.sessStore.UpdateUsage(s.entry.SessionKey, delta)
+					if err := s.sessStore.UpdateUsage(s.entry.SessionKey, delta); err != nil {
+						log.Printf("gateway: session %q: update usage: %v", s.key, err)
+					}
 				}
 			}
 		}
@@ -258,10 +260,14 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 		if !IsFresh(s.entry, cfg, time.Now(), lastUsed) {
 			msgs := s.agent.State().Messages
 			if s.summarizer != nil && len(msgs) > 0 {
-				_ = s.summarizer.Summarize(ctx, msgs)
+				if err := s.summarizer.Summarize(ctx, msgs); err != nil {
+					log.Printf("gateway: session %q: summarize before reset: %v", s.key, err)
+				}
 			}
 			s.agent.ClearMessages()
-			_ = s.sessStore.MarkReset(s.entry.SessionKey)
+			if err := s.sessStore.MarkReset(s.entry.SessionKey); err != nil {
+				log.Printf("gateway: session %q: mark reset: %v", s.key, err)
+			}
 			now := time.Now()
 			s.mu.Lock()
 			s.entry.LastResetAt = &now
@@ -349,9 +355,16 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 		}
 	}
 	if err := s.agent.PromptMessages(ctx, []types.Message{userMsg}); err != nil {
+		log.Printf("gateway: session %q: PromptMessages: %v", s.key, err)
+		s.emitEvent(types.AgentEvent{
+			Type:      types.EventAgentError,
+			ErrorText: fmt.Sprintf("failed to start agent: %v", err),
+		})
 		return
 	}
-	_ = s.agent.WaitForIdle(ctx)
+	if err := s.agent.WaitForIdle(ctx); err != nil {
+		log.Printf("gateway: session %q: WaitForIdle: %v", s.key, err)
+	}
 }
 
 // emitSaveError sends a save_error event to all registered sinks so the
@@ -403,7 +416,9 @@ func saveMediaToTemp(b64Data, mimeType string) (string, error) {
 		ext = ".bin"
 	}
 	dir := filepath.Join(os.TempDir(), "clawfirm-media")
-	os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir %s: %w", dir, err)
+	}
 	f, err := os.CreateTemp(dir, "upload-*"+ext)
 	if err != nil {
 		return "", fmt.Errorf("create temp: %w", err)

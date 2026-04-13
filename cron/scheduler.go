@@ -375,6 +375,7 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 	historyID, err := s.store.InsertHistory(jobID)
 	if err != nil {
 		log.Printf("cron: insert history for %s: %v", jobID, err)
+		return // DB error — do not skip silently as if another run exists
 	}
 	if historyID == 0 {
 		// Another running record already exists in the DB — skip this execution.
@@ -390,7 +391,9 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 		}
 		log.Printf("cron: job %s: %s", jobName, errMsg)
 		if historyID > 0 {
-			_ = s.store.CompleteHistory(historyID, "error", "", errMsg)
+			if err := s.store.CompleteHistory(historyID, "error", "", errMsg); err != nil {
+				log.Printf("cron: complete history for %s: %v", jobID, err)
+			}
 		}
 		return
 	}
@@ -439,7 +442,9 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 		result := buildResult(textParts, toolResults)
 		mu.Unlock()
 		if historyID > 0 {
-			_ = s.store.CompleteHistory(historyID, "error", result, errMsg)
+			if err := s.store.CompleteHistory(historyID, "error", result, errMsg); err != nil {
+				log.Printf("cron: complete history for %s: %v", jobID, err)
+			}
 		}
 		return
 	}
@@ -455,7 +460,9 @@ func (s *Scheduler) executeJob(jobID, jobName, agentName, prompt string) {
 	}
 
 	if historyID > 0 {
-		_ = s.store.CompleteHistory(historyID, "success", result, "")
+		if err := s.store.CompleteHistory(historyID, "success", result, ""); err != nil {
+			log.Printf("cron: complete history for %s: %v", jobID, err)
+		}
 	}
 	log.Printf("cron: job %s (%s) completed successfully", jobName, jobID)
 }

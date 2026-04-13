@@ -19,6 +19,8 @@ func TestAgentEventTypeConstants(t *testing.T) {
 		{EventToolExecutionStart, "tool_execution_start"},
 		{EventToolExecutionUpdate, "tool_execution_update"},
 		{EventToolExecutionEnd, "tool_execution_end"},
+		{EventSaveError, "save_error"},
+		{EventAgentError, "agent_error"},
 	}
 	for _, c := range cases {
 		if string(c.got) != c.want {

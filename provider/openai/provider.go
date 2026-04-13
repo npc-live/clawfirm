@@ -311,7 +311,9 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 
 				for idx, acc := range toolAccums {
 					var args map[string]any
-					_ = json.Unmarshal([]byte(acc.args.String()), &args)
+					if err := json.Unmarshal([]byte(acc.args.String()), &args); err != nil {
+						log.Printf("[openai-stream] malformed tool args for %s: %v", acc.name, err)
+					}
 					if args == nil {
 						args = map[string]any{}
 					}

@@ -251,6 +251,22 @@ func (c *Channel) ensureReplySubscription(sess *gateway.Session, chatJID waTypes
 	c.mu.Unlock()
 
 	sess.Subscribe(func(ev piTypes.AgentEvent) {
+		if ev.Type == piTypes.EventAgentError {
+			if ev.ErrorText != "" {
+				c.mu.RLock()
+				client := c.waClient
+				c.mu.RUnlock()
+				if client != nil {
+					errCtx := context.Background()
+					if _, err := client.SendMessage(errCtx, chatJID, &waE2E.Message{
+						Conversation: proto.String("[Error] " + ev.ErrorText),
+					}); err != nil {
+						log.Printf("whatsapp: SendMessage error to %s: %v", chatJID, err)
+					}
+				}
+			}
+			return
+		}
 		if ev.Type != piTypes.EventAgentEnd {
 			return
 		}

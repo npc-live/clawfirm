@@ -31,3 +31,5 @@ mobile/node_modules/
 
 # Media assets (large files, not source)
 cover-asset/
+mac_to_wsl2
+mac_to_wsl2.pub

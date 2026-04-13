@@ -85,7 +85,10 @@ func (d *DB) migrate() error {
 		version := strings.TrimSuffix(name, ".sql")
 
 		var count int
-		_ = d.sql.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version=?`, version).Scan(&count)
+		err := d.sql.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE version=?`, version).Scan(&count)
+		if err != nil && !strings.Contains(err.Error(), "no such table") {
+			return fmt.Errorf("store: check migration %s: %w", version, err)
+		}
 		if count > 0 {
 			continue // already applied
 		}

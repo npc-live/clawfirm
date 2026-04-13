@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -70,7 +71,9 @@ func (r *AuthResolver) ResolveAPIKey(ctx context.Context, provider string) (stri
 						ExpiresAt: fresh.ExpiresAt,
 						Extra:     fresh.Extra,
 					}
-					_ = r.storage.SetOAuth(provider, newCreds)
+					if err := r.storage.SetOAuth(provider, newCreds); err != nil {
+						log.Printf("auth: persist refreshed OAuth token for %s: %v", provider, err)
+					}
 					return fresh.Access, nil
 				}
 			}

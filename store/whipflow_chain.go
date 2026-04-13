@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 // WhipflowChainEntry is a single node in the whipflow execution chain.
 type WhipflowChainEntry struct {
@@ -77,11 +80,14 @@ func (s *WhipflowChainStore) GetByCallID(callID string) (*WhipflowChainEntry, er
 }
 
 // LatestCallID returns the most recent call_id for a channel+user, or "" if none.
-func (s *WhipflowChainStore) LatestCallID(channelID, userID string) string {
+func (s *WhipflowChainStore) LatestCallID(channelID, userID string) (string, error) {
 	var callID string
-	_ = s.db.sql.QueryRow(
+	err := s.db.sql.QueryRow(
 		`SELECT call_id FROM whipflow_chain WHERE channel_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 1`,
 		channelID, userID,
 	).Scan(&callID)
-	return callID
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return callID, err
 }

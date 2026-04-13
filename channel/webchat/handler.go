@@ -16,6 +16,7 @@ package webchat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -177,7 +178,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				// Execute through the agent so the tool call and result are injected
 				// into the conversation history and persisted via the normal event path.
 				go func(toolID, toolName string, toolArgs map[string]any) {
-					_ = sess.ExecuteToolDirectly(context.Background(), toolID, toolName, toolArgs)
+					if err := sess.ExecuteToolDirectly(context.Background(), toolID, toolName, toolArgs); err != nil {
+						log.Printf("webchat: run_tool %s: %v", toolName, err)
+						write(serverMessage{Type: "error", Content: fmt.Sprintf("tool %s failed: %v", toolName, err)})
+					}
 				}(msg.ToolID, msg.ToolName, args)
 			}
 		}
@@ -253,6 +257,17 @@ func handleAgentEvent(write func(any), ev types.AgentEvent) {
 		write(serverMessage{
 			Type:       "done",
 			StopReason: stop,
+			Timestamp:  time.Now().UnixMilli(),
+		})
+	case types.EventAgentError:
+		write(serverMessage{
+			Type:    "error",
+			Content: ev.ErrorText,
+		})
+		// Also send "done" so the frontend knows the agent stopped.
+		write(serverMessage{
+			Type:       "done",
+			StopReason: "error",
 			Timestamp:  time.Now().UnixMilli(),
 		})
 	case types.EventSaveError:

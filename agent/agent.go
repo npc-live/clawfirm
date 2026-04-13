@@ -161,8 +161,14 @@ func (a *Agent) PromptMessages(ctx context.Context, msgs []types.Message) error 
 		a.state.Messages = history
 		if err != nil && err != context.Canceled {
 			a.state.Error = err.Error()
+			a.mu.Unlock()
+			a.emit(types.AgentEvent{
+				Type:      types.EventAgentError,
+				ErrorText: err.Error(),
+			})
+		} else {
+			a.mu.Unlock()
 		}
-		a.mu.Unlock()
 	}()
 
 	return nil

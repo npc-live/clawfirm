@@ -199,6 +199,17 @@ func (c *Channel) ensureReplySubscription(ctx context.Context, sess *gateway.Ses
 	c.mu.Unlock()
 
 	sess.Subscribe(func(ev piTypes.AgentEvent) {
+		if ev.Type == piTypes.EventAgentError {
+			if ev.ErrorText != "" {
+				c.mu.RLock()
+				apiClient := c.apiClient
+				c.mu.RUnlock()
+				if apiClient != nil {
+					_ = sendText(ctx, apiClient, chatID, "[Error] "+ev.ErrorText)
+				}
+			}
+			return
+		}
 		if ev.Type != piTypes.EventAgentEnd {
 			return
 		}

@@ -214,5 +214,15 @@ func handleAgentEvent(write func(any), ev types.AgentEvent) {
 			StopReason: stop,
 			Timestamp:  time.Now().UnixMilli(),
 		})
+	case types.EventAgentError:
+		write(serverMessage{
+			Type:    "error",
+			Content: ev.ErrorText,
+		})
+		write(serverMessage{
+			Type:       "done",
+			StopReason: "error",
+			Timestamp:  time.Now().UnixMilli(),
+		})
 	}
 }

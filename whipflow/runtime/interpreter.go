@@ -1,9 +1,10 @@
 package runtime
 
 import (
-	"errors"
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -726,7 +727,9 @@ func (interp *Interpreter) evaluateExpression(expr ast.Node) RuntimeValue {
 				Type:    "runtime",
 				Message: fmt.Sprintf("inline session error: %s", err),
 			})
-			return nil
+			// Propagate as a throw so callers (let, pipe, etc.) see the failure
+			// instead of silently receiving nil.
+			panic(ControlFlow{Type: "throw", Err: err})
 		}
 		// Return the most recent session result.
 		if len(interp.allSessionOutputs) > 0 {
@@ -744,9 +747,9 @@ func (interp *Interpreter) evaluateExpression(expr ast.Node) RuntimeValue {
 // discretion expression as a boolean.
 // ---------------------------------------------------------------------------
 
-func (interp *Interpreter) evaluateCondition(d *ast.Discretion) bool {
+func (interp *Interpreter) evaluateCondition(d *ast.Discretion) (bool, error) {
 	if d == nil {
-		return true
+		return true, nil
 	}
 
 	// Build enriched context for condition evaluation.
@@ -801,8 +804,7 @@ func (interp *Interpreter) evaluateCondition(d *ast.Discretion) bool {
 
 	provider, err := interp.getProvider(providerName)
 	if err != nil {
-		interp.env.Log("error", fmt.Sprintf("condition evaluation provider error: %s", err))
-		return false
+		return false, fmt.Errorf("condition evaluation provider error: %w", err)
 	}
 
 	spec := SessionSpec{
@@ -815,8 +817,7 @@ func (interp *Interpreter) evaluateCondition(d *ast.Discretion) bool {
 
 	result, err := provider.ExecuteSession(spec, interp.env.Config, false, nil, nil)
 	if err != nil {
-		interp.env.Log("error", fmt.Sprintf("condition evaluation failed: %s", err))
-		return false
+		return false, fmt.Errorf("condition evaluation failed: %w", err)
 	}
 
 	// Record the condition evaluation event.
@@ -829,7 +830,7 @@ func (interp *Interpreter) evaluateCondition(d *ast.Discretion) bool {
 
 	// Parse the response.
 	answer := strings.TrimSpace(strings.ToLower(result.Output))
-	return answer == "true" || strings.HasPrefix(answer, "true")
+	return answer == "true" || strings.HasPrefix(answer, "true"), nil
 }
 
 // buildEnrichedContext constructs an EnrichedExecutionContext with the current state.
@@ -1057,6 +1058,22 @@ func (interp *Interpreter) executeParallelBlock(n *ast.ParallelBlock) error {
 	doneCh := make(chan struct{})
 	var completedCount int
 
+	// For JoinFirst/JoinAny, create a cancellable context so that remaining
+	// goroutines (and their downstream provider calls) are stopped once we
+	// have enough results. This prevents leaked goroutines from making
+	// expensive LLM API calls after the parallel block has returned.
+	parentCtx := interp.env.Config.Ctx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+	branchCtx, branchCancel := context.WithCancel(parentCtx)
+	defer branchCancel()
+
+	// Temporarily swap Ctx for parallel branches.
+	origCtx := interp.env.Config.Ctx
+	interp.env.Config.Ctx = branchCtx
+	defer func() { interp.env.Config.Ctx = origCtx }()
+
 	for i, stmt := range n.Body {
 		wg.Add(1)
 		go func(idx int, s ast.Node) {
@@ -1073,6 +1090,11 @@ func (interp *Interpreter) executeParallelBlock(n *ast.ParallelBlock) error {
 						}
 					}
 				}()
+				// Check if already cancelled before starting.
+				if branchCtx.Err() != nil {
+					execErr = branchCtx.Err()
+					return
+				}
 				execErr = interp.executeStatement(s)
 			}()
 
@@ -1114,16 +1136,29 @@ func (interp *Interpreter) executeParallelBlock(n *ast.ParallelBlock) error {
 			}
 		}()
 		<-doneCh
+		// Cancel remaining branches so they stop ASAP.
+		branchCancel()
+		// Wait for all goroutines to finish to avoid data races.
+		wg.Wait()
 	}
 
-	// Check for errors.
-	if failStrategy == FailFast {
+	// Check for errors (skip context.Canceled from cancelled branches).
+	switch failStrategy {
+	case FailFast:
 		for _, r := range results {
-			if r.err != nil {
+			if r.err != nil && !errors.Is(r.err, context.Canceled) {
 				return r.err
 			}
 		}
+	case FailContinue:
+		// Log all errors so they're visible, but don't fail the block.
+		for i, r := range results {
+			if r.err != nil && !errors.Is(r.err, context.Canceled) {
+				interp.env.Log("warn", fmt.Sprintf("parallel branch %d error (continue): %v", i, r.err))
+			}
+		}
 	}
+	// FailIgnore: truly silent — no logging, no error propagation.
 
 	return nil
 }
@@ -1242,10 +1277,20 @@ func (interp *Interpreter) executeForEachParallel(n *ast.ForEachBlock, items []a
 	wg.Wait()
 	close(errCh)
 
+	var errs []error
 	for err := range errCh {
 		if err != nil {
-			return err
+			errs = append(errs, err)
 		}
+	}
+	if len(errs) > 0 {
+		// Log all but return the first.
+		for i, e := range errs {
+			if i > 0 {
+				interp.env.Log("warn", fmt.Sprintf("parallel foreach error %d: %v", i, e))
+			}
+		}
+		return errs[0]
 	}
 	return nil
 }
@@ -1280,12 +1325,24 @@ func (interp *Interpreter) executeLoopBlock(n *ast.LoopBlock) error {
 		// Check condition based on variant.
 		switch n.Variant {
 		case "until":
-			if n.Condition != nil && interp.evaluateCondition(n.Condition) {
-				return nil // Condition met; exit loop.
+			if n.Condition != nil {
+				met, err := interp.evaluateCondition(n.Condition)
+				if err != nil {
+					return fmt.Errorf("loop until condition: %w", err)
+				}
+				if met {
+					return nil // Condition met; exit loop.
+				}
 			}
 		case "while":
-			if n.Condition != nil && !interp.evaluateCondition(n.Condition) {
-				return nil // Condition no longer met; exit loop.
+			if n.Condition != nil {
+				met, err := interp.evaluateCondition(n.Condition)
+				if err != nil {
+					return fmt.Errorf("loop while condition: %w", err)
+				}
+				if !met {
+					return nil // Condition no longer met; exit loop.
+				}
 			}
 		case "loop":
 			// Infinite loop; relies on break or max iterations.
@@ -1327,13 +1384,21 @@ func (interp *Interpreter) executeIfStatement(n *ast.IfStatement) error {
 	interp.env.Context.AddToExecutionPath("if")
 
 	// Evaluate the main condition.
-	if interp.evaluateCondition(n.Condition) {
+	met, err := interp.evaluateCondition(n.Condition)
+	if err != nil {
+		return fmt.Errorf("if condition: %w", err)
+	}
+	if met {
 		return interp.executeBody(n.ThenBody)
 	}
 
 	// Check else-if clauses.
 	for _, clause := range n.ElseIfClauses {
-		if interp.evaluateCondition(clause.Condition) {
+		met, err := interp.evaluateCondition(clause.Condition)
+		if err != nil {
+			return fmt.Errorf("else-if condition: %w", err)
+		}
+		if met {
 			return interp.executeBody(clause.Body)
 		}
 	}
@@ -1635,8 +1700,7 @@ func (interp *Interpreter) executeSkillInvocation(n *ast.SkillInvocation) error 
 	}
 
 	// TODO: Implement full skill resolution (import-based skills, etc.).
-	interp.env.Log("warn", fmt.Sprintf("skill '%s' not found; skipping", n.SkillName.Name))
-	return nil
+	return fmt.Errorf("skill '%s' not found", n.SkillName.Name)
 }
 
 // ---------------------------------------------------------------------------
@@ -1759,7 +1823,7 @@ func (interp *Interpreter) pipePmap(input RuntimeValue, op *ast.PipeOperation) R
 			defer wg.Done()
 			defer func() {
 				if r := recover(); r != nil {
-					// Swallow panics in parallel map; store nil.
+					interp.env.Log("warn", fmt.Sprintf("pmap: branch %d panic: %v", idx, r))
 					results[idx] = nil
 				}
 			}()

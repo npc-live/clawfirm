@@ -101,6 +101,7 @@ type App struct {
 	remoteSrv      *remote.Server
 	remoteCancel   context.CancelFunc
 	memoryMgr      *memory.Manager
+	startupErrors  []string
 }
 
 // New creates the App. Call wails.Run with a.OnStartup / a.OnShutdown.
@@ -592,6 +593,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	db, err := store.Open("")
 	if err != nil {
 		log.Printf("app: store open: %v", err)
+		a.startupErrors = append(a.startupErrors, fmt.Sprintf("数据库打开失败: %v", err))
 	} else {
 		a.db = db
 	}
@@ -623,6 +625,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	if len(cfg.Agents) > 0 {
 		if err := a.startGateway(); err != nil {
 			log.Printf("app: gateway start: %v", err)
+			a.startupErrors = append(a.startupErrors, fmt.Sprintf("Gateway 启动失败: %v", err))
 		}
 	}
 
@@ -642,7 +645,11 @@ func (a *App) OnStartup(ctx context.Context) {
 }
 
 // OnDomReady is called after the DOM is ready.
-func (a *App) OnDomReady(_ context.Context) {}
+func (a *App) OnDomReady(_ context.Context) {
+	for _, msg := range a.startupErrors {
+		wailsruntime.EventsEmit(a.ctx, "startup:error", msg)
+	}
+}
 
 // OnShutdown is called when the application is shutting down.
 func (a *App) OnShutdown(_ context.Context) {
@@ -833,14 +840,16 @@ func (a *App) startGateway() error {
 								}
 							}
 						}
-						_ = db.WhipflowChain().Insert(store.WhipflowChainEntry{
-							ChannelID:  storeChannelID,
-							UserID:     userID,
-							CallID:     ev.ToolCallID,
-							ParentID:   parentID,
-							SessionIdx: sessionIdx,
-							Status:     "running",
-						})
+						if err := db.WhipflowChain().Insert(store.WhipflowChainEntry{
+						ChannelID:  storeChannelID,
+						UserID:     userID,
+						CallID:     ev.ToolCallID,
+						ParentID:   parentID,
+						SessionIdx: sessionIdx,
+						Status:     "running",
+					}); err != nil {
+						log.Printf("[%s] whipflow chain insert: %v", agentName, err)
+					}
 					}
 				case types.EventToolExecutionEnd:
 					a.updateToolExec(storeChannelID, userID, ev.ToolCallID, func(r *ToolExecRecord) {
@@ -856,7 +865,9 @@ func (a *App) startGateway() error {
 						if ev.ToolIsError {
 							status = "error"
 						}
-						_ = db.WhipflowChain().UpdateStatus(ev.ToolCallID, status)
+						if err := db.WhipflowChain().UpdateStatus(ev.ToolCallID, status); err != nil {
+						log.Printf("[%s] whipflow chain update status: %v", agentName, err)
+					}
 					}
 				}
 			})
@@ -1499,22 +1510,23 @@ func (a *App) SendMessage(agentName, sessionID, content string) error {
 }
 
 // AbortCurrentTurn cancels the in-progress agent turn for the given session.
-func (a *App) AbortCurrentTurn(agentName, sessionID string) {
+func (a *App) AbortCurrentTurn(agentName, sessionID string) error {
 	a.mu.RLock()
 	registry := a.registry
 	a.mu.RUnlock()
 	if registry == nil {
-		return
+		return fmt.Errorf("gateway not running")
 	}
 	mgr, ok := registry.Get(agentName)
 	if !ok {
-		return
+		return fmt.Errorf("agent %q not found", agentName)
 	}
 	sess, err := mgr.GetOrCreate("webchat", sessionID)
 	if err != nil {
-		return
+		return fmt.Errorf("get session: %w", err)
 	}
 	sess.Abort()
+	return nil
 }
 
 // ToolExecutionInfo is a summary of one tool call + result for the frontend.
@@ -1562,7 +1574,9 @@ func (a *App) saveToolExecs(channelID, userID string, records []ToolExecRecord) 
 	if db == nil {
 		return
 	}
-	_ = db.KV().Set(toolExecKey(channelID, userID), records)
+	if err := db.KV().Set(toolExecKey(channelID, userID), records); err != nil {
+		log.Printf("app: save tool execs: %v", err)
+	}
 }
 
 // updateToolExec applies fn to the record with the given id (creating it if needed), then saves.
@@ -1612,7 +1626,9 @@ func (a *App) recoverInterruptedToolExecs() {
 			}
 		}
 		if changed {
-			_ = db.KV().Set(key, records)
+			if err := db.KV().Set(key, records); err != nil {
+				log.Printf("app: recover tool execs %s: %v", key, err)
+			}
 		}
 	}
 }
@@ -1683,7 +1699,7 @@ func (a *App) GetWhipflowChain(channelID, userID string) ([]store.WhipflowChainE
 	db := a.db
 	a.mu.RUnlock()
 	if db == nil {
-		return nil, nil
+		return nil, fmt.Errorf("database not available")
 	}
 	return db.WhipflowChain().ListBySession(channelID, userID)
 }
@@ -1695,7 +1711,7 @@ func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) 
 	db := a.db
 	a.mu.RUnlock()
 	if db == nil {
-		return nil, nil
+		return nil, fmt.Errorf("database not available")
 	}
 	msgs, err := db.Messages().ListMessages(store.QueryParams{
 		ChannelID: channelID,
@@ -1765,7 +1781,7 @@ func (a *App) GetChatSessions(agentName string) ([]string, error) {
 	db := a.db
 	a.mu.RUnlock()
 	if db == nil {
-		return nil, nil
+		return nil, fmt.Errorf("database not available")
 	}
 	ids1, err := db.Messages().ListUserIDs("webchat/" + agentName)
 	if err != nil {
@@ -1817,7 +1833,7 @@ func (a *App) ListSessions(agentName string) ([]SessionDetail, error) {
 	registry := a.registry
 	a.mu.RUnlock()
 	if db == nil {
-		return nil, nil
+		return nil, fmt.Errorf("database not available")
 	}
 	entries, err := db.Sessions().ListByAgent(agentName)
 	if err != nil {

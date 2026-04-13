@@ -2,10 +2,10 @@
 name: social-cli
 description: |
   Social media browser automation reference — full command & parameter docs
-  for all supported platforms (小红书, 抖音, B站, X/Twitter, Boss直聘).
+  for all supported platforms (小红书, 抖音, B站, X/Twitter, 视频号, Boss直聘).
   Activate when the user asks about social media shortcuts, wants to
   automate social platforms, "怎么发小红书", "帮我点赞", "搜索抖音",
-  "post to twitter", "bilibili comment", "Boss直聘候选人", etc.
+  "post to twitter", "bilibili comment", "发视频号", "Boss直聘候选人", etc.
 ---
 
 # Social CLI — Browser Shortcut Reference
@@ -92,11 +92,12 @@ Example: `发小红书视频 /tmp/demo.mp4 标题"AI演示" 描述"看看这个A
 |-------|------|----------|-------------|
 | `title` | string | yes | 笔记标题 |
 | `content` | string | yes | 笔记正文 |
-| `image` | string | yes | 本地图片路径 (绝对路径, 小红书图文必须有图) |
 
 Returns: `状态`, `标题`, `正文`, `跳转URL`
 
-Example: `发小红书图文 标题"周末探店" 内容"超好吃的..." 图片 /tmp/food.jpg`
+Note: 通过小红书创作者平台发布。自动切换到"上传图文" tab，填写标题和正文后点击发布。
+
+Example: `发小红书图文 标题"周末探店" 内容"超好吃的..."`
 
 ---
 
@@ -341,6 +342,69 @@ Example: `转推 https://x.com/user/status/xxx`
 
 ---
 
+### `post_video` — 发推 + 视频
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `video` | string | yes | 本地视频文件路径 (绝对路径) |
+| `text` | string | yes | 推文内容 |
+
+Returns: `状态`, `推文内容`, `视频附件`, `操作`
+
+Note: 通过 `x.com/compose/post` 上传视频。自动等待上传处理完成 (进度条消失 + 附件预览出现，最长 5 分钟)。上传完成后需手动确认点击 Post 按钮发布。
+
+Example: `发推带视频 /tmp/demo.mp4 Check out this demo!`
+
+---
+
+### `post_media` — 发推 + 媒体 (图片/视频)
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `text` | string | yes | 推文内容 |
+| `media` | string | yes | 本地文件路径 (视频或图片，绝对路径) |
+
+Returns: `状态`, `推文内容`, `媒体已上传`, `操作`
+
+Note: 通用媒体上传，支持图片和视频。通过 `x.com/compose/post` 上传。上传完成后需手动确认点击 Post 按钮发布。
+
+Example: `发推带图片 /tmp/screenshot.png Look at this!`
+
+---
+
+## 视频号 (WeChat Channels) — `channels.yaml`
+
+Login URL: `https://channels.weixin.qq.com`
+Session cookie: `myuin`
+
+Note: 视频号助手使用无界微前端 (wujie-app)，所有 DOM 在 shadow root 内。
+
+### `post` — 发布视频
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `video` | string | yes | 本地视频文件路径 (绝对路径) |
+| `title` | string | yes | 短标题 (6-16 字符) |
+| `desc` | string | yes | 视频描述 |
+
+Returns: `状态`, `标题`, `描述`, `跳转URL`
+
+Note: 通过视频号助手上传。自动关闭弹窗，等待上传完成 (最长 10 分钟)，在 shadow DOM 内填写描述和短标题，点击发表。
+
+Example: `发布视频号 /tmp/vlog.mp4 "周末日常" "记录一下周末去公园"`
+
+---
+
+### `list` — 内容列表
+
+No parameters.
+
+Returns: `内容列表` (最近 10 条发布记录的标题)
+
+Example: `看看视频号发布列表`
+
+---
+
 ## Boss直聘 (Zhipin) — `zhipin.yaml`
 
 Login URL: `https://www.zhipin.com`
@@ -379,7 +443,7 @@ Example: `看看Boss直聘有哪些候选人`
 | 小红书 | `like` | `url` | 点赞/取消 |
 | 小红书 | `comment` | `url`, `text` | 发表评论 |
 | 小红书 | `post_video` | `video`, `title`, `desc` | 发布视频 |
-| 小红书 | `post` | `title`, `content`, `image` | 发布图文 |
+| 小红书 | `post` | `title`, `content` | 发布图文 |
 | 抖音 | `search` | `keyword` | 搜索视频 |
 | 抖音 | `like` | `url` | 点赞/取消 |
 | 抖音 | `comment` | `url`, `text` | 发表评论 |
@@ -397,5 +461,9 @@ Example: `看看Boss直聘有哪些候选人`
 | X | `reply` | `url`, `text` | 回复推文 |
 | X | `post` | `text` | 发推 |
 | X | `retweet` | `url` | 转推 |
+| X | `post_video` | `video`, `text` | 发推+视频 |
+| X | `post_media` | `text`, `media` | 发推+媒体 |
+| 视频号 | `post` | `video`, `title`, `desc` | 发布视频 |
+| 视频号 | `list` | — | 内容列表 |
 | Boss直聘 | `chat_stats` | — | 聊天统计 |
 | Boss直聘 | `candidates` | — | 候选人列表 |

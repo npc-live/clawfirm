@@ -164,7 +164,9 @@ func (m *SessionManager) removeByKey(key string) {
 	if ok {
 		s.Stop()
 		if m.cfg.SessionStore != nil {
-			_ = m.cfg.SessionStore.MarkEnded(key)
+			if err := m.cfg.SessionStore.MarkEnded(key); err != nil {
+				log.Printf("gateway: mark session ended %q: %v", key, err)
+			}
 		}
 	}
 }

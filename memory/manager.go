@@ -11,6 +11,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"path/filepath"
@@ -99,8 +100,7 @@ func (m *Manager) Sync(ctx context.Context) error {
 		}
 		path := filepath.Join(dir, e.Name())
 		if err := m.indexFile(ctx, path); err != nil {
-			// Log but continue with remaining files.
-			_ = err
+			log.Printf("memory: index %s: %v", path, err)
 		}
 	}
 
@@ -485,10 +485,12 @@ func (m *Manager) embedWithCache(ctx context.Context, texts []string) ([][]float
 		results[idx] = embs[j]
 		blob := encodeFloat32s(embs[j])
 		h := textHash(texts[idx])
-		_, _ = m.db.ExecContext(ctx,
+		if _, err := m.db.ExecContext(ctx,
 			`INSERT OR REPLACE INTO memory_embedding_cache(text_hash, provider, model, embedding)
 			 VALUES(?,?,?,?)`, h, provider, model, blob,
-		)
+		); err != nil {
+			log.Printf("memory: cache embedding: %v", err)
+		}
 	}
 	return results, nil
 }

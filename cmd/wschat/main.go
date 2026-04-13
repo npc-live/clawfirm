@@ -48,7 +48,10 @@ func main() {
 			log.Fatalf("read: %v", err)
 		}
 		var m map[string]any
-		json.Unmarshal(data, &m)
+		if err := json.Unmarshal(data, &m); err != nil {
+			log.Printf("invalid JSON from server: %v", err)
+			continue
+		}
 		switch m["type"] {
 		case "delta":
 			fmt.Print(m["content"])

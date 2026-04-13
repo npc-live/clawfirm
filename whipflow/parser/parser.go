@@ -44,6 +44,15 @@ type Parser struct {
 func Parse(source string) ParseResult {
 	result := lexer.Tokenize(source)
 
+	// Convert lexer errors into ParseErrors so callers see them.
+	var errs []ParseError
+	for _, le := range result.Errors {
+		errs = append(errs, ParseError{
+			Message: le.Message,
+			Span:    le.Span,
+		})
+	}
+
 	// Filter out NEWLINE and COMMENT tokens — the parser works with
 	// significant tokens only (INDENT/DEDENT delimit blocks).
 	filtered := make([]token.Token, 0, len(result.Tokens))
@@ -58,7 +67,7 @@ func Parse(source string) ParseResult {
 
 	return ParseResult{
 		Program: program,
-		Errors:  p.errors,
+		Errors:  append(errs, p.errors...),
 	}
 }
 

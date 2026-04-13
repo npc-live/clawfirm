@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"regexp"
@@ -597,10 +596,21 @@ func runCli(parentCtx context.Context, cfg CliConfig, prompt string, vaultEnv fu
 		if ctx.Err() == context.DeadlineExceeded {
 			return "", fmt.Errorf("command timed out after %dms", timeout)
 		}
-		if _, ok := err.(*exec.ExitError); !ok {
-			return "", fmt.Errorf("failed to execute %s: %w", cfg.Bin, err)
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderrStr := strings.TrimSpace(stderr.String())
+			stdoutStr := strings.TrimSpace(stdout.String())
+			// Use stderr if available, otherwise fall back to stdout (some
+			// tools print errors to stdout), then the exit code.
+			errDetail := stderrStr
+			if errDetail == "" {
+				errDetail = stdoutStr
+			}
+			if errDetail == "" {
+				errDetail = fmt.Sprintf("exit code %d", exitErr.ExitCode())
+			}
+			return "", fmt.Errorf("provider %s failed: %s", cfg.Name, errDetail)
 		}
-		log.Printf("provider %s exited with error: %v, stderr: %s", cfg.Name, err, stderr.String())
+		return "", fmt.Errorf("failed to execute %s: %w", cfg.Bin, err)
 	}
 
 	stdoutStr := stdout.String()
