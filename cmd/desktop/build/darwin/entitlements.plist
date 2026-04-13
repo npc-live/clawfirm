@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Wails WebView (WKWebView / JavaScriptCore) requires JIT -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- Load bundled helper binaries (func, whip, claw, etc.) -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Unrestricted read/write to ~/.clawfirm/ and user-chosen files -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <!-- Network access for LLM API calls -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- Gateway HTTP server (localhost) -->
+    <key>com.apple.security.network.server</key>
+    <true/>
+</dict>
+</plist>

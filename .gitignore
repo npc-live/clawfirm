@@ -11,6 +11,7 @@ OPTIMIZATION_PLAN.md
 
 # Desktop build artifacts
 cmd/desktop/build/darwin/
+!cmd/desktop/build/darwin/entitlements.plist
 cmd/desktop/build/bin/
 cmd/desktop/frontend/node_modules/
 cmd/desktop/frontend/dist/

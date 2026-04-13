@@ -37,6 +37,8 @@ claw-debug:
 # ── macOS .app bundle ────────────────────────────────────────────
 # Produces: bin/clawfirm.app  (drag to /Applications to install)
 # Embeds darwin/universal Go binaries + claw into app/assets before compiling.
+ENTITLEMENTS := cmd/desktop/build/darwin/entitlements.plist
+
 app: $(addsuffix -universal,$(UNIVERSAL_CMDS)) claw
 	@cp claw-code/rust/target/release/claw app/assets/claw
 	@echo "✓ Embedded claw binary: app/assets/claw ($$(wc -c < app/assets/claw | tr -d ' ') bytes)"
@@ -49,6 +51,7 @@ app: $(addsuffix -universal,$(UNIVERSAL_CMDS)) claw
 	@mkdir -p $(BIN_DIR)
 	@rm -rf $(BIN_DIR)/clawfirm.app
 	@mv cmd/desktop/build/bin/clawfirm.app $(BIN_DIR)/clawfirm.app
+	codesign --force --deep --sign - --entitlements $(ENTITLEMENTS) $(BIN_DIR)/clawfirm.app
 	@echo ""
 	@echo "✓ Built: $(BIN_DIR)/clawfirm.app  ($(VERSION))"
 	@echo "  Install: cp -r $(BIN_DIR)/clawfirm.app /Applications/"
