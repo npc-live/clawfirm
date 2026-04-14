@@ -24,6 +24,8 @@ import (
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/gateway"
 	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
+	"github.com/ai-gateway/clawfirm/provider"
+	"github.com/ai-gateway/clawfirm/skill"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
 )
@@ -59,6 +61,12 @@ func main() {
 		log.Fatalf("providers: %v", err)
 	}
 
+	// ── Media provider ──────────────────────────────────────────────────────
+	var mediaProvider provider.LLMProvider
+	if cfg.Media.Provider != "" {
+		mediaProvider = providerMap[cfg.Media.Provider]
+	}
+
 	// ── Agent registry ────────────────────────────────────────────────────────
 	msgStore := db.Messages()
 	registry := gateway.NewAgentRegistry()
@@ -75,10 +83,60 @@ func main() {
 		}
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 
+		// Build tools (same as app.go).
+		tools := agentbuilder.BuildTools(ac.Tools, nil, cfg, nil, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
+
+		// Load skills.
+		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+		for _, d := range skillResult.Diagnostics {
+			log.Printf("agent %s: skill warning: %s: %s", agentName, d.Path, d.Message)
+		}
+		if len(skillResult.Skills) > 0 {
+			names := make([]string, len(skillResult.Skills))
+			for i, s := range skillResult.Skills {
+				names[i] = s.Name
+			}
+			log.Printf("agent %s: loaded %d skill(s): %s", agentName, len(skillResult.Skills), strings.Join(names, ", "))
+		}
+		compacted := skill.CompactSkillPaths(skillResult.Skills)
+		skillsPrompt, _, _ := skill.ApplySkillsPromptLimits(compacted)
+
+		// Build system prompt.
+		bootstrap := agent.LoadBootstrapContext(ac.WorkspaceDir)
+		systemPrompt := agent.BuildSystemPrompt(agent.SystemPromptParams{
+			WorkspaceDir:   ac.WorkspaceDir,
+			SkillsPrompt:   skillsPrompt,
+			ContextFiles:   bootstrap.ContextFiles,
+			WorkspaceNotes: bootstrap.WorkspaceNotes,
+			PromptMode:     agent.PromptModeFull,
+			RuntimeInfo:    buildRuntimeInfo(ac),
+			ExtraPrompt:    ac.SystemPrompt,
+		})
+
+		temporal := agent.NewTemporalInjector(0)
+		loopCfg := agent.AgentLoopConfig{
+			TransformContext: temporal.TransformContext,
+		}
+
 		factory := gateway.AgentFactory(func(channelID, userID string) gateway.AgentRunner {
-			ag := agent.NewAgent(prov,
+			opts := []agent.AgentOption{
 				agent.WithModel(model),
-			)
+				agent.WithSystemPrompt(systemPrompt),
+				agent.WithLoopConfig(loopCfg),
+			}
+			if len(tools) > 0 {
+				opts = append(opts, agent.WithTools(tools))
+			}
+			ag := agent.NewAgent(prov, opts...)
+			// Restore message history from store.
+			storeChannelID := "webchat/" + agentName
+			if history, err := msgStore.ListMessages(store.QueryParams{
+				ChannelID: storeChannelID,
+				UserID:    userID,
+			}); err == nil && len(history) > 0 {
+				ag.ReplaceMessages(history)
+				log.Printf("[%s] session %s/%s: restored %d messages", agentName, storeChannelID, userID, len(history))
+			}
 			ag.Subscribe(func(ev types.AgentEvent) {
 				switch ev.Type {
 				case types.EventMessageEnd:
@@ -102,7 +160,7 @@ func main() {
 			},
 		})
 		registry.Register(ac.Name, mgr)
-		log.Printf("agent: %s  model: %s", ac.Name, ac.Model)
+		log.Printf("agent: %s  model: %s  tools: %d", ac.Name, ac.Model, len(tools))
 	}
 
 	if len(cfg.Agents) == 0 {
@@ -279,6 +337,14 @@ func registerAPI(srv *gateway.Server, cfg *config.Config, db *store.DB, registry
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(v)
+}
+
+func buildRuntimeInfo(ac config.AgentConfig) string {
+	info := "model=" + ac.Model
+	if ac.WorkspaceDir != "" {
+		info += " | workspace=" + ac.WorkspaceDir
+	}
+	return info
 }
 
 // extractText returns the first text content from a message.
