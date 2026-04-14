@@ -20,6 +20,7 @@ import (
 	"syscall"
 
 	"github.com/ai-gateway/clawfirm/agent"
+	"github.com/ai-gateway/clawfirm/channel/telegram"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/gateway"
@@ -199,6 +200,19 @@ func main() {
 	// ── Run ───────────────────────────────────────────────────────────────────
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	// ── Telegram channel ─────────────────────────────────────────────────────
+	if defaultAgent != "" && cfg.Telegram.BotToken != "" {
+		tgCh := telegram.New(cfg.Telegram.BotToken, registry, defaultAgent)
+		tgCtx, tgCancel := context.WithCancel(ctx)
+		defer tgCancel()
+		go func() {
+			if err := tgCh.Start(tgCtx); err != nil {
+				log.Printf("telegram: %v", err)
+			}
+		}()
+		log.Printf("telegram: starting bot")
+	}
 
 	log.Printf("gateway: starting on %s  default-agent: %s", listenAddr, defaultAgent)
 	log.Printf("gateway: http://localhost%s  (Web UI)", listenAddr)

@@ -27,9 +27,13 @@ func BuildProviders(cfg *config.Config) (map[string]provider.LLMProvider, error)
 	for id, pc := range cfg.Providers {
 		prov, err := BuildProvider(id, pc)
 		if err != nil {
-			return nil, err
+			log.Printf("agentbuilder: skipping provider %q: %v", id, err)
+			continue
 		}
 		out[id] = prov
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("no usable providers configured")
 	}
 	return out, nil
 }
@@ -60,7 +64,7 @@ func BuildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, e
 		if base == "" {
 			base = "https://api.openai.com/v1"
 		}
-		if key == "" {
+		if key == "" && !isLocalURL(base) {
 			return nil, fmt.Errorf("provider %q: no api_key", id)
 		}
 		return openai.NewWithBaseURL(key, base), nil
@@ -460,6 +464,33 @@ func buildBrowserShortcut(refs []AgentRef) *builtin.BrowserShortcut {
 		}
 	}
 	return &builtin.BrowserShortcut{}
+}
+
+// isLocalURL returns true if the URL points to a local, loopback, or
+// private-network address (RFC 1918 / link-local).
+func isLocalURL(u string) bool {
+	return strings.Contains(u, "://localhost") ||
+		strings.Contains(u, "://127.") ||
+		strings.Contains(u, "://0.0.0.0") ||
+		strings.Contains(u, "://[::1]") ||
+		strings.Contains(u, "://10.") ||
+		strings.Contains(u, "://192.168.") ||
+		strings.Contains(u, "://172.16.") ||
+		strings.Contains(u, "://172.17.") ||
+		strings.Contains(u, "://172.18.") ||
+		strings.Contains(u, "://172.19.") ||
+		strings.Contains(u, "://172.20.") ||
+		strings.Contains(u, "://172.21.") ||
+		strings.Contains(u, "://172.22.") ||
+		strings.Contains(u, "://172.23.") ||
+		strings.Contains(u, "://172.24.") ||
+		strings.Contains(u, "://172.25.") ||
+		strings.Contains(u, "://172.26.") ||
+		strings.Contains(u, "://172.27.") ||
+		strings.Contains(u, "://172.28.") ||
+		strings.Contains(u, "://172.29.") ||
+		strings.Contains(u, "://172.30.") ||
+		strings.Contains(u, "://172.31.")
 }
 
 // ProviderEnvVar returns the conventional env var name for a provider ID.

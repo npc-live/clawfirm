@@ -4,6 +4,7 @@
 //
 //	Client → Server: {"type":"message","content":"...","images":[{"data":"base64","mime":"image/jpeg"}]}
 //	Server → Client: {"type":"thinking","timestamp":...}
+//	                 {"type":"thinking_delta","content":"..."}
 //	                 {"type":"delta","content":"..."}
 //	                 {"type":"done","stop_reason":"stop"}
 //	                 {"type":"error","content":"..."}
@@ -54,7 +55,7 @@ type imageData struct {
 
 // serverMessage is the JSON format the server sends to clients.
 type serverMessage struct {
-	Type       string `json:"type"`                  // "delta" | "done" | "error" | "tool_start" | "tool_update" | "tool_end"
+	Type       string `json:"type"`                  // "delta" | "thinking_delta" | "done" | "error" | "tool_start" | "tool_update" | "tool_end"
 	Content    string `json:"content,omitempty"`
 	StopReason string `json:"stop_reason,omitempty"` // on "done"
 	Timestamp  int64  `json:"timestamp,omitempty"`
@@ -221,6 +222,11 @@ func handleAgentEvent(write func(any), ev types.AgentEvent) {
 		case types.StreamEventTextDelta:
 			write(serverMessage{
 				Type:    "delta",
+				Content: ev.StreamEvent.Delta,
+			})
+		case types.StreamEventThinkingDelta:
+			write(serverMessage{
+				Type:    "thinking_delta",
 				Content: ev.StreamEvent.Delta,
 			})
 		case types.StreamEventError:

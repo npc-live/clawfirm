@@ -447,6 +447,18 @@ export namespace config {
 	        this.Enabled = source["Enabled"];
 	    }
 	}
+	export class TelegramConfig {
+	    BotToken: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TelegramConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.BotToken = source["BotToken"];
+	    }
+	}
 	export class FeishuConfig {
 	    AppID: string;
 	    AppSecret: string;
@@ -484,6 +496,7 @@ export namespace config {
 	    DefaultProvider: string;
 	    DefaultModel: string;
 	    Feishu: FeishuConfig;
+	    Telegram: TelegramConfig;
 	    WhatsApp: WhatsAppConfig;
 	    whipflow: WhipflowConfig;
 	    cron_jobs: CronJobConfig[];
@@ -502,6 +515,7 @@ export namespace config {
 	        this.DefaultProvider = source["DefaultProvider"];
 	        this.DefaultModel = source["DefaultModel"];
 	        this.Feishu = this.convertValues(source["Feishu"], FeishuConfig);
+	        this.Telegram = this.convertValues(source["Telegram"], TelegramConfig);
 	        this.WhatsApp = this.convertValues(source["WhatsApp"], WhatsAppConfig);
 	        this.whipflow = this.convertValues(source["whipflow"], WhipflowConfig);
 	        this.cron_jobs = this.convertValues(source["cron_jobs"], CronJobConfig);
@@ -527,6 +541,7 @@ export namespace config {
 		    return a;
 		}
 	}
+	
 	
 	
 	

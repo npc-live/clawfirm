@@ -11,7 +11,6 @@ import (
 	"log"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -736,7 +735,8 @@ func (a *App) startGateway() error {
 	for _, ac := range cfg.Agents {
 		prov, ok := providerMap[ac.Provider]
 		if !ok {
-			return fmt.Errorf("startGateway: agent %q: provider %q not found", ac.Name, ac.Provider)
+			log.Printf("app: skipping agent %q: provider %q not available", ac.Name, ac.Provider)
+			continue
 		}
 		maxTokens := ac.MaxTokens
 		if maxTokens == 0 {
@@ -962,16 +962,7 @@ func (a *App) startGateway() error {
 		log.Printf("app: agent %s  provider: %s  model: %s", ac.Name, ac.Provider, ac.Model)
 	}
 
-	// Random loopback port.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return fmt.Errorf("startGateway: listen: %w", err)
-	}
-	addr := ln.Addr().String()
-	ln.Close() // gateway.Server will re-listen on this addr
-	// Note: there is a brief TOCTOU window here; acceptable for desktop use.
-
-	srv := gateway.NewServer(registry, gateway.ServerConfig{Addr: addr})
+	srv := gateway.NewServer(registry, gateway.ServerConfig{Addr: "127.0.0.1:0"})
 
 	defaultAgent := cfg.DefaultAgent
 	if defaultAgent == "" && len(cfg.Agents) > 0 {
@@ -981,13 +972,20 @@ func (a *App) startGateway() error {
 	srv.Handle("GET /ws/{agentName}/{sessionID}", handler)
 	srv.Handle("GET /ws/{sessionID}", handler)
 
+	// Listen first, then store the address so GetWebhookBaseURL returns a
+	// reachable endpoint only after the port is actually bound.
+	ln, err := srv.Listen()
+	if err != nil {
+		return fmt.Errorf("startGateway: %w", err)
+	}
+
 	a.mu.Lock()
 	a.registry = registry
-	a.srvAddr = addr
+	a.srvAddr = srv.Addr()
 	a.mu.Unlock()
 
 	go func() {
-		if err := srv.Start(a.ctx); err != nil {
+		if err := srv.Serve(a.ctx, ln); err != nil {
 			log.Printf("app: gateway stopped: %v", err)
 		}
 	}()
@@ -1037,7 +1035,7 @@ func (a *App) startGateway() error {
 		}()
 	}
 
-	log.Printf("app: gateway started on %s", addr)
+	log.Printf("app: gateway started on %s", srv.Addr())
 	return nil
 }
 

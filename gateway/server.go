@@ -112,6 +112,36 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 }
 
+// Listen binds the server to its address and returns the actual address.
+// Call Serve after storing the address to avoid TOCTOU races.
+func (s *Server) Listen() (net.Listener, error) {
+	ln, err := net.Listen("tcp", s.addr)
+	if err != nil {
+		return nil, fmt.Errorf("gateway: listen %s: %w", s.addr, err)
+	}
+	s.addr = ln.Addr().String()
+	log.Printf("gateway: listening on %s", s.addr)
+	return ln, nil
+}
+
+// Serve accepts connections on ln. Blocks until ctx is cancelled or an error occurs.
+func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
+	errCh := make(chan error, 1)
+	go func() {
+		if err := s.httpSrv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		_ = s.httpSrv.Shutdown(context.Background())
+		return nil
+	case err := <-errCh:
+		return err
+	}
+}
+
 // Addr returns the configured listen address.
 func (s *Server) Addr() string { return s.addr }
 

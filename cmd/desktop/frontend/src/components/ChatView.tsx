@@ -32,6 +32,7 @@ function readFileAsBase64(file: File): Promise<{ data: string; mime: string }> {
 interface Message {
   role: "user" | "assistant";
   content: string;
+  thinking?: string; // accumulated native thinking (e.g. Anthropic extended thinking)
   streaming?: boolean;
   fileCount?: number;
 }
@@ -149,6 +150,42 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
     }).catch(() => {});
   }, [agentName, sessionID]);
 
+  // Split message content into segments: thinking blocks and regular text.
+  // Handles <think>...</think> tags emitted by models like DeepSeek/QwQ.
+  // Also handles unclosed <think> (streaming) as "thinking_open".
+  // Strips orphan </think> tags that appear without a matching <think>.
+  function parseThinkingBlocks(text: string): { type: "text" | "thinking" | "thinking_open"; content: string }[] {
+    const segments: { type: "text" | "thinking" | "thinking_open"; content: string }[] = [];
+    const re = /<think>([\s\S]*?)<\/think>/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        segments.push({ type: "text", content: text.slice(lastIndex, match.index) });
+      }
+      segments.push({ type: "thinking", content: match[1].trim() });
+      lastIndex = re.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      const remaining = text.slice(lastIndex);
+      // Check for unclosed <think> tag (still streaming)
+      const openIdx = remaining.indexOf("<think>");
+      if (openIdx !== -1) {
+        if (openIdx > 0) {
+          segments.push({ type: "text", content: remaining.slice(0, openIdx) });
+        }
+        segments.push({ type: "thinking_open", content: remaining.slice(openIdx + 7).trim() });
+      } else {
+        // Strip any orphan </think> tags (e.g. model output starts with </think>)
+        const cleaned = remaining.replace(/<\/think>/g, "");
+        if (cleaned.trim()) {
+          segments.push({ type: "text", content: cleaned });
+        }
+      }
+    }
+    return segments;
+  }
+
   // Extract the last complete ```html code block from text.
   function extractHtmlBlock(text: string): string | null {
     const matches = [...text.matchAll(/```html\n([\s\S]*?)```/g)];
@@ -185,6 +222,17 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
   const handleMessage = useCallback((msg: WSMessage) => {
     if (msg.type === "thinking") {
       setIsThinking(true);
+      return;
+    }
+    if (msg.type === "thinking_delta" && msg.content) {
+      setIsThinking(true);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && last.streaming) {
+          return [...prev.slice(0, -1), { ...last, thinking: (last.thinking || "") + msg.content }];
+        }
+        return [...prev, { role: "assistant", content: "", thinking: msg.content, streaming: true }];
+      });
       return;
     }
     if (msg.type === "delta" && msg.content) {
@@ -500,7 +548,58 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                   }`}
                 >
                   <div className="prose-pre:overflow-x-auto prose-pre:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-white/20 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-white/20 [&_td]:px-2 [&_td]:py-1">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                    {msg.role === "assistant" ? (
+                      <>
+                        {/* Native thinking (Anthropic extended thinking) */}
+                        {msg.thinking && (
+                          <details className="my-2 rounded-lg border border-[rgba(61,57,41,0.1)] bg-[rgba(61,57,41,0.03)] overflow-hidden"
+                            open={msg.streaming && !msg.content}>
+                            <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.6)] transition-colors flex items-center gap-1.5">
+                              {msg.streaming && !msg.content && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-[rgba(200,90,42,0.4)] animate-pulse" />
+                              )}
+                              {msg.streaming && !msg.content ? "Thinking..." : "Thinking"}
+                            </summary>
+                            <div className="px-3 pb-2 text-[12px] text-[rgba(61,57,41,0.5)] leading-relaxed">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.thinking}</ReactMarkdown>
+                            </div>
+                          </details>
+                        )}
+                        {/* Text content — parse <think> tags from models like DeepSeek/QwQ */}
+                        {msg.content.includes("<think>") || msg.content.includes("</think>") ? (
+                          parseThinkingBlocks(msg.content).map((seg, si) =>
+                            seg.type === "thinking" ? (
+                              <details key={si} className="my-2 rounded-lg border border-[rgba(61,57,41,0.1)] bg-[rgba(61,57,41,0.03)] overflow-hidden">
+                                <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.6)] transition-colors">
+                                  Thinking
+                                </summary>
+                                <div className="px-3 pb-2 text-[12px] text-[rgba(61,57,41,0.5)] leading-relaxed">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
+                                </div>
+                              </details>
+                            ) : seg.type === "thinking_open" ? (
+                              <details key={si} open className="my-2 rounded-lg border border-[rgba(200,90,42,0.15)] bg-[rgba(200,90,42,0.03)] overflow-hidden">
+                                <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[rgba(200,90,42,0.5)] flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(200,90,42,0.4)] animate-pulse" />
+                                  Thinking...
+                                </summary>
+                                {seg.content && (
+                                  <div className="px-3 pb-2 text-[12px] text-[rgba(61,57,41,0.5)] leading-relaxed">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
+                                  </div>
+                                )}
+                              </details>
+                            ) : seg.content.trim() ? (
+                              <ReactMarkdown key={si} remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
+                            ) : null
+                          )
+                        ) : msg.content ? (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                        ) : null}
+                      </>
+                    ) : (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                    )}
                   </div>
                   {msg.role === "user" && msg.fileCount && (
                     <div className="mt-1 text-[11px] opacity-70">

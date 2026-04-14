@@ -7,7 +7,7 @@ COPY cmd/desktop/frontend/ ./
 RUN npm run build
 
 # Stage 2: Build Go binary
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -19,10 +19,19 @@ RUN CGO_ENABLED=0 go build -o /gateway ./cmd/gateway
 # Stage 3: Runtime
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S clawfirm && adduser -S clawfirm -G clawfirm \
-    && mkdir -p /var/lib/clawfirm && chown clawfirm:clawfirm /var/lib/clawfirm
+    && addgroup -g 1000 -S clawfirm && adduser -u 1000 -S clawfirm -G clawfirm \
+    && mkdir -p /data && chown 1000:1000 /data
 COPY --from=builder /gateway /usr/local/bin/gateway
+
+# All state lives under /data (config.yml, data.db, memory/).
+# Mount a host volume here:
+#   docker run -v /path/on/host:/data clawfirm-gateway
+# Ensure the host directory is owned by UID 1000:
+#   chown -R 1000:1000 /path/on/host
+ENV HOME=/data
+VOLUME /data
 USER clawfirm
-ENV HOME=/var/lib/clawfirm
 EXPOSE 9988
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD wget -qO- http://localhost:9988/health || exit 1
 ENTRYPOINT ["gateway"]

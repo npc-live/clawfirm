@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   GetChannels, GetChatSessions, GetHistory,
   GetConfig, SaveConfig,
@@ -848,8 +848,72 @@ function HistoryPanel({ jobId }: { jobId: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Channels pane
+// New Chat dropdown button
 // ─────────────────────────────────────────────────────────────────────────────
+
+function NewChatButton({ channels, onOpenChat }: {
+  channels: ChannelInfo[];
+  onOpenChat: (agentName: string, sessionID: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  if (channels.length <= 1) {
+    return (
+      <button
+        onClick={() => {
+          const name = channels[0]?.name;
+          if (name) onOpenChat(name, "s" + Date.now());
+        }}
+        className="px-4 py-2 text-[13px] bg-[#c85a2a] text-white rounded-xl hover:bg-[#a84a22] transition-colors font-medium"
+      >
+        + New Chat
+      </button>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="px-4 py-2 text-[13px] bg-[#c85a2a] text-white rounded-xl hover:bg-[#a84a22] transition-colors font-medium flex items-center gap-1.5"
+      >
+        + New Chat
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className={`transition-transform ${open ? "rotate-180" : ""}`}>
+          <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1.5 min-w-[180px] bg-white rounded-xl border border-[rgba(61,57,41,0.12)] shadow-lg overflow-hidden z-50">
+          {channels.map((c) => (
+            <button
+              key={c.name}
+              onClick={() => {
+                setOpen(false);
+                onOpenChat(c.name, "s" + Date.now());
+              }}
+              className="w-full text-left px-4 py-2.5 text-[13px] text-[#3d3929] hover:bg-[rgba(200,90,42,0.08)] transition-colors flex items-center gap-2.5"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="font-medium">{c.name}</span>
+              <span className="text-[11px] text-[rgba(61,57,41,0.35)] ml-auto">{c.model}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Chats — session history list
 // ─────────────────────────────────────────────────────────────────────────────
@@ -884,15 +948,7 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
           <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Chats</h2>
           <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Your conversation history</p>
         </div>
-        <button
-          onClick={() => {
-            const agentName = channels[0]?.name;
-            if (agentName) onOpenChat(agentName, "s" + Date.now());
-          }}
-          className="px-4 py-2 text-[13px] bg-[#c85a2a] text-white rounded-xl hover:bg-[#a84a22] transition-colors font-medium"
-        >
-          + New Chat
-        </button>
+        <NewChatButton channels={channels} onOpenChat={onOpenChat} />
       </header>
 
       {allSessions.length === 0 ? (
