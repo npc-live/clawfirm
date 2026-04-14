@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GetWhatsAppQR, GetWhatsAppStatus, LogoutWhatsApp } from "../wailsjs/go/app/App";
+import { GetWhatsAppQR, GetWhatsAppStatus, LogoutWhatsApp } from "../lib/wails-shim";
 
 const POLL_MS = 2000;
 

@@ -15,6 +15,10 @@ cmd/desktop/build/darwin/
 cmd/desktop/build/bin/
 cmd/desktop/frontend/node_modules/
 cmd/desktop/frontend/dist/
+
+# Gateway embedded frontend (built artifacts, keep .gitkeep)
+cmd/gateway/frontend/dist/*
+!cmd/gateway/frontend/dist/.gitkeep
 cmd/desktop/frontend/wailsjs/
 cmd/desktop/frontend/package.json.md5
 cmd/desktop/desktop

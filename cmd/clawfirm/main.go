@@ -38,6 +38,8 @@ func main() {
 		runValidate(os.Args[2:])
 	case "vault":
 		runVault(os.Args[2:])
+	case "daemon":
+		runDaemon(os.Args[2:])
 	case "skill":
 		runSkill(os.Args[2:])
 	case "install-skills":
@@ -63,6 +65,7 @@ Commands:
   run <file.whip>          Run a WhipFlow workflow
   validate <file.whip>     Validate a WhipFlow workflow (parse + semantic check)
   vault <subcommand>       Encrypted secret vault (init, set, get, list, ...)
+  daemon start|stop|status Manage the watchdog daemon
   skill search <query>     Search the remote skill registry
   skill install <name>     Install a skill from the registry
   skill sync               Sync skills to client directories

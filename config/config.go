@@ -14,6 +14,92 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// setIfEmpty sets *dst to the first non-empty env var value found,
+// only when *dst is already empty. envKeys are tried in order.
+func setIfEmpty(dst *string, envKeys ...string) {
+	if *dst != "" {
+		return
+	}
+	for _, k := range envKeys {
+		if v := os.Getenv(k); v != "" {
+			*dst = v
+			return
+		}
+	}
+}
+
+// setBoolIfUnset sets *dst from the env var when *dst is false.
+// Truthy values: "1", "true", "yes" (case-insensitive).
+func setBoolIfUnset(dst *bool, envKey string) {
+	if *dst {
+		return
+	}
+	switch strings.ToLower(os.Getenv(envKey)) {
+	case "1", "true", "yes":
+		*dst = true
+	}
+}
+
+// discoverProvidersFromEnv scans environment for CLAWFIRM_PROVIDERS_<ID>_API_KEY
+// and registers any provider not already declared in cfg.Providers.
+func discoverProvidersFromEnv(cfg *Config) {
+	const prefix = "CLAWFIRM_PROVIDERS_"
+	const keySuffix = "_API_KEY"
+	for _, env := range os.Environ() {
+		k, v, ok := strings.Cut(env, "=")
+		if !ok || v == "" {
+			continue
+		}
+		if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, keySuffix) {
+			continue
+		}
+		// Extract provider ID: CLAWFIRM_PROVIDERS_<ID>_API_KEY → <id> (lowercase)
+		id := strings.ToLower(k[len(prefix) : len(k)-len(keySuffix)])
+		if id == "" {
+			continue
+		}
+		if _, exists := cfg.Providers[id]; exists {
+			continue
+		}
+		envPrefix := prefix + strings.ToUpper(id)
+		cfg.Providers[id] = ProviderConfig{
+			Type:    os.Getenv(envPrefix + "_TYPE"),
+			APIKey:  v,
+			BaseURL: os.Getenv(envPrefix + "_BASE_URL"),
+		}
+	}
+}
+
+// applyEnvDefaults fills zero-value Config fields from environment variables.
+// Called after YAML parsing so YAML values always take priority.
+func applyEnvDefaults(cfg *Config) {
+	// Simple top-level fields
+	setIfEmpty(&cfg.DefaultProvider, "CLAWFIRM_DEFAULT_PROVIDER")
+	setIfEmpty(&cfg.DefaultModel, "CLAWFIRM_DEFAULT_MODEL")
+	setIfEmpty(&cfg.DefaultAgent, "CLAWFIRM_DEFAULT_AGENT")
+
+	// Telegram (CLAWFIRM_ prefix first, legacy fallback second)
+	setIfEmpty(&cfg.Telegram.BotToken, "CLAWFIRM_TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN")
+
+	// Feishu (CLAWFIRM_ prefix first, legacy fallback second)
+	setIfEmpty(&cfg.Feishu.AppID, "CLAWFIRM_FEISHU_APP_ID", "FEISHU_APP_ID")
+	setIfEmpty(&cfg.Feishu.AppSecret, "CLAWFIRM_FEISHU_APP_SECRET", "FEISHU_APP_SECRET")
+
+	// WhatsApp
+	setBoolIfUnset(&cfg.WhatsApp.Enabled, "CLAWFIRM_WHATSAPP_ENABLED")
+
+	// Media
+	setIfEmpty(&cfg.Media.Provider, "CLAWFIRM_MEDIA_PROVIDER")
+	setIfEmpty(&cfg.Media.Model, "CLAWFIRM_MEDIA_MODEL")
+
+	// ImageGen
+	setIfEmpty(&cfg.ImageGen.Provider, "CLAWFIRM_IMAGE_GEN_PROVIDER")
+	setIfEmpty(&cfg.ImageGen.Model, "CLAWFIRM_IMAGE_GEN_MODEL")
+
+	// Dynamic provider discovery
+	discoverProvidersFromEnv(cfg)
+}
+
 // ProviderConfig holds connection settings for a single LLM provider.
 type ProviderConfig struct {
 	// Type identifies the API protocol to use.
@@ -73,6 +159,13 @@ type AgentConfig struct {
 
 	// IdleMinutes is the idle threshold for ResetMode "idle" (default 30).
 	IdleMinutes int `yaml:"idle_minutes" json:"idle_minutes"`
+}
+
+// TelegramConfig holds credentials for the Telegram Bot channel.
+type TelegramConfig struct {
+	// BotToken is the Telegram Bot API token (format: 123456789:ABCdef...).
+	// Supports ${ENV_VAR} expansion. Falls back to TELEGRAM_BOT_TOKEN env var.
+	BotToken string `yaml:"bot_token"`
 }
 
 // WhatsAppConfig holds settings for the WhatsApp channel.
@@ -168,6 +261,9 @@ type Config struct {
 	// Feishu configures the Feishu (Lark) channel. Optional.
 	Feishu FeishuConfig `yaml:"feishu"`
 
+	// Telegram configures the Telegram Bot channel. Optional.
+	Telegram TelegramConfig `yaml:"telegram"`
+
 	// WhatsApp configures the WhatsApp channel. Optional.
 	WhatsApp WhatsAppConfig `yaml:"whatsapp"`
 
@@ -254,7 +350,9 @@ func Load(path string) (*Config, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return &Config{Providers: make(map[string]ProviderConfig)}, nil
+		cfg := &Config{Providers: make(map[string]ProviderConfig)}
+		applyEnvDefaults(cfg)
+		return cfg, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("config: read %s: %w", path, err)
@@ -280,17 +378,15 @@ func Load(path string) (*Config, error) {
 	cfg.DefaultAgent = expandEnv(cfg.DefaultAgent)
 	cfg.Feishu.AppID = expandEnv(cfg.Feishu.AppID)
 	cfg.Feishu.AppSecret = expandEnv(cfg.Feishu.AppSecret)
-	// Fall back to environment variables when not set in config.
-	if cfg.Feishu.AppID == "" {
-		cfg.Feishu.AppID = os.Getenv("FEISHU_APP_ID")
-	}
-	if cfg.Feishu.AppSecret == "" {
-		cfg.Feishu.AppSecret = os.Getenv("FEISHU_APP_SECRET")
-	}
+	cfg.Telegram.BotToken = expandEnv(cfg.Telegram.BotToken)
 
 	// Expand env vars in media config.
 	cfg.Media.Provider = expandEnv(cfg.Media.Provider)
 	cfg.Media.Model = expandEnv(cfg.Media.Model)
+
+	// Expand env vars in image gen config.
+	cfg.ImageGen.Provider = expandEnv(cfg.ImageGen.Provider)
+	cfg.ImageGen.Model = expandEnv(cfg.ImageGen.Model)
 
 	// Expand env vars in cron jobs.
 	for i, cj := range cfg.CronJobs {
@@ -301,6 +397,9 @@ func Load(path string) (*Config, error) {
 		cfg.CronJobs[i].Schedule.Expr = expandEnv(cj.Schedule.Expr)
 		cfg.CronJobs[i].Schedule.Tz = expandEnv(cj.Schedule.Tz)
 	}
+
+	// Fill zero-value fields from environment variables (YAML > env).
+	applyEnvDefaults(&cfg)
 
 	return &cfg, nil
 }

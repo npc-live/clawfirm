@@ -13,6 +13,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -81,7 +82,7 @@ func main() {
 	}
 
 	// Execute.
-	rows, err := browser.RunYAMLCommand(fp, in.Command, in.Args, 9222)
+	rows, err := browser.RunYAMLCommand(context.Background(), fp, in.Command, in.Args, 9222, nil, nil)
 	if err != nil {
 		fatal("browser shortcut error: %v", err)
 	}

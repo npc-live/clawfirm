@@ -14,8 +14,8 @@ import {
   BrowserTestCDP, BrowserLaunchChrome,
   BrowserListShortcuts, BrowserRunShortcut,
   DisableRemote, EnableNgrok, GetRemoteStatus,
-} from "../wailsjs/go/app/App";
-import type { ChannelInfo, HistoryMessage, SkillInfo, RemoteSkillInfo, CronJob, CronJobHistory, Config, ProviderInfo, VaultEntry, BrowserStatus, ShortcutInfo, RemoteStatus } from "../wailsjs/go/app/App";
+} from "../lib/wails-shim";
+import type { ChannelInfo, HistoryMessage, SkillInfo, RemoteSkillInfo, CronJob, CronJobHistory, Config, ProviderInfo, VaultEntry, BrowserStatus, ShortcutInfo, RemoteStatus } from "../lib/wails-shim";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { MemoryPane } from "./MemoryPane";
 import { ProvidersPane } from "./ProvidersPane";

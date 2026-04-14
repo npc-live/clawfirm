@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { IsFirstRun, GetChatSessions, GetChannels } from "./wailsjs/go/app/App";
+import { IsFirstRun, GetChatSessions, GetChannels } from "./lib/wails-shim";
 import { SetupWizard } from "./components/SetupWizard";
 import { Dashboard } from "./components/Dashboard";
 import { ChatView } from "./components/ChatView";

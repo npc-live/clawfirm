@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutionState, type SkillInfo } from "../wailsjs/go/app/App";
+import { GetWebhookBaseURL, AbortCurrentTurn, GetHistory, GetAgentSkills, GetToolExecutionState, type SkillInfo } from "../lib/wails-shim";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
 import { ToolPanel, type ToolExecution, isWhipflowPreview } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";
@@ -65,9 +65,36 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
   const [whipAskReady, setWhipAskReady] = useState(false);
   const [activeTab, setActiveTab] = useState<"tools" | "preview">("tools");
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([]);
+  const [leftPanelWidth, setLeftPanelWidth] = useState(40); // percentage
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  // Resize splitter drag handlers
+  const handleSplitterMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setLeftPanelWidth(Math.min(80, Math.max(20, pct)));
+    };
+    const onMouseUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, []);
 
   // Persist current session so App.tsx can restore it on next launch.
   useEffect(() => {
@@ -447,9 +474,9 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
       </header>
 
       {/* Main content: Chat (left) + Tool Panel (right) */}
-      <div className="flex flex-1 min-h-0">
-        {/* Left: Chat + Input (40%) */}
-        <div className="w-[40%] flex flex-col min-w-0">
+      <div ref={containerRef} className="flex flex-1 min-h-0">
+        {/* Left: Chat + Input */}
+        <div style={{ width: `${leftPanelWidth}%` }} className="flex flex-col min-w-0">
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
             {messages.length === 0 && (
               <div className="text-center text-[rgba(61,57,41,0.3)] mt-16 text-[13px]">Start a conversation</div>
@@ -694,8 +721,14 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
           </div>
         </div>
 
-        {/* Right: Tabbed Panel (60%) */}
-        <div className="w-[60%] border-l border-[rgba(61,57,41,0.08)] min-h-0 flex flex-col">
+        {/* Resize handle */}
+        <div
+          onMouseDown={handleSplitterMouseDown}
+          className="w-1 flex-shrink-0 cursor-col-resize bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(200,90,42,0.3)] active:bg-[rgba(200,90,42,0.5)] transition-colors"
+        />
+
+        {/* Right: Tabbed Panel */}
+        <div style={{ width: `${100 - leftPanelWidth}%` }} className="border-l border-[rgba(61,57,41,0.08)] min-h-0 flex flex-col">
           {/* Tab bar */}
           <div className="flex border-b border-[rgba(61,57,41,0.08)] flex-shrink-0">
             <button

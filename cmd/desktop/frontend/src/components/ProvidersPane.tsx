@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { GetConfig, SaveConfig, TestProviderConnection } from "../wailsjs/go/app/App";
-import type { Config } from "../wailsjs/go/app/App";
+import { GetConfig, SaveConfig, TestProviderConnection } from "../lib/wails-shim";
+import type { Config } from "../lib/wails-shim";
 
 const PROVIDER_TYPES = [
   "anthropic", "minimax", "openai", "gemini", "ollama",

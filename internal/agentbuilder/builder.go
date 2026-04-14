@@ -326,7 +326,14 @@ func DefaultModelForProvider(providerID string) string {
 //
 // The returned slice always includes a tool_search meta-tool as the last element
 // (unless names is empty). tool_search lets the LLM discover deferred tools.
-func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string, mediaProvider provider.LLMProvider) []tool.AgentTool {
+// AgentRef identifies the calling agent's provider and model so that tools
+// like browser_shortcut can reuse the same LLM for sub-tasks (e.g. healing).
+type AgentRef struct {
+	Provider provider.LLMProvider
+	Model    string
+}
+
+func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string, mediaProvider provider.LLMProvider, agentRef ...AgentRef) []tool.AgentTool {
 	if len(names) == 0 {
 		return nil
 	}
@@ -356,8 +363,8 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		// Network
 		"fetch":      &builtin.Fetch{},
 		"web_search": &builtin.WebSearch{APIKey: os.Getenv("BRAVE_SEARCH_API_KEY")},
-		// Browser automation
-		"browser_shortcut": &builtin.BrowserShortcut{},
+		// Browser automation — auto-healing uses the agent's own provider.
+		"browser_shortcut": buildBrowserShortcut(agentRef),
 		// Workflows
 		"whipflow_run": &builtin.WhipflowRun{PiConfig: cfg, VaultEnv: vaultEnv, SkillLoader: skillTool},
 		// Memory
@@ -441,6 +448,18 @@ func resolveMediaProviderType(cfg *config.Config) string {
 		return pc.Type
 	}
 	return cfg.Media.Provider
+}
+
+// buildBrowserShortcut creates a BrowserShortcut tool, optionally wired
+// with the calling agent's provider for auto-healing.
+func buildBrowserShortcut(refs []AgentRef) *builtin.BrowserShortcut {
+	if len(refs) > 0 && refs[0].Provider != nil {
+		return &builtin.BrowserShortcut{
+			Provider: refs[0].Provider,
+			Model:    refs[0].Model,
+		}
+	}
+	return &builtin.BrowserShortcut{}
 }
 
 // ProviderEnvVar returns the conventional env var name for a provider ID.

@@ -1,0 +1,27 @@
+[Unit]
+Description=Clawfirm Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=clawfirm
+Group=clawfirm
+ExecStart=/usr/local/bin/gateway -addr :9988
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+# Config and data directories
+Environment=HOME=/var/lib/clawfirm
+WorkingDirectory=/var/lib/clawfirm
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/clawfirm
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

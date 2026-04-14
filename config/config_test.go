@@ -150,6 +150,164 @@ func TestLoadConfigEnvFallback(t *testing.T) {
 	}
 }
 
+func TestApplyEnvDefaults_SimpleFields(t *testing.T) {
+	t.Setenv("CLAWFIRM_DEFAULT_PROVIDER", "env-provider")
+	t.Setenv("CLAWFIRM_DEFAULT_MODEL", "env-model")
+	t.Setenv("CLAWFIRM_DEFAULT_AGENT", "env-agent")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.DefaultProvider != "env-provider" {
+		t.Errorf("DefaultProvider: got %q want %q", cfg.DefaultProvider, "env-provider")
+	}
+	if cfg.DefaultModel != "env-model" {
+		t.Errorf("DefaultModel: got %q want %q", cfg.DefaultModel, "env-model")
+	}
+	if cfg.DefaultAgent != "env-agent" {
+		t.Errorf("DefaultAgent: got %q want %q", cfg.DefaultAgent, "env-agent")
+	}
+}
+
+func TestApplyEnvDefaults_YAMLTakesPriority(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	if err := os.WriteFile(path, []byte("default_agent: from-yaml\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAWFIRM_DEFAULT_AGENT", "from-env")
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.DefaultAgent != "from-yaml" {
+		t.Errorf("DefaultAgent: got %q want %q (YAML should win)", cfg.DefaultAgent, "from-yaml")
+	}
+}
+
+func TestApplyEnvDefaults_TelegramLegacy(t *testing.T) {
+	// Legacy env var should work
+	t.Setenv("TELEGRAM_BOT_TOKEN", "legacy-token")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Telegram.BotToken != "legacy-token" {
+		t.Errorf("Telegram.BotToken: got %q want %q", cfg.Telegram.BotToken, "legacy-token")
+	}
+}
+
+func TestApplyEnvDefaults_TelegramPrefixWins(t *testing.T) {
+	// CLAWFIRM_ prefix takes priority over legacy
+	t.Setenv("CLAWFIRM_TELEGRAM_BOT_TOKEN", "new-token")
+	t.Setenv("TELEGRAM_BOT_TOKEN", "legacy-token")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Telegram.BotToken != "new-token" {
+		t.Errorf("Telegram.BotToken: got %q want %q (CLAWFIRM_ should win)", cfg.Telegram.BotToken, "new-token")
+	}
+}
+
+func TestApplyEnvDefaults_FeishuLegacy(t *testing.T) {
+	t.Setenv("FEISHU_APP_ID", "legacy-id")
+	t.Setenv("FEISHU_APP_SECRET", "legacy-secret")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Feishu.AppID != "legacy-id" {
+		t.Errorf("Feishu.AppID: got %q want %q", cfg.Feishu.AppID, "legacy-id")
+	}
+	if cfg.Feishu.AppSecret != "legacy-secret" {
+		t.Errorf("Feishu.AppSecret: got %q want %q", cfg.Feishu.AppSecret, "legacy-secret")
+	}
+}
+
+func TestApplyEnvDefaults_WhatsAppEnabled(t *testing.T) {
+	t.Setenv("CLAWFIRM_WHATSAPP_ENABLED", "true")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !cfg.WhatsApp.Enabled {
+		t.Error("WhatsApp.Enabled: want true")
+	}
+}
+
+func TestApplyEnvDefaults_MediaAndImageGen(t *testing.T) {
+	t.Setenv("CLAWFIRM_MEDIA_PROVIDER", "gemini")
+	t.Setenv("CLAWFIRM_MEDIA_MODEL", "gemini-2.0")
+	t.Setenv("CLAWFIRM_IMAGE_GEN_PROVIDER", "openai")
+	t.Setenv("CLAWFIRM_IMAGE_GEN_MODEL", "dall-e-3")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.Media.Provider != "gemini" {
+		t.Errorf("Media.Provider: got %q", cfg.Media.Provider)
+	}
+	if cfg.Media.Model != "gemini-2.0" {
+		t.Errorf("Media.Model: got %q", cfg.Media.Model)
+	}
+	if cfg.ImageGen.Provider != "openai" {
+		t.Errorf("ImageGen.Provider: got %q", cfg.ImageGen.Provider)
+	}
+	if cfg.ImageGen.Model != "dall-e-3" {
+		t.Errorf("ImageGen.Model: got %q", cfg.ImageGen.Model)
+	}
+}
+
+func TestApplyEnvDefaults_DiscoverProviders(t *testing.T) {
+	t.Setenv("CLAWFIRM_PROVIDERS_MYCLOUD_API_KEY", "sk-mycloud")
+	t.Setenv("CLAWFIRM_PROVIDERS_MYCLOUD_TYPE", "openai")
+	t.Setenv("CLAWFIRM_PROVIDERS_MYCLOUD_BASE_URL", "https://mycloud.example.com/v1")
+
+	cfg, err := config.Load("/nonexistent/path/config.yml")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.ProviderAPIKey("mycloud") != "sk-mycloud" {
+		t.Errorf("mycloud api_key: got %q", cfg.ProviderAPIKey("mycloud"))
+	}
+	if cfg.ProviderType("mycloud") != "openai" {
+		t.Errorf("mycloud type: got %q", cfg.ProviderType("mycloud"))
+	}
+	if cfg.ProviderBaseURL("mycloud") != "https://mycloud.example.com/v1" {
+		t.Errorf("mycloud base_url: got %q", cfg.ProviderBaseURL("mycloud"))
+	}
+}
+
+func TestApplyEnvDefaults_DiscoverSkipsExisting(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	yaml := `providers:
+  existing:
+    api_key: yaml-key
+    type: anthropic
+`
+	if err := os.WriteFile(path, []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAWFIRM_PROVIDERS_EXISTING_API_KEY", "env-key")
+
+	cfg, err := config.Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if cfg.ProviderAPIKey("existing") != "yaml-key" {
+		t.Errorf("existing api_key: got %q want %q (YAML should win)", cfg.ProviderAPIKey("existing"), "yaml-key")
+	}
+}
+
 func TestLoadConfigDollarBrace(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yml")

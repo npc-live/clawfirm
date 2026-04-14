@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/ai-gateway/clawfirm/browser"
+	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/tool"
 	"github.com/ai-gateway/clawfirm/types"
 )
@@ -16,7 +17,10 @@ import (
 // BrowserShortcut executes a YAML browser automation shortcut via CDP.
 // Shortcuts are located in ~/.clawfirm/shortcuts/ (e.g. douyin.yaml, xhs.yaml).
 type BrowserShortcut struct {
-	CDPPort int // default 9222
+	CDPPort   int // default 9222
+	Provider  provider.LLMProvider
+	Model     string
+	IssueRepo string
 }
 
 func (b *BrowserShortcut) Name() string  { return "browser_shortcut" }
@@ -124,7 +128,29 @@ func (b *BrowserShortcut) Execute(ctx context.Context, id string, params map[str
 		port = 9222
 	}
 
-	rows, err := browser.RunYAMLCommand(fp, command, args, port)
+	var healer *browser.HealerConfig
+	if b.Provider != nil {
+		healer = &browser.HealerConfig{
+			Provider:  b.Provider,
+			Model:     b.Model,
+			IssueRepo: b.IssueRepo,
+		}
+	}
+
+	// Wire onUpdate as progress callback so the frontend sees step-by-step progress.
+	var progressFn browser.ProgressFunc
+	if onUpdate != nil {
+		progressFn = func(text string) {
+			onUpdate(tool.ToolUpdate{
+				Content: []types.ContentBlock{&types.TextContent{
+					Type: types.ContentTypeText,
+					Text: text,
+				}},
+			})
+		}
+	}
+
+	rows, err := browser.RunYAMLCommand(ctx, fp, command, args, port, healer, progressFn)
 	if err != nil {
 		return tool.ToolResult{
 			Content: []types.ContentBlock{&types.TextContent{Text: fmt.Sprintf("Browser shortcut error: %v", err)}},

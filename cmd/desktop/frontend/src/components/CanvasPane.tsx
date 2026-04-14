@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { GetWebhookBaseURL, AbortCurrentTurn, GetConfig, ReadCanvasFile, ListCanvasFiles } from "../wailsjs/go/app/App";
+import { GetWebhookBaseURL, AbortCurrentTurn, GetConfig, ReadCanvasFile, ListCanvasFiles } from "../lib/wails-shim";
 import { useWebSocket, type WSMessage } from "../hooks/useWebSocket";
 import { ToolPanel, type ToolExecution } from "./ToolPanel";
 import { HtmlPreview } from "./HtmlPreview";

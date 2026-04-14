@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { GetFeishuConfig, SaveFeishuConfig } from "../wailsjs/go/app/App";
+import { GetFeishuConfig, SaveFeishuConfig } from "../lib/wails-shim";
 
 export function FeishuSetup() {
   const [appID, setAppID] = useState("");

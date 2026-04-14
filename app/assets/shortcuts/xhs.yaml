@@ -91,12 +91,12 @@ commands:
       - wait: 3000
       # 等待上传按钮渲染完成（file input 是隐藏元素，不能用 wait selector）
       - wait_until:
-          eval: "!!document.querySelector('input.upload-input, input[type=file]')"
+          eval: "!!document.querySelector('input.upload-input, input.upload-input-el, input[type=file], input[accept*=video]')"
           timeout: 15000
           interval: 1000
       # 默认就在「上传视频」tab，直接上传
       - upload:
-          selector: "input.upload-input, input[type=file]"
+          selector: "input.upload-input, input.upload-input-el, input[type=file], input[accept*=video]"
           file: "{{video}}"
       # 等待上传完成（标题输入框出现，也可能是隐藏元素）
       - wait_until:

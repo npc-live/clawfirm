@@ -8,4 +8,13 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
+  server: {
+    proxy: {
+      "/api": "http://localhost:9988",
+      "/ws": {
+        target: "ws://localhost:9988",
+        ws: true,
+      },
+    },
+  },
 });

@@ -27,6 +27,7 @@ import (
 	"github.com/ai-gateway/clawfirm/browser"
 	"github.com/ai-gateway/clawfirm/channel/feishu"
 	"github.com/ai-gateway/clawfirm/channel/remote"
+	"github.com/ai-gateway/clawfirm/channel/telegram"
 	"github.com/ai-gateway/clawfirm/channel/webchat"
 	"github.com/ai-gateway/clawfirm/channel/whatsapp"
 	"github.com/ai-gateway/clawfirm/config"
@@ -96,6 +97,8 @@ type App struct {
 	whatsappCancel context.CancelFunc
 	feishuCh       *feishu.Channel
 	feishuCancel   context.CancelFunc
+	telegramCh     *telegram.Channel
+	telegramCancel context.CancelFunc
 	cronScheduler  *picron.Scheduler
 	vault          *vault.Vault
 	remoteSrv      *remote.Server
@@ -629,6 +632,9 @@ func (a *App) OnStartup(ctx context.Context) {
 		}
 	}
 
+	// Write PID file so the watchdog daemon can track us.
+	writeAppPID()
+
 	// Start cron scheduler if DB is available.
 	if a.db != nil {
 		// Clean up any "running" history rows left over from a previous crash/restart.
@@ -653,6 +659,10 @@ func (a *App) OnDomReady(_ context.Context) {
 
 // OnShutdown is called when the application is shutting down.
 func (a *App) OnShutdown(_ context.Context) {
+	// Signal the watchdog daemon that this was a clean exit.
+	writeCleanExitMarker()
+	removeAppPID()
+
 	a.mu.Lock()
 	if a.remoteSrv != nil {
 		_ = a.remoteSrv.Stop()
@@ -669,6 +679,10 @@ func (a *App) OnShutdown(_ context.Context) {
 	if a.feishuCancel != nil {
 		a.feishuCancel()
 		a.feishuCancel = nil
+	}
+	if a.telegramCancel != nil {
+		a.telegramCancel()
+		a.telegramCancel = nil
 	}
 	a.mu.Unlock()
 	if a.cancelFn != nil {
@@ -730,7 +744,7 @@ func (a *App) startGateway() error {
 		}
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
-		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
+		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
 		// Inject MessageSaver into WhipflowRun so each session's conversation
 		// is persisted to DB as channelID="whipflow/<toolExecID>" userID="<idx>".
@@ -1008,6 +1022,21 @@ func (a *App) startGateway() error {
 		}()
 	}
 
+	// Start Telegram channel if bot token is configured.
+	if defaultAgent != "" && cfg.Telegram.BotToken != "" {
+		tgCh := telegram.New(cfg.Telegram.BotToken, registry, defaultAgent)
+		tgCtx, tgCancel := context.WithCancel(a.ctx)
+		a.mu.Lock()
+		a.telegramCh = tgCh
+		a.telegramCancel = tgCancel
+		a.mu.Unlock()
+		go func() {
+			if err := tgCh.Start(tgCtx); err != nil {
+				log.Printf("app: telegram: %v", err)
+			}
+		}()
+	}
+
 	log.Printf("app: gateway started on %s", addr)
 	return nil
 }
@@ -1024,6 +1053,9 @@ func (a *App) stopGateway() {
 	fsCancel := a.feishuCancel
 	a.feishuCh = nil
 	a.feishuCancel = nil
+	tgCancel := a.telegramCancel
+	a.telegramCh = nil
+	a.telegramCancel = nil
 	remoteSrv := a.remoteSrv
 	a.remoteSrv = nil
 	remoteCancel := a.remoteCancel
@@ -1040,6 +1072,9 @@ func (a *App) stopGateway() {
 	}
 	if fsCancel != nil {
 		fsCancel()
+	}
+	if tgCancel != nil {
+		tgCancel()
 	}
 	if reg != nil {
 		reg.Stop()
@@ -1117,6 +1152,36 @@ func installVaultEnvHook() {
 		return
 	}
 	log.Printf("app: vault hook installed in %s", rcPath)
+}
+
+// writeAppPID writes the current process PID to ~/.clawfirm/app.pid.
+func writeAppPID() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".clawfirm", "app.pid")
+	_ = os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0644)
+}
+
+// removeAppPID removes the ~/.clawfirm/app.pid file.
+func removeAppPID() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	os.Remove(filepath.Join(home, ".clawfirm", "app.pid"))
+}
+
+// writeCleanExitMarker writes a ~/.clawfirm/clean_exit file to signal the
+// watchdog daemon that the app shut down intentionally.
+func writeCleanExitMarker() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	path := filepath.Join(home, ".clawfirm", "clean_exit")
+	_ = os.WriteFile(path, []byte("clean"), 0644)
 }
 
 // writeVaultEnvFile writes vault secrets to ~/.clawfirm/env as export statements
@@ -2182,6 +2247,7 @@ func (a *App) channelStatusFunc() func() []remote.ChannelStatus {
 		a.mu.RLock()
 		waCh := a.whatsappCh
 		fsCh := a.feishuCh
+		tgCh := a.telegramCh
 		a.mu.RUnlock()
 
 		var out []remote.ChannelStatus
@@ -2190,6 +2256,9 @@ func (a *App) channelStatusFunc() func() []remote.ChannelStatus {
 		}
 		if fsCh != nil {
 			out = append(out, remote.ChannelStatus{Name: "feishu", Status: "connected"})
+		}
+		if tgCh != nil {
+			out = append(out, remote.ChannelStatus{Name: "telegram", Status: "connected"})
 		}
 		return out
 	}
@@ -2543,7 +2612,7 @@ func defaultModelForProvider(providerID string) string {
 }
 
 // buildTools resolves a list of tool names to AgentTool instances.
-func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, mediaProvider provider.LLMProvider) []tool.AgentTool {
+func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, mediaProvider provider.LLMProvider, agentRef ...agentbuilder.AgentRef) []tool.AgentTool {
 	var vaultEnv func() map[string]string
 	if v != nil {
 		vaultEnv = func() map[string]string {
@@ -2551,7 +2620,7 @@ func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *v
 			return m
 		}
 	}
-	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, mediaProvider)
+	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, mediaProvider, agentRef...)
 }
 
 func streamSummarize(ctx context.Context, prov provider.LLMProvider, model types.Model, msgs []types.Message) (string, error) {
@@ -2617,7 +2686,7 @@ func (a *App) buildAgentForCron(agentName string) (gateway.AgentRunner, error) {
 		maxTokens = 4096
 	}
 	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
-	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider)
+	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
 	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
 	compacted := skill.CompactSkillPaths(skillResult.Skills)
@@ -3014,5 +3083,5 @@ func (a *App) BrowserRunShortcut(file, command string, args []string) ([]map[str
 	if _, err := os.Stat(fp); err != nil {
 		return nil, fmt.Errorf("shortcut file not found: %s", file)
 	}
-	return browser.RunYAMLCommand(fp, command, args, 9222)
+	return browser.RunYAMLCommand(context.Background(), fp, command, args, 9222, nil, nil)
 }

@@ -6,14 +6,29 @@ VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "de
 # Go binaries that get embedded as universal (arm64+amd64) into app/assets for the .app bundle
 UNIVERSAL_CMDS := func whip browser-shortcut media-understand media-gen
 
-.PHONY: all clean $(CMDS) desktop frontend app install claw claw-debug \
+.PHONY: all clean $(CMDS) desktop frontend gateway-frontend app install linux linux-arm64 \
         mobile-android mobile-ios mobile-dev-android mobile-dev-ios mobile-install-android test
 
-all: claw $(CMDS) desktop
+all: $(CMDS) desktop
 
 # ── Pure Go binaries ──────────────────────────────────────────────
 $(CMDS):
 	$(GO) build -o $(BIN_DIR)/$@ ./cmd/$@
+
+# ── Gateway frontend (build into cmd/gateway/frontend/dist for embed) ────
+gateway-frontend:
+	cd cmd/desktop/frontend && npm install && npm run build
+	rm -rf cmd/gateway/frontend/dist
+	cp -r cmd/desktop/frontend/dist cmd/gateway/frontend/dist
+
+# ── Linux cross-compile ──────────────────────────────────────────
+linux: gateway-frontend
+	GOOS=linux GOARCH=amd64 $(GO) build -o $(BIN_DIR)/linux/clawfirm ./cmd/clawfirm
+	GOOS=linux GOARCH=amd64 $(GO) build -o $(BIN_DIR)/linux/gateway ./cmd/gateway
+
+linux-arm64: gateway-frontend
+	GOOS=linux GOARCH=arm64 $(GO) build -o $(BIN_DIR)/linux-arm64/clawfirm ./cmd/clawfirm
+	GOOS=linux GOARCH=arm64 $(GO) build -o $(BIN_DIR)/linux-arm64/gateway ./cmd/gateway
 
 # ── Desktop (Wails) ──────────────────────────────────────────────
 frontend:
@@ -25,23 +40,12 @@ desktop:
 	@mkdir -p cmd/desktop/build/bin
 	cd cmd/desktop && wails build -o ../../$(BIN_DIR)/desktop
 
-# ── claw-code Rust CLI ───────────────────────────────────────────
-claw:
-	cd claw-code/rust && cargo build --release
-	@echo "✓ Built: claw-code/rust/target/release/claw"
-
-claw-debug:
-	cd claw-code/rust && cargo build
-	@echo "✓ Built: claw-code/rust/target/debug/claw"
-
 # ── macOS .app bundle ────────────────────────────────────────────
 # Produces: bin/clawfirm.app  (drag to /Applications to install)
 # Embeds darwin/universal Go binaries + claw into app/assets before compiling.
 ENTITLEMENTS := cmd/desktop/build/darwin/entitlements.plist
 
-app: $(addsuffix -universal,$(UNIVERSAL_CMDS)) claw
-	@cp claw-code/rust/target/release/claw app/assets/claw
-	@echo "✓ Embedded claw binary: app/assets/claw ($$(wc -c < app/assets/claw | tr -d ' ') bytes)"
+app: $(addsuffix -universal,$(UNIVERSAL_CMDS))
 	@rm -rf cmd/desktop/frontend/wailsjs cmd/desktop/build/bin
 	cd cmd/desktop && wails generate module
 	cd cmd/desktop && wails build \
@@ -105,7 +109,7 @@ clean:
 	rm -rf $(BIN_DIR)
 	rm -rf cmd/desktop/build/bin cmd/desktop/build/darwin
 	rm -rf cmd/desktop/frontend/dist cmd/desktop/frontend/wailsjs
-	rm -f app/assets/claw app/assets/func app/assets/whip app/assets/browser-shortcut app/assets/media-understand app/assets/media-gen
+	rm -f app/assets/func app/assets/whip app/assets/browser-shortcut app/assets/media-understand app/assets/media-gen
 
 test:
 	$(GO) test ./cmd/func/ ./funcs/... ./skill/... ./agent/...

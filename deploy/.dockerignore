@@ -1,0 +1,11 @@
+bin/
+*.app
+cmd/desktop/build/
+cmd/desktop/frontend/node_modules/
+cmd/desktop/frontend/dist/
+cmd/desktop/frontend/wailsjs/
+mobile/
+.git/
+.claude/
+*.md
+LICENSE

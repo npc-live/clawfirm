@@ -4,7 +4,7 @@ import {
   GetWebhookBaseURL,
   SaveChannelConfig,
   StartOAuthLogin,
-} from "../wailsjs/go/app/App";
+} from "../lib/wails-shim";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 
 interface Props {

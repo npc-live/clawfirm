@@ -8,8 +8,8 @@ import {
   SearchMemory,
   SyncMemory,
   GetMemoryDir,
-} from "../wailsjs/go/app/App";
-import type { MemoryFile, MemorySearchResult } from "../wailsjs/go/app/App";
+} from "../lib/wails-shim";
+import type { MemoryFile, MemorySearchResult } from "../lib/wails-shim";
 
 type Tab = "files" | "search";
 

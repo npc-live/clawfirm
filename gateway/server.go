@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -23,7 +24,8 @@ type Server struct {
 
 // ServerConfig configures a Server.
 type ServerConfig struct {
-	Addr string // default ":9988"
+	Addr     string // default ":9988"
+	Frontend fs.FS  // if set, serves static files with SPA fallback
 }
 
 // NewServer creates a Server backed by an AgentRegistry.
@@ -55,6 +57,23 @@ func NewServer(registry *AgentRegistry, cfg ServerConfig) *Server {
 		}
 		fmt.Fprint(w, `}}`)
 	})
+
+	// Serve embedded frontend (SPA with index.html fallback).
+	if cfg.Frontend != nil {
+		fileServer := http.FileServerFS(cfg.Frontend)
+		s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+			// Try serving the exact file first.
+			f, err := cfg.Frontend.Open(r.URL.Path[1:]) // strip leading /
+			if err == nil {
+				f.Close()
+				fileServer.ServeHTTP(w, r)
+				return
+			}
+			// SPA fallback: serve index.html for unknown paths.
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
+		})
+	}
 
 	return s
 }

@@ -114,6 +114,23 @@ jobs:
             -o clawfirm
         working-directory: cmd/desktop
 
+      # --- Build gateway (Linux: embedded Web UI, no GTK needed) ---
+      - name: Build gateway (Linux amd64 + arm64)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p gateway-out
+          # Copy frontend dist into embed directory
+          rm -rf cmd/gateway/frontend/dist
+          cp -r cmd/desktop/frontend/dist cmd/gateway/frontend/dist
+          # amd64
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.version }}" \
+            -o gateway-out/gateway-linux-amd64 ./cmd/gateway
+          # arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build \
+            -ldflags "-X main.version=${{ steps.version.outputs.version }}" \
+            -o gateway-out/gateway-linux-arm64 ./cmd/gateway
+
       # --- Build standalone CLI binary ---
       - name: Build CLI (macOS universal)
         if: runner.os == 'macOS'
@@ -161,6 +178,13 @@ jobs:
           cd cli-out
           tar czf clawfirm-cli-linux-amd64.tar.gz clawfirm
 
+      - name: Package gateway (Linux → .tar.gz)
+        if: runner.os == 'Linux'
+        run: |
+          cd gateway-out
+          cp gateway-linux-amd64 gateway && tar czf clawfirm-gateway-linux-amd64.tar.gz gateway && rm gateway
+          cp gateway-linux-arm64 gateway && tar czf clawfirm-gateway-linux-arm64.tar.gz gateway && rm gateway
+
       - name: Package (Windows → .zip)
         if: runner.os == 'Windows'
         shell: bash
@@ -192,6 +216,13 @@ jobs:
           path: |
             cli-out/*.zip
             cli-out/*.tar.gz
+
+      - name: Upload gateway artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: clawfirm-gateway-linux
+          path: gateway-out/*.tar.gz
 
   release:
     needs: build
@@ -241,6 +272,13 @@ jobs:
           | Windows x64 | `clawfirm-cli-windows-amd64.zip` |
           | Linux x64 | `clawfirm-cli-linux-amd64.tar.gz` |
 
+          #### Gateway (Linux server with Web UI)
+
+          | Arch | Package |
+          |------|---------|
+          | Linux x64 | `clawfirm-gateway-linux-amd64.tar.gz` |
+          | Linux arm64 | `clawfirm-gateway-linux-arm64.tar.gz` |
+
           ### Installation
 
           #### Desktop App
@@ -255,6 +293,16 @@ jobs:
           sudo mv clawfirm /usr/local/bin/
 
           # Windows: unzip and add clawfirm.exe to your PATH
+          ```
+
+          #### Gateway (Linux Server)
+          ```bash
+          tar xzf clawfirm-gateway-linux-amd64.tar.gz
+          # Configure via env vars or ~/.clawfirm/config.yml
+          export CLAWFIRM_PROVIDERS_ANTHROPIC_API_KEY=sk-xxx
+          export CLAWFIRM_DEFAULT_AGENT=main
+          ./gateway -addr :9988
+          # Open http://your-server:9988 in browser
           ```
 
           ---
