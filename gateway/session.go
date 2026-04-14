@@ -364,6 +364,10 @@ func (s *Session) process(ctx context.Context, msg IncomingMessage) {
 	}
 	if err := s.agent.WaitForIdle(ctx); err != nil {
 		log.Printf("gateway: session %q: WaitForIdle: %v", s.key, err)
+		s.emitEvent(types.AgentEvent{
+			Type:      types.EventAgentError,
+			ErrorText: fmt.Sprintf("agent loop error: %v", err),
+		})
 	}
 }
 

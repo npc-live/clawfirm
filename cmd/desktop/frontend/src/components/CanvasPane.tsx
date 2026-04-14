@@ -364,6 +364,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("connecting");
   const [toolExecutions, setToolExecutions] = useState<ToolExecution[]>([]);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -416,7 +417,12 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   }
 
   const handleMessage = useCallback((msg: WSMessage) => {
+    if (msg.type === "thinking") {
+      setIsThinking(true);
+      return;
+    }
     if (msg.type === "delta" && msg.content) {
+      setIsThinking(false);
       setMessages(prev => {
         const last = prev[prev.length - 1];
         let updated: Message;
@@ -433,12 +439,14 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
       });
     } else if (msg.type === "done") {
       setIsStreaming(false);
+      setIsThinking(false);
       setMessages(prev => {
         const last = prev[prev.length - 1];
         return last?.streaming ? [...prev.slice(0, -1), { ...last, streaming: false }] : prev;
       });
     } else if (msg.type === "error") {
       setIsStreaming(false);
+      setIsThinking(false);
       setMessages(prev => [...prev, { role: "assistant", content: `⚠️ ${msg.content}` }]);
     } else if (msg.type === "tool_start") {
       setToolExecutions(prev => [{
@@ -465,7 +473,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   }, []);
 
   const handleOpen = useCallback(() => setWsStatus("open"), []);
-  const handleClose = useCallback(() => { setWsStatus("closed"); setIsStreaming(false); }, []);
+  const handleClose = useCallback(() => { setWsStatus("closed"); setIsStreaming(false); setIsThinking(false); }, []);
 
   const { send } = useWebSocket({ url: wsURL, onMessage: handleMessage, onOpen: handleOpen, onClose: handleClose });
 
@@ -667,6 +675,15 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                       </div>
                     </div>
                   ))}
+                  {isThinking && !messages.some(m => m.role === "assistant" && m.streaming) && (
+                    <div className="flex justify-start">
+                      <div className="flex items-center gap-1.5 rounded-xl px-3 py-2 bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.1)]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_infinite]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.2s_infinite]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.4s_infinite]" />
+                      </div>
+                    </div>
+                  )}
                   <div ref={bottomRef} />
                 </div>
                 <div className="border-t border-[rgba(61,57,41,0.08)] px-3 py-2 flex gap-2 items-end flex-shrink-0">

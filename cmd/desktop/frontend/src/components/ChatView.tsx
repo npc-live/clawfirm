@@ -49,6 +49,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
   const [input, setInput] = useState("");
   const [wsURL, setWsURL] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed">("closed");
   const [toolExecutions, setToolExecutions] = useState<ToolExecution[]>([]);
   const [agentSkills, setAgentSkills] = useState<SkillInfo[]>([]);
@@ -182,7 +183,12 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
 
   // Stable onMessage — wrapped in useCallback so identity never changes.
   const handleMessage = useCallback((msg: WSMessage) => {
+    if (msg.type === "thinking") {
+      setIsThinking(true);
+      return;
+    }
     if (msg.type === "delta" && msg.content) {
+      setIsThinking(false);
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         let updated: Message;
@@ -202,12 +208,14 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
       });
     } else if (msg.type === "done") {
       setIsStreaming(false);
+      setIsThinking(false);
       setMessages((prev) => {
         const last = prev[prev.length - 1];
         return last?.streaming ? [...prev.slice(0, -1), { ...last, streaming: false }] : prev;
       });
     } else if (msg.type === "error") {
       setIsStreaming(false);
+      setIsThinking(false);
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: `⚠️ Error: ${msg.content}` },
@@ -255,6 +263,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
   const handleClose = useCallback(() => {
     setWsStatus("closed");
     setIsStreaming(false);
+    setIsThinking(false);
   }, []);
 
   const { send } = useWebSocket({
@@ -504,6 +513,16 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                 </div>
               </div>
             ))}
+            {isThinking && !messages.some(m => m.role === "assistant" && m.streaming) && (
+              <div className="flex justify-start">
+                <div className="flex items-center gap-1.5 rounded-2xl px-4 py-3 bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.08)]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_infinite]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.2s_infinite]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.4s_infinite]" />
+                  <span className="ml-2 text-[12px] text-[rgba(61,57,41,0.35)]">思考中…</span>
+                </div>
+              </div>
+            )}
             <div ref={bottomRef} />
           </div>
           {/* Whip Plan inline banner */}

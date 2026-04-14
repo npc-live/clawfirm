@@ -3,7 +3,8 @@
 // Protocol:
 //
 //	Client → Server: {"type":"message","content":"...","images":[{"data":"base64","mime":"image/jpeg"}]}
-//	Server → Client: {"type":"delta","content":"..."}
+//	Server → Client: {"type":"thinking","timestamp":...}
+//	                 {"type":"delta","content":"..."}
 //	                 {"type":"done","stop_reason":"stop"}
 //	                 {"type":"error","content":"..."}
 //
@@ -164,12 +165,14 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				for _, img := range msg.Images {
 					images = append(images, gateway.ImageData{Data: img.Data, MimeType: img.Mime})
 				}
-				sess.Send(gateway.IncomingMessage{
+				if !sess.Send(gateway.IncomingMessage{
 					ChannelID: channelID,
 					UserID:    sessionID,
 					Content:   msg.Content,
 					Images:    images,
-				})
+				}) {
+					write(serverMessage{Type: "error", Content: "消息队列已满，请稍后重试"})
+				}
 			case "run_tool":
 				args := msg.ToolArgs
 				if args == nil {
@@ -205,6 +208,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // handleAgentEvent converts an AgentEvent to WebSocket messages.
 func handleAgentEvent(write func(any), ev types.AgentEvent) {
 	switch ev.Type {
+	case types.EventAgentStart:
+		write(serverMessage{
+			Type:      "thinking",
+			Timestamp: time.Now().UnixMilli(),
+		})
 	case types.EventMessageUpdate:
 		if ev.StreamEvent == nil {
 			return
