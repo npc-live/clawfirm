@@ -77,6 +77,14 @@ commands:
     steps:
       - open: "https://x.com/home"
       - wait: 3000
+      # 清空已有文本（防止草稿残留或重试时追加重复）
+      - eval: >-
+          (function(){
+            var el = document.querySelector('[data-testid="tweetTextarea_0"]');
+            if(el) { el.focus(); document.execCommand("selectAll",false,null); document.execCommand("delete",false,null); }
+            return !!el;
+          })()
+      - wait: 300
       - type_rich:
           selector: "[data-testid='tweetTextarea_0']"
           value: "{{text}}"
@@ -121,6 +129,14 @@ commands:
     steps:
       - open: "https://x.com/compose/post"
       - wait: 3000
+      # 清空已有文本（防止草稿残留或重试时追加重复）
+      - eval: >-
+          (function(){
+            var el = document.querySelector('[data-testid="tweetTextarea_0"]');
+            if(el) { el.focus(); document.execCommand("selectAll",false,null); document.execCommand("delete",false,null); }
+            return !!el;
+          })()
+      - wait: 300
       # 填写推文文字
       - type_rich:
           selector: "[data-testid='tweetTextarea_0']"
@@ -170,6 +186,14 @@ commands:
     steps:
       - open: "https://x.com/compose/post"
       - wait: 3000
+      # 清空已有文本（防止草稿残留或重试时追加重复）
+      - eval: >-
+          (function(){
+            var el = document.querySelector('[data-testid="tweetTextarea_0"]');
+            if(el) { el.focus(); document.execCommand("selectAll",false,null); document.execCommand("delete",false,null); }
+            return !!el;
+          })()
+      - wait: 300
       - type_rich:
           selector: "[data-testid='tweetTextarea_0']"
           value: "{{text}}"
