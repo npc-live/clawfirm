@@ -1,9 +1,10 @@
 // Command media-gen is a claw-code plugin tool.
-// It generates an image from a text prompt using a generative LLM and saves it to a file.
+// It generates an image from a text prompt (with optional reference images) using a
+// generative LLM and saves it to a file.
 //
 // Input (CLAWD_TOOL_INPUT env, JSON):
 //
-//	{"prompt": "...", "output_path": "/path/to/output.png"}
+//	{"prompt": "...", "output_path": "/path/to/output.png", "reference_images": ["/path/to/ref.jpg"]}
 //
 // Output (stdout): path of the saved image.
 //
@@ -27,8 +28,9 @@ import (
 )
 
 type input struct {
-	Prompt     string `json:"prompt"`
-	OutputPath string `json:"output_path"`
+	Prompt          string   `json:"prompt"`
+	OutputPath      string   `json:"output_path"`
+	ReferenceImages []string `json:"reference_images"`
 }
 
 func main() {
@@ -57,12 +59,17 @@ func main() {
 	orKey := firstEnv("OPENROUTER_API_KEY", "OPENROUTER_APIKEY")
 	geminiKey := firstEnv("GEMINI_API_KEY", "GOOGLE_API_KEY")
 
+	refImages, err := loadReferenceImages(inp.ReferenceImages)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
 	var imgBytes []byte
-	var err error
 	if orKey != "" {
-		imgBytes, err = genOpenRouter(orKey, inp.Prompt)
+		imgBytes, err = genOpenRouter(orKey, inp.Prompt, refImages)
 	} else if geminiKey != "" {
-		imgBytes, err = genGemini(geminiKey, inp.Prompt)
+		imgBytes, err = genGemini(geminiKey, inp.Prompt, refImages)
 	} else {
 		fmt.Fprintln(os.Stderr, "error: set OPENROUTER_API_KEY or GEMINI_API_KEY")
 		os.Exit(1)
@@ -86,6 +93,44 @@ func firstEnv(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// referenceImage holds a base64-encoded image with its MIME type.
+type referenceImage struct {
+	MimeType string
+	Data     string // base64
+}
+
+// loadReferenceImages reads local image files and returns them as base64-encoded blocks.
+func loadReferenceImages(paths []string) ([]referenceImage, error) {
+	var imgs []referenceImage
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return nil, fmt.Errorf("reference image %s: %w", p, err)
+		}
+		mime := mimeFromPath(p)
+		imgs = append(imgs, referenceImage{
+			MimeType: mime,
+			Data:     base64.StdEncoding.EncodeToString(data),
+		})
+	}
+	return imgs, nil
+}
+
+func mimeFromPath(p string) string {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return "image/jpeg"
+	}
 }
 
 func doPost(url string, headers map[string]string, body any) ([]byte, error) {
@@ -114,17 +159,44 @@ func doPost(url string, headers map[string]string, body any) ([]byte, error) {
 	return respBody, nil
 }
 
-func genOpenRouter(apiKey, prompt string) ([]byte, error) {
+func genOpenRouter(apiKey, prompt string, refs []referenceImage) ([]byte, error) {
 	model := os.Getenv("CLAWFIRM_IMAGE_GEN_MODEL")
 	if model == "" {
 		model = "google/gemini-3.1-flash-image-preview"
 	}
+
+	// Build message content: reference images first, then the text prompt.
+	var content any
+	if len(refs) == 0 {
+		content = prompt
+	} else {
+		var parts []map[string]any
+		for _, ref := range refs {
+			parts = append(parts, map[string]any{
+				"type": "image_url",
+				"image_url": map[string]any{
+					"url": "data:" + ref.MimeType + ";base64," + ref.Data,
+				},
+			})
+		}
+		parts = append(parts, map[string]any{
+			"type": "text",
+			"text": prompt,
+		})
+		content = parts
+	}
+
 	body := map[string]any{
 		"model":      model,
-		"messages":   []map[string]any{{"role": "user", "content": prompt}},
+		"messages":   []map[string]any{{"role": "user", "content": content}},
 		"modalities": []string{"image"},
 	}
-	respBytes, err := doPost("https://openrouter.ai/api/v1/chat/completions",
+	baseURL := os.Getenv("OPENROUTER_BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://openrouter.ai/api"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	respBytes, err := doPost(baseURL+"/v1/chat/completions",
 		map[string]string{"Authorization": "Bearer " + apiKey}, body)
 	if err != nil {
 		return nil, err
@@ -166,13 +238,26 @@ func genOpenRouter(apiKey, prompt string) ([]byte, error) {
 	return nil, fmt.Errorf("no image in response: %s", respBytes[:min(200, len(respBytes))])
 }
 
-func genGemini(apiKey, prompt string) ([]byte, error) {
+func genGemini(apiKey, prompt string, refs []referenceImage) ([]byte, error) {
 	model := os.Getenv("CLAWFIRM_IMAGE_GEN_MODEL")
 	if model == "" {
 		model = "gemini-3.1-flash-image-preview"
 	}
+
+	// Build parts: reference images first, then the text prompt.
+	var parts []map[string]any
+	for _, ref := range refs {
+		parts = append(parts, map[string]any{
+			"inline_data": map[string]any{
+				"mime_type": ref.MimeType,
+				"data":      ref.Data,
+			},
+		})
+	}
+	parts = append(parts, map[string]any{"text": prompt})
+
 	body := map[string]any{
-		"contents": []map[string]any{{"parts": []map[string]any{{"text": prompt}}}},
+		"contents": []map[string]any{{"parts": parts}},
 		"generationConfig": map[string]any{
 			"responseModalities": []string{"IMAGE", "TEXT"},
 		},
