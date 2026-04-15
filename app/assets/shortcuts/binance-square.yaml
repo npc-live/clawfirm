@@ -1,0 +1,378 @@
+platform: binance-square
+login_url: https://www.binance.com/en/square
+login_check:
+  cookie: p20t
+
+commands:
+
+  # ── 搜索帖子 ─────────────────────────────────────────────────────────────────
+  search:
+    args: [keyword]
+    steps:
+      - open: "https://www.binance.com/en/square/search?q={{keyword}}"
+      - wait: 4000
+      - extract:
+          selector: ".feed-item-wrap, [class*='feed-buzz'], article"
+          fields:
+            text: "[class*='content-text'], [class*='post-content'], p"
+            author: ".nick-username, [class*='creator-name']"
+            link:
+              selector: "a[href*='/square/post/']"
+              attr: href
+
+  # ── 点赞帖子 ─────────────────────────────────────────────────────────────────
+  like:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: before_state
+          eval: >-
+            (function(){
+              var btn = document.querySelector('.thumb-up-button');
+              if(!btn) return 'not_found';
+              return btn.classList.toString().includes('active') ? 'liked' : 'not_liked';
+            })()
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('.thumb-up-button');
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1000
+      - capture:
+          name: after_state
+          eval: >-
+            (function(){
+              var btn = document.querySelector('.thumb-up-button');
+              if(!btn) return 'not_found';
+              return btn.classList.toString().includes('active') ? 'liked' : 'not_liked';
+            })()
+      - return:
+          - field: 操作
+            value: "{{before_state === 'liked' ? '取消点赞' : '点赞成功'}}"
+          - field: 状态
+            value: "{{after_state}}"
+
+  # ── 发表评论 ─────────────────────────────────────────────────────────────────
+  comment:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      # 点击评论输入框获得焦点
+      - eval: >-
+          (function(){
+            var input = document.querySelector('input[placeholder="Post your reply"]');
+            if(input) { input.click(); input.focus(); return true; }
+            return false;
+          })()
+      - wait: 500
+      # 输入评论文字 — 使用 React-compatible 方式设值
+      - eval: >-
+          (function(){
+            var input = document.querySelector('input[placeholder="Post your reply"]');
+            if(!input) return false;
+            var nativeSet = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+            if(nativeSet && nativeSet.set) nativeSet.set.call(input, '{{text}}');
+            else input.value = '{{text}}';
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          })()
+      - wait: 500
+      - capture:
+          name: input_check
+          eval: >-
+            (function(){
+              var input = document.querySelector('input[placeholder="Post your reply"]');
+              return input ? input.value : '';
+            })()
+      # 点击 Reply 按钮发送
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('.feed-post-editor button.bn-button');
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ 评论成功"
+          - field: 评论内容
+            value: "{{text}}"
+          - field: 输入确认
+            value: "{{input_check}}"
+
+  # ── 发布短帖（纯文字）───────────────────────────────────────────────────────
+  post:
+    args: [text]
+    steps:
+      - open: "https://www.binance.com/en/square"
+      - wait: 3000
+      # 点击顶部 Post 按钮打开编辑器
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('button.news-post-button');
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      # 聚焦 ProseMirror 编辑器
+      - eval: >-
+          (function(){
+            var pm = document.querySelector('.short-editor-content .ProseMirror');
+            if(pm) { pm.focus(); return true; }
+            return false;
+          })()
+      - wait: 300
+      # 输入帖子内容 — ProseMirror 需要 insertText
+      - insert_text: "{{text}}"
+      - wait: 500
+      - capture:
+          name: input_check
+          eval: >-
+            (function(){
+              var pm = document.querySelector('.short-editor-content .ProseMirror');
+              return pm ? pm.textContent.trim().slice(0, 50) : '';
+            })()
+      # 点击编辑器内的 Post 按钮（inactive class 消失后变可点击）
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('.css-1f466lo button[data-bn-type="button"]');
+            if(btn && !btn.classList.contains('inactive')) { btn.click(); return 'clicked'; }
+            return 'inactive or not found';
+          })()
+      - wait: 3000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "✅ 发布成功"
+          - field: 内容
+            value: "{{input_check}}..."
+          - field: 页面URL
+            value: "{{result_url}}"
+
+  # ── 发布图文帖 ───────────────────────────────────────────────────────────────
+  post_image:
+    args: [text, image]
+    steps:
+      - open: "https://www.binance.com/en/square"
+      - wait: 3000
+      # 点击顶部 Post 按钮打开编辑器
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('button.news-post-button');
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      # 输入文字
+      - eval: >-
+          (function(){
+            var pm = document.querySelector('.short-editor-content .ProseMirror');
+            if(pm) { pm.focus(); return true; }
+            return false;
+          })()
+      - wait: 300
+      - insert_text: "{{text}}"
+      - wait: 500
+      # 上传图片 — 通过 #shortPostEditorImageUploaderBox 内的 file input
+      - upload:
+          selector: "#shortPostEditorImageUploaderBox input[type='file']"
+          file: "{{image}}"
+      - wait: 3000
+      # 等待图片上传完成
+      - wait_until:
+          eval: >-
+            (function(){
+              var preview = document.querySelector('[class*="image-preview"], [class*="upload-preview"], .rc-upload img');
+              if(preview) return true;
+              var progress = document.querySelector('[class*="upload-progress"], [role="progressbar"]');
+              return !progress;
+            })()
+          timeout: 60000
+          interval: 2000
+      - capture:
+          name: has_image
+          eval: >-
+            (function(){
+              var imgs = document.querySelectorAll('#shortPostEditorImageUploaderBox img, .short-editor-content img');
+              return imgs.length > 0;
+            })()
+      # 点击 Post 按钮
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('.css-1f466lo button[data-bn-type="button"]');
+            if(btn && !btn.classList.contains('inactive')) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 3000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "{{has_image == 'true' && '✅ 图文发布成功' || '⚠️ 图片可能未成功上传'}}"
+          - field: 内容
+            value: "{{text}}"
+          - field: 页面URL
+            value: "{{result_url}}"
+
+  # ── 发布视频帖 ───────────────────────────────────────────────────────────────
+  post_video:
+    args: [video, text]
+    steps:
+      - open: "https://www.binance.com/en/square"
+      - wait: 3000
+      # 点击顶部 Post 按钮打开编辑器
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('button.news-post-button');
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      # 输入描述文字
+      - eval: >-
+          (function(){
+            var pm = document.querySelector('.short-editor-content .ProseMirror');
+            if(pm) { pm.focus(); return true; }
+            return false;
+          })()
+      - wait: 300
+      - insert_text: "{{text}}"
+      - wait: 500
+      # 点击视频图标触发视频上传 file input
+      - eval: >-
+          (function(){
+            var videoIcon = document.querySelector('.editor-toolbar-container .icon-box.css-1w5k7wg');
+            if(videoIcon) { videoIcon.click(); return true; }
+            return false;
+          })()
+      - wait: 1000
+      # 上传视频文件
+      - upload:
+          selector: "input[type='file'][accept*='.mp4']"
+          file: "{{video}}"
+      # 等待视频上传+转码完成（最长5分钟）
+      - wait_until:
+          eval: >-
+            (function(){
+              var progress = document.querySelector('[class*="upload-progress"], [role="progressbar"], [class*="uploading"]');
+              if(progress) {
+                var text = progress.textContent || '';
+                if(text.includes('100%')) return true;
+                return false;
+              }
+              var preview = document.querySelector('video, [class*="video-preview"], [class*="upload-success"]');
+              if(preview) return true;
+              return false;
+            })()
+          timeout: 300000
+          interval: 3000
+      - wait: 1000
+      - capture:
+          name: has_video
+          eval: >-
+            (function(){
+              var preview = document.querySelector('video, [class*="video-preview"], [class*="upload-success"]');
+              return !!preview;
+            })()
+      # 点击 Post 按钮
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('.css-1f466lo button[data-bn-type="button"]');
+            if(btn && !btn.classList.contains('inactive')) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 5000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "{{has_video == 'true' && '✅ 视频发布成功' || '⚠️ 视频可能未成功上传'}}"
+          - field: 描述
+            value: "{{text}}"
+          - field: 页面URL
+            value: "{{result_url}}"
+
+  # ── 发布长文章 ───────────────────────────────────────────────────────────────
+  post_long:
+    args: [title, content]
+    steps:
+      - open: "https://www.binance.com/en/square"
+      - wait: 3000
+      # 点击顶部 Post 按钮打开编辑器
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('button.news-post-button');
+            if(btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      # 点击 Article 按钮切换到长文编辑器
+      - eval: >-
+          (function(){
+            var articleBtn = document.querySelector('.article-icon');
+            if(articleBtn) { articleBtn.click(); return true; }
+            return false;
+          })()
+      - wait: 2000
+      # 填写标题 — textarea.css-l8d6kh 在 "Add Your Title" 区域
+      - eval: >-
+          (function(){
+            var ta = document.querySelector('.article-editor-main textarea');
+            if(!ta) return false;
+            ta.focus();
+            var nativeSet = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value');
+            if(nativeSet && nativeSet.set) nativeSet.set.call(ta, '{{title}}');
+            else ta.value = '{{title}}';
+            ta.dispatchEvent(new Event('input', { bubbles: true }));
+            ta.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          })()
+      - wait: 500
+      # 填写正文 — 文章编辑器的 ProseMirror
+      - eval: >-
+          (function(){
+            var editors = document.querySelectorAll('.article-editor .ProseMirror');
+            var bodyEditor = editors[0];
+            if(bodyEditor) { bodyEditor.focus(); return true; }
+            return false;
+          })()
+      - wait: 300
+      - insert_text: "{{content}}"
+      - wait: 500
+      - capture:
+          name: title_check
+          eval: >-
+            (function(){
+              var ta = document.querySelector('.article-editor-main textarea');
+              return ta ? ta.value.slice(0, 50) : '';
+            })()
+      # 点击 Publish 按钮
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('.article-editor-main button');
+            var publishBtn = [...btns].find(function(b){
+              return b.textContent.trim() === 'Publish';
+            });
+            if(publishBtn && !publishBtn.disabled) { publishBtn.click(); return true; }
+            return false;
+          })()
+      - wait: 5000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "✅ 长文发布成功"
+          - field: 标题
+            value: "{{title_check}}"
+          - field: 页面URL
+            value: "{{result_url}}"

@@ -116,6 +116,39 @@ parallel:
     失败：追加 data/publish-log.json + 输出错误事件
     """
 
+  let binance_square_result = session: publisher
+    prompt: """
+    发布今日币安广场内容：
+
+    从 {run_config}.drafts 中取 platform='binance-square' 的草稿。
+    如果没有币安广场草稿，输出 {"platform":"binance-square","status":"skipped"} 并结束。
+
+    登录币安广场，按内容类型发布：
+    - 短帖：直接发布（正文 + 标签 + $代币标记）
+    - 长文：发布到长文编辑器（标题 + 正文 + 标签）
+    - 视频：上传视频 + 描述 + 标签
+
+    合规检查（发布前自动验证）：
+    - 不含明确投资建议措辞（"立刻买入""稳赚"等 → 替换为安全措辞）
+    - 分析类内容已标注 NFA/DYOR
+    - 不含未经验证的合约地址
+    - 标签数量 3-5 个
+
+    发布成功后：
+    - 截图保存到 data/screenshots/binance-square-{date}.png
+    - 读取 data/publish-log.json（不存在则 []），追加：
+      { run_id, draft_id, platform: "binance-square", status: "success", published_at: "[ISO]", post_url: "[链接]", screenshot_path: "..." }
+      写回文件
+    - 更新 data/content-drafts.json 中对应条目 status="published"
+
+    输出 WorkflowEvent：
+    {"ts":"[ISO]","event":"publish_result","runId":[id],"stage":"daily-publish","data":{"platform":"binance-square","status":"success","url":"[链接]"}}
+
+    发布失败：
+    - 追加 data/publish-log.json：{ ..., status: "failed", error_msg: "[原因]" }
+    - 输出：{"ts":"[ISO]","event":"publish_result","data":{"platform":"binance-square","status":"failed","error":"[原因]"}}
+    """
+
 # ── 汇总发布结果 ──
 let publish_summary = session: validator
   prompt: """
@@ -127,6 +160,7 @@ let publish_summary = session: validator
   - B站：{bilibili_result}
   - Twitter：{twitter_result}
   - Telegram：{telegram_result}
+  - 币安广场：{binance_square_result}
 
   读取 data/publish-log.json，筛选今日（published_at 为今天）的记录确认数据已写入。
 

@@ -434,6 +434,101 @@ Example: `看看Boss直聘有哪些候选人`
 
 ---
 
+## 币安广场 (Binance Square) — `binance-square.yaml`
+
+Login URL: `https://www.binance.com/en/square`
+Session cookie: `p20t`
+
+### `search` — 搜索帖子
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `keyword` | string | yes | 搜索关键词 |
+
+Returns: `text`, `author`, `link`
+
+Example: `搜索币安广场 BTC ETF`
+
+---
+
+### `like` — 点赞帖子
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | 帖子 URL |
+
+Returns: `操作` (点赞成功/取消点赞), `状态`
+
+Example: `点赞币安广场 https://www.binance.com/en/square/post/xxx`
+
+---
+
+### `comment` — 发表评论
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | 帖子 URL |
+| `text` | string | yes | 评论内容 |
+
+Returns: `状态`, `评论内容`, `输入确认`
+
+Example: `评论币安广场 https://www.binance.com/en/square/post/xxx 分析得很好，NFA`
+
+---
+
+### `post` — 发布短帖
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `text` | string | yes | 帖子内容（≤1000字符，支持 #标签 和 $代币） |
+
+Returns: `状态`, `内容`, `页面URL`
+
+Example: `发币安广场短帖 BTC突破新高，三个关键指标 #BTC $BTC NFA/DYOR`
+
+---
+
+### `post_image` — 发布图文帖
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `text` | string | yes | 帖子文字 |
+| `image` | string | yes | 本地图片路径（绝对路径） |
+
+Returns: `状态`, `内容`, `页面URL`
+
+Example: `发币安广场图文 "K线技术分析" /tmp/btc-chart.png`
+
+---
+
+### `post_video` — 发布视频帖
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `video` | string | yes | 本地视频文件路径（绝对路径，MP4） |
+| `text` | string | yes | 视频描述（≤1000字符） |
+
+Returns: `状态`, `描述`, `页面URL`
+
+Note: 上传后等待转码完成（最长5分钟）。视频推荐 1080p MP4，≤60分钟。
+
+Example: `发币安广场视频 /tmp/analysis.mp4 "BTC周度分析 #BTC $BTC"`
+
+---
+
+### `post_long` — 发布长文章
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | yes | 文章标题（≤100字符） |
+| `content` | string | yes | 文章正文（≤20000字符，支持富文本） |
+
+Returns: `状态`, `标题`, `页面URL`
+
+Example: `发币安广场长文 "以太坊 Dencun 升级全解析" "正文内容..."`
+
+---
+
 ## Command Summary
 
 | Platform | Command | Args | Description |
@@ -467,3 +562,10 @@ Example: `看看Boss直聘有哪些候选人`
 | 视频号 | `list` | — | 内容列表 |
 | Boss直聘 | `chat_stats` | — | 聊天统计 |
 | Boss直聘 | `candidates` | — | 候选人列表 |
+| 币安广场 | `search` | `keyword` | 搜索帖子 |
+| 币安广场 | `like` | `url` | 点赞帖子 |
+| 币安广场 | `comment` | `url`, `text` | 发表评论 |
+| 币安广场 | `post` | `text` | 发布短帖 |
+| 币安广场 | `post_image` | `text`, `image` | 发布图文帖 |
+| 币安广场 | `post_video` | `video`, `text` | 发布视频帖 |
+| 币安广场 | `post_long` | `title`, `content` | 发布长文章 |

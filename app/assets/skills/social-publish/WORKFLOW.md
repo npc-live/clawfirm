@@ -56,7 +56,10 @@ social-publish/
 ├── douyin/                           ← 抖音专属
 │   ├── SKILL.md
 │   └── references/
-└── bilibili/                         ← B站专属
+├── bilibili/                         ← B站专属
+│   ├── SKILL.md
+│   └── references/
+└── binance-square/                   ← 币安广场专属
     ├── SKILL.md
     └── references/
 ```
@@ -146,6 +149,7 @@ social-publish/bilibili → B站标题 + 简介 + 分区标签
 | Twitter | 文字 + Thread | 回复率、引用率 | 犀利、观点驱动、简洁 |
 | 抖音 | 短视频 | 完播率、互动率 | 口语化、前3秒、信息密度 |
 | B站 | 中视频 + 短视频 | 播放+弹幕+投币 | 二次元、技术、一键三连 |
+| 币安广场 | 短帖 + 长文 + 视频 | 互动量、阅读时间 | 专业分析、数据驱动、NFA/DYOR |
 
 ---
 
@@ -163,6 +167,7 @@ AI（Skill）生成文案 → CDP（Adapter）自动发布
 | `adapters/x.yaml` | Twitter/X | 推文/Thread 发布 |
 | `adapters/douyin.yaml` | 抖音 | 视频发布 |
 | `adapters/bilibili.yaml` | B站 | 视频投稿 |
+| `adapters/binance-square.yaml` | 币安广场 | 短帖/图文/视频/长文发布 |
 
 ---
 
