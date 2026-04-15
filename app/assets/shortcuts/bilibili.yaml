@@ -197,7 +197,7 @@ commands:
 
   # ── 投稿（发布视频）──────────────────────────────────────────────────────────
   post:
-    args: [video, title, desc]   # video: 本地视频路径（必填）
+    args: [video, title, desc, cover]   # video: 本地视频路径（必填）, cover: 封面图片路径（可选）
     steps:
       - open: "https://member.bilibili.com/platform/upload/video/frame"
       - wait: 4000
@@ -267,6 +267,38 @@ commands:
             return el.textContent.trim().slice(0,30);
           })()
       - wait: 500
+      # 封面上传（可选，cover 为空时自动跳过）
+      - eval: >-
+          (function(){
+            var cover = "{{cover}}";
+            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
+            var btn = document.querySelector('.cover-v2-edit-btn, [class*=cover-edit], [class*=change-cover]') ||
+                      [...document.querySelectorAll('span,div,button')]
+                        .find(function(el){ var t = el.textContent.trim(); return t === '更换封面' || t === '选择封面'; });
+            if (btn) btn.click();
+            return btn ? "opened" : "no_btn";
+          })()
+      - wait: 2000
+      - eval: >-
+          (function(){
+            var tab = [...document.querySelectorAll('span,div,button,li')]
+              .find(function(el){ var t = el.textContent.trim(); return t === '上传封面' || t === '本地上传'; });
+            if (tab) tab.click();
+            return !!tab;
+          })()
+      - wait: 1000
+      - upload:
+          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg']"
+          file: "{{cover}}"
+      - wait: 3000
+      - eval: >-
+          (function(){
+            var btn = [...document.querySelectorAll('button')]
+              .find(function(b){ return b.textContent.trim() === '完成'; });
+            if (btn) btn.click();
+            return !!btn;
+          })()
+      - wait: 1000
       # 点击"立即投稿"（用 agent-browser click 发送真实鼠标事件，JS .click() 在此无效）
       - eval: "document.querySelector('span.submit-add')?.scrollIntoView({block:'center'})"
       - wait: 500

@@ -85,7 +85,7 @@ commands:
             value: "{{input_text}}"
 
   post_video:
-    args: [video, title, desc]   # video: 本地视频路径（必填）
+    args: [video, title, desc, cover]   # video: 本地视频路径（必填）, cover: 封面图片路径（可选）
     steps:
       - open: "https://creator.xiaohongshu.com/publish/publish?source=official"
       - wait: 3000
@@ -130,6 +130,30 @@ commands:
           selector: ".tiptap.ProseMirror"
           value: "{{desc}}"
       - wait: 800
+      # 封面上传（可选，cover 为空时自动跳过）
+      - eval: >-
+          (function(){
+            var cover = "{{cover}}";
+            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
+            var btn = document.querySelector('[class*=cover]') ||
+                      [...document.querySelectorAll('div,span')]
+                        .find(function(el){ return el.textContent.trim().includes('封面') && el.offsetHeight > 0 && el.offsetHeight < 200; });
+            if (btn) btn.click();
+            return btn ? "opened" : "no_btn";
+          })()
+      - wait: 2000
+      - upload:
+          selector: "input[type=file][accept*=image], .upload-input"
+          file: "{{cover}}"
+      - wait: 3000
+      - eval: >-
+          (function(){
+            var btn = [...document.querySelectorAll('button')]
+              .find(function(b){ var t = b.textContent.trim(); return t === '完成' || t === '确认'; });
+            if (btn) btn.click();
+            return !!btn;
+          })()
+      - wait: 1000
       # 点击发布
       - eval: >-
           (function(){
