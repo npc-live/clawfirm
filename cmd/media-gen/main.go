@@ -4,7 +4,10 @@
 //
 // Input (CLAWD_TOOL_INPUT env, JSON):
 //
-//	{"prompt": "...", "output_path": "/path/to/output.png", "reference_images": ["/path/to/ref.jpg"]}
+//	{"prompt": "...", "output_path": "/path/to/output.png", "size": "landscape_4x3", "reference_images": ["/path/to/ref.jpg"]}
+//
+// Supported sizes: portrait (9:16), landscape (16:9), landscape_4x3 (4:3), square (1:1).
+// Default: portrait. The size hint is appended to the prompt for Gemini models.
 //
 // Output (stdout): path of the saved image.
 //
@@ -30,7 +33,16 @@ import (
 type input struct {
 	Prompt          string   `json:"prompt"`
 	OutputPath      string   `json:"output_path"`
+	Size            string   `json:"size"`
 	ReferenceImages []string `json:"reference_images"`
+}
+
+// sizeHints maps size keys to aspect ratio descriptions appended to the prompt.
+var sizeHints = map[string]string{
+	"portrait":       "Generate the image in vertical portrait 9:16 aspect ratio (e.g. 1080×1920).",
+	"landscape":      "Generate the image in horizontal landscape 16:9 aspect ratio (e.g. 1920×1080).",
+	"landscape_4x3":  "Generate the image in horizontal landscape 4:3 aspect ratio (e.g. 1440×1080).",
+	"square":         "Generate the image in square 1:1 aspect ratio (e.g. 1024×1024).",
 }
 
 func main() {
@@ -58,6 +70,17 @@ func main() {
 
 	orKey := firstEnv("OPENROUTER_API_KEY", "OPENROUTER_APIKEY")
 	geminiKey := firstEnv("GEMINI_API_KEY", "GOOGLE_API_KEY")
+
+	// Append aspect-ratio hint to the prompt when a size is specified.
+	if inp.Size == "" {
+		inp.Size = "portrait"
+	}
+	if hint, ok := sizeHints[inp.Size]; ok {
+		inp.Prompt = inp.Prompt + "\n\n" + hint
+	} else {
+		fmt.Fprintf(os.Stderr, "error: unknown size %q (supported: portrait, landscape, landscape_4x3, square)\n", inp.Size)
+		os.Exit(1)
+	}
 
 	refImages, err := loadReferenceImages(inp.ReferenceImages)
 	if err != nil {
