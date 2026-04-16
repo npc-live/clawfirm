@@ -135,12 +135,77 @@ GitHub 根路径: `https://github.com/npc-live/clawfirm/blob/main/`
 
 | 类型 | 本地路径 | GitHub |
 |------|----------|--------|
+| **README** | `app/assets/workflows/saas/README.md` | [workflows/saas/README.md](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/README.md) |
 | **setup** | `app/assets/workflows/saas/setup.whip` | [workflows/saas/setup.whip](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/setup.whip) |
 | **acquire** | `app/assets/workflows/saas/acquire.whip` | [workflows/saas/acquire.whip](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/acquire.whip) |
 | **landing** | `app/assets/workflows/saas/landing.whip` | [workflows/saas/landing.whip](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/landing.whip) |
 | **launch** | `app/assets/workflows/saas/launch.whip` | [workflows/saas/launch.whip](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/launch.whip) |
 | **monitor** | `app/assets/workflows/saas/monitor.whip` | [workflows/saas/monitor.whip](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/monitor.whip) |
 | **report** | `app/assets/workflows/saas/report.whip` | [workflows/saas/report.whip](https://github.com/npc-live/clawfirm/blob/main/app/assets/workflows/saas/report.whip) |
+
+### 8.1 营销模块详解
+
+营销链路：**setup(策略) → landing(转化页) → acquire(获客内容) → launch(PH引爆) → monitor(追踪) → report(复盘)**
+
+#### setup.whip — 营销战略层
+
+| 模块 | 说明 |
+|------|------|
+| 竞品分析 | 5-8 个竞品的获客渠道、定价、G2/PH 评分、用户差评 |
+| SEO 关键词机会 | 竞品核心关键词 + 低竞争长尾词方向 |
+| GTM 冷启动方案 | 0→100 用户各渠道具体打法 (PH/Reddit/HN/Cold Email/SEO) |
+| 增长飞轮 | 100+ 用户后：免费→付费转化、referral/affiliate、内容 SEO 复利 |
+
+#### landing.whip — 落地页文案 (转化)
+
+| 模块 | 说明 |
+|------|------|
+| Hero Section | Headline + Subheadline + CTA button + 社会证明数字，含 A/B 版本 |
+| Problem Section | 痛点共鸣 (用户语言描述 3 个痛点) |
+| Features Section | outcome 导向功能描述 (非技术术语) |
+| Social Proof | testimonial 模板 (3 条，含职位/公司规模) |
+| Pricing Section | 含锚定价格策略，Free/Pro/Enterprise 梯度 |
+| FAQ | 5 个最大购买阻力问题 |
+| 自动审核循环 | validator agent 做转化率审核，不通过则自动修改 (max 2 轮) |
+
+#### acquire.whip — 多渠道获客内容 (核心营销模块)
+
+| 渠道 | 产出 | 输出文件 |
+|------|------|----------|
+| **Reddit** | 3 种帖子：教程软推 / Show Reddit / 问答参与 | `docs/content/reddit-posts.md` |
+| **Hacker News** | Show HN 标题 + 首条评论 + 发布时间策略 | `docs/content/hn-submission.md` |
+| **Cold Email** | 3 封序列邮件 (首次/跟进/最终) + Apollo/Hunter 找邮箱 | `docs/content/cold-email-sequence.md` |
+| **SEO 文章** | 1500-2500 词英文长文 (对比测评/教程/竞品替代) | `docs/content/seo-article-[keyword].md` |
+
+含内容合规 validator 审核：检查是否像真实用户、是否违反平台推广规则。
+
+#### launch.whip — Product Hunt 发布 (引爆)
+
+| 模块 | 说明 |
+|------|------|
+| PH 文案素材 | Tagline (3 备选) / Description (250-300 词) / Maker Comment / 回复模板 |
+| 社群预热消息 | Twitter 3 条 (T-0/T+4h/T+12h)、LinkedIn 1 条、Slack/Discord 通知 |
+| 发布核查清单 | D-7 → D-1 逐天 checklist (Hunter、截图、Demo Video、折扣码) |
+| 小时级执行计划 | 发布当天 00:01 PST → 23:00 的每小时行动项 |
+
+#### monitor.whip — 营销效果追踪
+
+| 模块 | 说明 |
+|------|------|
+| 评论追踪 | Reddit/HN/PH 帖子新评论自动采集 + 情感分类 |
+| 回复草稿 | 自动生成回复 (负面→问题→正面→功能请求 优先级) |
+| 紧急标记 | 负面/bug 反馈自动 `URGENT` 标记 |
+| 竞品监控 | 竞品新功能、定价变化、市场活动 |
+
+#### report.whip — 增长周报 (复盘)
+
+| 模块 | 说明 |
+|------|------|
+| 渠道效果分析 | 各渠道发布量/互动/ROI，效果最好/最差内容原因分析 |
+| 用户反馈洞察 | Top 3 痛点、Top 3 功能请求、正面反馈核心原因 |
+| 竞品动态 | 本周竞品重大变化对策略的影响 |
+| 下周行动计划 | 红 (必须做) / 黄 (应该做) / 绿 (可以做) 优先级 |
+| 30 天展望 | MRR 预测、最大风险/机会 |
 
 ---
 
