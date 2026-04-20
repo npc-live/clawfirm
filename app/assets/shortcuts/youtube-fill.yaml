@@ -1,0 +1,142 @@
+platform: youtube
+login_url: https://www.youtube.com
+login_check:
+  cookie: SID
+
+commands:
+  post_video:
+    args: [video, title, desc, visibility]
+    steps:
+      - open: "https://studio.youtube.com/"
+      - wait: 4000
+      - eval: >-
+          (function(){
+            var dismissBtns = document.querySelectorAll(
+              'ytcp-button#dismiss-button, [id="dismiss-button"], tp-yt-paper-dialog #secondary-action-button'
+            );
+            dismissBtns.forEach(function(b){ b.click(); });
+            return dismissBtns.length;
+          })()
+      - wait: 500
+      # 点击 Create 按钮
+      - eval: >-
+          (function(){
+            var createBtn = document.querySelector('#create-icon') ||
+                            document.querySelector('ytcp-button#create-icon') ||
+                            document.querySelector('[id="upload-icon"]') ||
+                            document.querySelector('button[aria-label="Create"]') ||
+                            document.querySelector('button[aria-label="创建"]');
+            if (createBtn) { createBtn.click(); return "clicked_create"; }
+            var els = document.querySelectorAll('ytcp-button, button');
+            for (var i = 0; i < els.length; i++) {
+              var t = els[i].textContent.trim();
+              if (/^(Create|创建|Upload)$/i.test(t) || els[i].id === 'create-icon') {
+                els[i].click();
+                return "clicked_text:" + t;
+              }
+            }
+            return "no_create_btn";
+          })()
+      - wait: 1500
+      # 点击 Upload videos
+      - eval: >-
+          (function(){
+            var uploadItem = document.querySelector('#text-item-0') ||
+                             document.querySelector('tp-yt-paper-item#text-item-0') ||
+                             document.querySelector('[test-id="upload-beta"]');
+            if (uploadItem) { uploadItem.click(); return "clicked_upload_item"; }
+            var items = document.querySelectorAll(
+              'tp-yt-paper-item, ytcp-text-menu tp-yt-paper-item, [role="menuitem"], [role="option"]'
+            );
+            for (var i = 0; i < items.length; i++) {
+              var t = items[i].textContent.trim();
+              if (/Upload video|上传视频/i.test(t)) {
+                items[i].click();
+                return "clicked_menu:" + t;
+              }
+            }
+            return "no_upload_item";
+          })()
+      - wait: 2000
+      - wait_until:
+          eval: "!!document.querySelector('input[type=\"file\"]')"
+          timeout: 10000
+          interval: 500
+      # 上传视频
+      - upload:
+          selector: "input[type=file]"
+          file: "{{video}}"
+      # 等待 Details 页加载
+      - wait_until:
+          eval: >-
+            (function(){
+              var titleBox = document.querySelector('#title-textarea #textbox, ytcp-mention-textbox#title-textarea #textbox');
+              return !!titleBox;
+            })()
+          timeout: 60000
+          interval: 2000
+      - wait: 1500
+      # 等待视频上传完成
+      - wait_until:
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              if (body.includes('Upload complete') || body.includes('上传完成') ||
+                  body.includes('Checks complete') || body.includes('检查完毕') ||
+                  body.includes('Processing will begin shortly') ||
+                  body.includes('SD processing complete') || body.includes('HD processing complete')) return true;
+              var progress = document.querySelector('.progress-bar.ytcp-video-upload-progress');
+              if (progress) {
+                var style = progress.getAttribute('style') || '';
+                if (style.includes('100%')) return true;
+              }
+              var status = document.querySelector('.ytcp-video-upload-progress-renderer');
+              if (status && /100%|complete|完成/.test(status.textContent)) return true;
+              return false;
+            })()
+          timeout: 600000
+          interval: 5000
+      - wait: 1000
+      # 填写标题
+      - eval: >-
+          (function(){
+            var titleBox = document.querySelector('#title-textarea #textbox') ||
+                           document.querySelector('ytcp-mention-textbox#title-textarea #textbox') ||
+                           document.querySelector('#title-textarea [contenteditable="true"]');
+            if (!titleBox) return "no_title";
+            titleBox.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("delete", false, null);
+            document.execCommand("insertText", false, "{{title}}");
+            titleBox.dispatchEvent(new Event('input', {bubbles: true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 填写描述
+      - eval: >-
+          (function(){
+            var descBox = document.querySelector('#description-textarea #textbox') ||
+                          document.querySelector('ytcp-mention-textbox#description-textarea #textbox') ||
+                          document.querySelector('#description-textarea [contenteditable="true"]');
+            if (!descBox) return "no_desc";
+            descBox.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("delete", false, null);
+            document.execCommand("insertText", false, "{{desc}}");
+            descBox.dispatchEvent(new Event('input', {bubbles: true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 停在 Details 页，不点 Next/Publish，由用户手动完成
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "✅ YouTube 视频已上传，标题和描述已填写，请手动完成后续步骤并发布"
+          - field: 标题
+            value: "{{title}}"
+          - field: 描述
+            value: "{{desc}}"
+          - field: 页面URL
+            value: "{{result_url}}"

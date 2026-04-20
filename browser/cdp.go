@@ -247,18 +247,39 @@ func ConnectTab(cdpPort, tabIndex int) (*CDPClient, error) {
 
 // NewTab opens a new tab and returns a CDPClient connected to it.
 func NewTab(cdpPort int) (*CDPClient, error) {
+	c, _, err := NewTabWithID(cdpPort)
+	return c, err
+}
+
+// NewTabWithID opens a new tab and returns both a CDPClient and the tab ID.
+func NewTabWithID(cdpPort int) (*CDPClient, string, error) {
 	client := &http.Client{Timeout: 3 * time.Second}
 	resp, err := client.Do(mustReq("PUT", fmt.Sprintf("http://127.0.0.1:%d/json/new", cdpPort)))
 	if err != nil {
-		return nil, fmt.Errorf("cdp: new tab: %w", err)
+		return nil, "", fmt.Errorf("cdp: new tab: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	var tab TabInfo
 	if err := json.Unmarshal(body, &tab); err != nil {
-		return nil, fmt.Errorf("cdp: invalid new-tab response: %w", err)
+		return nil, "", fmt.Errorf("cdp: invalid new-tab response: %w", err)
 	}
-	return NewCDPClient(tab.WebSocketURL)
+	c, err := NewCDPClient(tab.WebSocketURL)
+	if err != nil {
+		return nil, "", err
+	}
+	return c, tab.ID, nil
+}
+
+// CloseTab closes a browser tab by its ID using the CDP HTTP endpoint.
+func CloseTab(cdpPort int, tabID string) error {
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/json/close/%s", cdpPort, tabID))
+	if err != nil {
+		return fmt.Errorf("cdp: close tab %s: %w", tabID, err)
+	}
+	resp.Body.Close()
+	return nil
 }
 
 func mustReq(method, url string) *http.Request {

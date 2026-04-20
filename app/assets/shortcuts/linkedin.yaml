@@ -15,18 +15,28 @@ commands:
     steps:
       - open: "https://www.linkedin.com/feed/"
       - wait: 3000
-      # 点击 "Start a post" / "发起帖子" 打开 Share Modal
+      # 点击 "Start a post" / "发起帖子" 打开 Share Modal（4 层降级）
       - eval: >-
           (function(){
             var trigger = document.querySelector('.share-box-feed-entry__trigger') ||
-                          document.querySelector('[class*=share-box-feed-entry__trigger]') ||
-                          [...document.querySelectorAll('button,div[role=button],div[tabindex="0"]')]
-                            .find(function(el){
-                              var t = el.textContent.trim();
-                              return t.includes('Start a post') || t.includes('发起帖子') ||
-                                     t.includes('开始发帖') || t.includes('Create a post');
-                            });
-            if (trigger) { trigger.click(); return "opened"; }
+                          document.querySelector('[class*="share-box"][class*="trigger"]') ||
+                          document.querySelector('[class*="share-creation"][class*="trigger"]');
+            if (trigger) { trigger.click(); return "opened_t1"; }
+            trigger = document.querySelector('button[aria-label*="Start a post"]') ||
+                      document.querySelector('button[aria-label*="Create a post"]') ||
+                      document.querySelector('[role="button"][aria-label*="Start a post"]');
+            if (trigger) { trigger.click(); return "opened_t2"; }
+            var els = document.querySelectorAll('button, div[role="button"], div[tabindex="0"], span[role="button"]');
+            for (var i = 0; i < els.length; i++) {
+              var t = els[i].textContent.trim();
+              if (t.length < 30 && (/Start a post|Create a post|发起帖子|开始发帖/.test(t))) {
+                els[i].click();
+                return "opened_t3";
+              }
+            }
+            var ph = document.querySelector('[placeholder*="Start a post"], [placeholder*="发起帖子"]') ||
+                     document.querySelector('[class*="share-box"] [contenteditable]');
+            if (ph) { ph.click(); return "opened_t4"; }
             return "no_trigger";
           })()
       - wait: 2000
@@ -34,35 +44,58 @@ commands:
       - wait_until:
           eval: >-
             (function(){
-              var editor = document.querySelector('.ql-editor[contenteditable=true]') ||
-                           document.querySelector('[role=textbox][contenteditable=true]') ||
-                           document.querySelector('.editor-content [contenteditable=true]');
-              return !!editor;
+              return !!(
+                document.querySelector('.ql-editor[contenteditable="true"]') ||
+                document.querySelector('[role="textbox"][contenteditable="true"]') ||
+                document.querySelector('.editor-content [contenteditable="true"]') ||
+                document.querySelector('[class*="share"] [contenteditable="true"]') ||
+                document.querySelector('[class*="share-creation"] [contenteditable="true"]') ||
+                document.querySelector('[aria-label*="Text editor"]') ||
+                document.querySelector('div[contenteditable="true"][role="textbox"]')
+              );
             })()
           timeout: 10000
           interval: 500
       # 点击媒体/视频上传按钮（底部工具栏）
       - eval: >-
           (function(){
-            var mediaBtn =
-              document.querySelector('button[aria-label*="Add a photo"]') ||
-              document.querySelector('button[aria-label*="Add media"]') ||
-              document.querySelector('button[aria-label*="添加媒体"]') ||
-              document.querySelector('button[aria-label*="添加照片"]') ||
-              document.querySelector('button[aria-label*="Photo"]') ||
-              document.querySelector('button[aria-label*="Video"]') ||
-              document.querySelector('button[aria-label*="视频"]') ||
-              document.querySelector('.share-promoted-detour-button--media') ||
-              document.querySelector('[class*=share-creation-state] button[class*=media]') ||
-              [...document.querySelectorAll('.share-box--modal button, [class*=share-creation] button')]
-                .find(function(b){
-                  var label = (b.getAttribute('aria-label') || '') + ' ' + b.textContent;
-                  return /photo|video|media|图片|视频|媒体/i.test(label);
-                });
-            if (mediaBtn) { mediaBtn.click(); return "opened_media"; }
+            var selectors = [
+              'button[aria-label*="Add a photo"]',
+              'button[aria-label*="Add media"]',
+              'button[aria-label*="Add a video"]',
+              'button[aria-label*="添加媒体"]',
+              'button[aria-label*="添加照片"]',
+              'button[aria-label*="添加视频"]',
+              'button[aria-label*="Photo"]',
+              'button[aria-label*="Video"]',
+              'button[aria-label*="视频"]',
+              'button[aria-label*="Media"]',
+              '.share-promoted-detour-button--media'
+            ];
+            for (var s = 0; s < selectors.length; s++) {
+              var btn = document.querySelector(selectors[s]);
+              if (btn) { btn.click(); return "opened_media_t1:" + selectors[s]; }
+            }
+            var modalBtns = document.querySelectorAll(
+              '[class*="share-box"] button, [class*="share-creation"] button, ' +
+              '[class*="share-promoted"] button, [role="dialog"] button'
+            );
+            for (var i = 0; i < modalBtns.length; i++) {
+              var b = modalBtns[i];
+              var label = ((b.getAttribute('aria-label') || '') + ' ' + b.textContent).toLowerCase();
+              if (/photo|video|media|image|图片|视频|媒体|照片/.test(label)) {
+                b.click();
+                return "opened_media_t2";
+              }
+            }
             return "no_media_btn";
           })()
-      - wait: 1500
+      - wait: 1000
+      # 等待文件选择器出现（关键步骤，防止 upload 空跑）
+      - wait_until:
+          eval: "!!document.querySelector('input[type=\"file\"]')"
+          timeout: 10000
+          interval: 500
       # 上传视频
       - upload:
           selector: "input[type=file][accept*=video], input[type=file][accept*='*'], input[type=file][accept*='.mp4'], input[type=file]"
@@ -72,16 +105,22 @@ commands:
           eval: >-
             (function(){
               var body = document.body.innerText;
-              if (body.includes('Upload complete') || body.includes('上传完成') || body.includes('Ready to post')) return true;
-              var progress = document.querySelector('[role=progressbar], [class*=progress-bar], [class*=uploading]');
+              if (body.includes('Upload complete') || body.includes('上传完成') ||
+                  body.includes('Ready to post') || body.includes('处理完成')) return true;
+              var progress = document.querySelector('[role=progressbar], [class*=progress-bar], [class*=uploading], [class*=upload-progress]');
               if (progress && progress.offsetParent !== null) return false;
               var postBtn = document.querySelector('.share-actions__primary-action:not([disabled])') ||
-                            [...document.querySelectorAll('button[class*=share-actions] , button')]
-                              .find(function(b){
-                                var t = b.textContent.trim();
-                                return (t === 'Post' || t === '发布' || t === 'Next') && !b.disabled && !b.classList.contains('disabled');
-                              });
-              return !!postBtn;
+                            document.querySelector('[class*="share-actions"] button:not([disabled])') ||
+                            document.querySelector('button[aria-label="Post"]:not([disabled])') ||
+                            document.querySelector('button[aria-label="发布"]:not([disabled])');
+              if (postBtn) return true;
+              var btns = document.querySelectorAll('[role="dialog"] button, [class*="share"] button');
+              for (var i = 0; i < btns.length; i++) {
+                var t = btns[i].textContent.trim();
+                if ((t === 'Post' || t === '发布' || t === 'Next') && !btns[i].disabled &&
+                    !btns[i].classList.contains('disabled')) return true;
+              }
+              return false;
             })()
           timeout: 600000
           interval: 5000
@@ -89,9 +128,13 @@ commands:
       # 填写正文（title + desc 合并，LinkedIn 无独立标题）
       - eval: >-
           (function(){
-            var editor = document.querySelector('.ql-editor[contenteditable=true]') ||
-                         document.querySelector('[role=textbox][contenteditable=true]') ||
-                         document.querySelector('.editor-content [contenteditable=true]');
+            var editor = document.querySelector('.ql-editor[contenteditable="true"]') ||
+                         document.querySelector('[role="textbox"][contenteditable="true"]') ||
+                         document.querySelector('.editor-content [contenteditable="true"]') ||
+                         document.querySelector('[class*="share"] [contenteditable="true"]') ||
+                         document.querySelector('[class*="share-creation"] [contenteditable="true"]') ||
+                         document.querySelector('[aria-label*="Text editor"]') ||
+                         document.querySelector('div[contenteditable="true"][role="textbox"]');
             if (!editor) return "no_editor";
             editor.focus();
             document.execCommand("selectAll", false, null);
@@ -110,12 +153,18 @@ commands:
       - eval: >-
           (function(){
             var btn = document.querySelector('.share-actions__primary-action:not([disabled])') ||
-                      [...document.querySelectorAll('button')]
-                        .find(function(b){
-                          var t = b.textContent.trim();
-                          return (t === 'Post' || t === '发布') && !b.disabled;
-                        });
+                      document.querySelector('[class*="share-actions"] button[class*="primary"]:not([disabled])') ||
+                      document.querySelector('button[aria-label="Post"]:not([disabled])') ||
+                      document.querySelector('button[aria-label="发布"]:not([disabled])');
             if (btn) { btn.click(); return true; }
+            var btns = document.querySelectorAll('[role="dialog"] button, [class*="share"] button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if ((t === 'Post' || t === '发布') && !btns[i].disabled) {
+                btns[i].click();
+                return true;
+              }
+            }
             return false;
           })()
       - wait: 5000
@@ -127,9 +176,14 @@ commands:
           eval: >-
             (function(){
               var body = document.body.innerText;
-              return body.includes('Post successful') || body.includes('发布成功') ||
-                     body.includes('Your post is being processed') ||
-                     !document.querySelector('.share-box--modal');
+              if (body.includes('Post successful') || body.includes('发布成功') ||
+                  body.includes('Your post is being processed') ||
+                  body.includes('帖子正在处理中') ||
+                  body.includes('Your post has been shared')) return true;
+              var modal = document.querySelector('.share-box--modal') ||
+                          document.querySelector('[class*="share-creation-state"]') ||
+                          document.querySelector('[role="dialog"][class*="share"]');
+              return !modal;
             })()
       - return:
           - field: 状态
@@ -150,27 +204,44 @@ commands:
       - eval: >-
           (function(){
             var trigger = document.querySelector('.share-box-feed-entry__trigger') ||
-                          [...document.querySelectorAll('button,div[role=button],div[tabindex="0"]')]
-                            .find(function(el){
-                              var t = el.textContent.trim();
-                              return t.includes('Start a post') || t.includes('发起帖子');
-                            });
-            if (trigger) { trigger.click(); return "opened"; }
+                          document.querySelector('[class*="share-box"][class*="trigger"]') ||
+                          document.querySelector('[class*="share-creation"][class*="trigger"]');
+            if (trigger) { trigger.click(); return "opened_t1"; }
+            trigger = document.querySelector('button[aria-label*="Start a post"]') ||
+                      document.querySelector('button[aria-label*="Create a post"]') ||
+                      document.querySelector('[role="button"][aria-label*="Start a post"]');
+            if (trigger) { trigger.click(); return "opened_t2"; }
+            var els = document.querySelectorAll('button, div[role="button"], div[tabindex="0"], span[role="button"]');
+            for (var i = 0; i < els.length; i++) {
+              var t = els[i].textContent.trim();
+              if (t.length < 30 && (/Start a post|Create a post|发起帖子|开始发帖/.test(t))) {
+                els[i].click();
+                return "opened_t3";
+              }
+            }
             return "no_trigger";
           })()
       - wait: 2000
       - wait_until:
           eval: >-
             (function(){
-              return !!(document.querySelector('.ql-editor[contenteditable=true]') ||
-                        document.querySelector('[role=textbox][contenteditable=true]'));
+              return !!(
+                document.querySelector('.ql-editor[contenteditable="true"]') ||
+                document.querySelector('[role="textbox"][contenteditable="true"]') ||
+                document.querySelector('[class*="share"] [contenteditable="true"]') ||
+                document.querySelector('[aria-label*="Text editor"]') ||
+                document.querySelector('div[contenteditable="true"][role="textbox"]')
+              );
             })()
           timeout: 10000
           interval: 500
       - eval: >-
           (function(){
-            var editor = document.querySelector('.ql-editor[contenteditable=true]') ||
-                         document.querySelector('[role=textbox][contenteditable=true]');
+            var editor = document.querySelector('.ql-editor[contenteditable="true"]') ||
+                         document.querySelector('[role="textbox"][contenteditable="true"]') ||
+                         document.querySelector('[class*="share"] [contenteditable="true"]') ||
+                         document.querySelector('[aria-label*="Text editor"]') ||
+                         document.querySelector('div[contenteditable="true"][role="textbox"]');
             if (!editor) return "no_editor";
             editor.focus();
             document.execCommand("insertText", false, "{{text}}");
@@ -180,12 +251,18 @@ commands:
       - eval: >-
           (function(){
             var btn = document.querySelector('.share-actions__primary-action:not([disabled])') ||
-                      [...document.querySelectorAll('button')]
-                        .find(function(b){
-                          var t = b.textContent.trim();
-                          return (t === 'Post' || t === '发布') && !b.disabled;
-                        });
+                      document.querySelector('[class*="share-actions"] button[class*="primary"]:not([disabled])') ||
+                      document.querySelector('button[aria-label="Post"]:not([disabled])') ||
+                      document.querySelector('button[aria-label="发布"]:not([disabled])');
             if (btn) { btn.click(); return true; }
+            var btns = document.querySelectorAll('[role="dialog"] button, [class*="share"] button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if ((t === 'Post' || t === '发布') && !btns[i].disabled) {
+                btns[i].click();
+                return true;
+              }
+            }
             return false;
           })()
       - wait: 3000
@@ -320,41 +397,72 @@ commands:
       - eval: >-
           (function(){
             var trigger = document.querySelector('.share-box-feed-entry__trigger') ||
-                          [...document.querySelectorAll('button,div[role=button],div[tabindex="0"]')]
-                            .find(function(el){
-                              var t = el.textContent.trim();
-                              return t.includes('Start a post') || t.includes('发起帖子');
-                            });
-            if (trigger) { trigger.click(); return "opened"; }
+                          document.querySelector('[class*="share-box"][class*="trigger"]') ||
+                          document.querySelector('[class*="share-creation"][class*="trigger"]');
+            if (trigger) { trigger.click(); return "opened_t1"; }
+            trigger = document.querySelector('button[aria-label*="Start a post"]') ||
+                      document.querySelector('button[aria-label*="Create a post"]') ||
+                      document.querySelector('[role="button"][aria-label*="Start a post"]');
+            if (trigger) { trigger.click(); return "opened_t2"; }
+            var els = document.querySelectorAll('button, div[role="button"], div[tabindex="0"], span[role="button"]');
+            for (var i = 0; i < els.length; i++) {
+              var t = els[i].textContent.trim();
+              if (t.length < 30 && (/Start a post|Create a post|发起帖子|开始发帖/.test(t))) {
+                els[i].click();
+                return "opened_t3";
+              }
+            }
             return "no_trigger";
           })()
       - wait: 2000
       - wait_until:
           eval: >-
             (function(){
-              return !!(document.querySelector('.ql-editor[contenteditable=true]') ||
-                        document.querySelector('[role=textbox][contenteditable=true]'));
+              return !!(
+                document.querySelector('.ql-editor[contenteditable="true"]') ||
+                document.querySelector('[role="textbox"][contenteditable="true"]') ||
+                document.querySelector('[class*="share"] [contenteditable="true"]') ||
+                document.querySelector('[aria-label*="Text editor"]') ||
+                document.querySelector('div[contenteditable="true"][role="textbox"]')
+              );
             })()
           timeout: 10000
           interval: 500
       # 点击媒体上传按钮
       - eval: >-
           (function(){
-            var mediaBtn =
-              document.querySelector('button[aria-label*="Add a photo"]') ||
-              document.querySelector('button[aria-label*="Photo"]') ||
-              document.querySelector('button[aria-label*="添加照片"]') ||
-              document.querySelector('button[aria-label*="媒体"]') ||
-              document.querySelector('.share-promoted-detour-button--media') ||
-              [...document.querySelectorAll('.share-box--modal button, [class*=share-creation] button')]
-                .find(function(b){
-                  var label = (b.getAttribute('aria-label') || '') + ' ' + b.textContent;
-                  return /photo|media|图片|媒体/i.test(label);
-                });
-            if (mediaBtn) { mediaBtn.click(); return "opened_media"; }
+            var selectors = [
+              'button[aria-label*="Add a photo"]',
+              'button[aria-label*="Add media"]',
+              'button[aria-label*="添加照片"]',
+              'button[aria-label*="添加媒体"]',
+              'button[aria-label*="Photo"]',
+              'button[aria-label*="Media"]',
+              '.share-promoted-detour-button--media'
+            ];
+            for (var s = 0; s < selectors.length; s++) {
+              var btn = document.querySelector(selectors[s]);
+              if (btn) { btn.click(); return "opened_media_t1"; }
+            }
+            var modalBtns = document.querySelectorAll(
+              '[class*="share-box"] button, [class*="share-creation"] button, [role="dialog"] button'
+            );
+            for (var i = 0; i < modalBtns.length; i++) {
+              var b = modalBtns[i];
+              var label = ((b.getAttribute('aria-label') || '') + ' ' + b.textContent).toLowerCase();
+              if (/photo|media|image|图片|媒体|照片/.test(label)) {
+                b.click();
+                return "opened_media_t2";
+              }
+            }
             return "no_media_btn";
           })()
-      - wait: 1500
+      - wait: 1000
+      # 等待文件选择器出现
+      - wait_until:
+          eval: "!!document.querySelector('input[type=\"file\"]')"
+          timeout: 10000
+          interval: 500
       - upload:
           selector: "input[type=file]"
           file: "{{media}}"
@@ -364,20 +472,26 @@ commands:
               var progress = document.querySelector('[role=progressbar]');
               if (progress && progress.offsetParent !== null) return false;
               var btn = document.querySelector('.share-actions__primary-action:not([disabled])') ||
-                        [...document.querySelectorAll('button')]
-                          .find(function(b){
-                            var t = b.textContent.trim();
-                            return (t === 'Post' || t === '发布' || t === 'Next' || t === '下一步') && !b.disabled;
-                          });
-              return !!btn;
+                        document.querySelector('[class*="share-actions"] button:not([disabled])') ||
+                        document.querySelector('button[aria-label="Post"]:not([disabled])');
+              if (btn) return true;
+              var btns = document.querySelectorAll('[role="dialog"] button, [class*="share"] button');
+              for (var i = 0; i < btns.length; i++) {
+                var t = btns[i].textContent.trim();
+                if ((t === 'Post' || t === '发布' || t === 'Next' || t === '下一步') && !btns[i].disabled) return true;
+              }
+              return false;
             })()
           timeout: 300000
           interval: 3000
       - wait: 1000
       - eval: >-
           (function(){
-            var editor = document.querySelector('.ql-editor[contenteditable=true]') ||
-                         document.querySelector('[role=textbox][contenteditable=true]');
+            var editor = document.querySelector('.ql-editor[contenteditable="true"]') ||
+                         document.querySelector('[role="textbox"][contenteditable="true"]') ||
+                         document.querySelector('[class*="share"] [contenteditable="true"]') ||
+                         document.querySelector('[aria-label*="Text editor"]') ||
+                         document.querySelector('div[contenteditable="true"][role="textbox"]');
             if (!editor) return "no_editor";
             editor.focus();
             document.execCommand("insertText", false, "{{text}}");
@@ -387,12 +501,18 @@ commands:
       - eval: >-
           (function(){
             var btn = document.querySelector('.share-actions__primary-action:not([disabled])') ||
-                      [...document.querySelectorAll('button')]
-                        .find(function(b){
-                          var t = b.textContent.trim();
-                          return (t === 'Post' || t === '发布') && !b.disabled;
-                        });
+                      document.querySelector('[class*="share-actions"] button[class*="primary"]:not([disabled])') ||
+                      document.querySelector('button[aria-label="Post"]:not([disabled])') ||
+                      document.querySelector('button[aria-label="发布"]:not([disabled])');
             if (btn) { btn.click(); return true; }
+            var btns = document.querySelectorAll('[role="dialog"] button, [class*="share"] button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if ((t === 'Post' || t === '发布') && !btns[i].disabled) {
+                btns[i].click();
+                return true;
+              }
+            }
             return false;
           })()
       - wait: 3000

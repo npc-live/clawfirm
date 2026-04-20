@@ -1,0 +1,421 @@
+platform: youtube
+login_url: https://www.youtube.com
+login_check:
+  cookie: SID
+
+# YouTube Studio 上传流程：
+# 1. 打开 studio.youtube.com → 触发上传对话框
+# 2. 选择文件 → 等待进入 Details 页
+# 3. 填写标题/描述 → Next → Next → Next → Visibility → Publish
+# YouTube Studio 使用 Polymer/LitElement 自定义组件，选择器以 # 和 ytcp- 为前缀
+
+commands:
+
+  # ── 上传视频 ──────────────────────────────────────────────────────────────────
+  post:
+    args: [video, title, desc, cover, visibility]   # video: 本地视频路径（必填）, cover: 封面图片路径（可选）, visibility: public/unlisted/private（默认 public）
+    steps:
+      - open: "https://studio.youtube.com/"
+      - wait: 4000
+      # 关闭可能出现的弹窗/提示
+      - eval: >-
+          (function(){
+            var dismissBtns = document.querySelectorAll(
+              'ytcp-button#dismiss-button, [id="dismiss-button"], tp-yt-paper-dialog #secondary-action-button'
+            );
+            dismissBtns.forEach(function(b){ b.click(); });
+            return dismissBtns.length;
+          })()
+      - wait: 500
+      # 点击 Create / 创建按钮 打开上传面板
+      - eval: >-
+          (function(){
+            var createBtn = document.querySelector('#create-icon') ||
+                            document.querySelector('ytcp-button#create-icon') ||
+                            document.querySelector('[id="upload-icon"]') ||
+                            document.querySelector('button[aria-label="Create"]') ||
+                            document.querySelector('button[aria-label="创建"]');
+            if (createBtn) { createBtn.click(); return "clicked_create"; }
+            var els = document.querySelectorAll('ytcp-button, button');
+            for (var i = 0; i < els.length; i++) {
+              var t = els[i].textContent.trim();
+              if (/^(Create|创建|Upload)$/i.test(t) || els[i].id === 'create-icon') {
+                els[i].click();
+                return "clicked_text:" + t;
+              }
+            }
+            return "no_create_btn";
+          })()
+      - wait: 1500
+      # 点击 "Upload videos" / "上传视频" 选项
+      - eval: >-
+          (function(){
+            var uploadItem = document.querySelector('#text-item-0') ||
+                             document.querySelector('tp-yt-paper-item#text-item-0') ||
+                             document.querySelector('[test-id="upload-beta"]');
+            if (uploadItem) { uploadItem.click(); return "clicked_upload_item"; }
+            var items = document.querySelectorAll(
+              'tp-yt-paper-item, ytcp-text-menu tp-yt-paper-item, [role="menuitem"], [role="option"]'
+            );
+            for (var i = 0; i < items.length; i++) {
+              var t = items[i].textContent.trim();
+              if (/Upload video|上传视频/i.test(t)) {
+                items[i].click();
+                return "clicked_menu:" + t;
+              }
+            }
+            return "no_upload_item";
+          })()
+      - wait: 2000
+      # 等待上传对话框出现（file input 渲染）
+      - wait_until:
+          eval: "!!document.querySelector('input[type=\"file\"]')"
+          timeout: 10000
+          interval: 500
+      # 上传视频文件
+      - upload:
+          selector: "input[type=file]"
+          file: "{{video}}"
+      # 等待 Details 页加载（标题输入框出现）
+      - wait_until:
+          eval: >-
+            (function(){
+              var titleBox = document.querySelector('#title-textarea #textbox, ytcp-mention-textbox#title-textarea #textbox, [aria-label="Add a title that describes your video (type @ to mention a channel)"]');
+              return !!titleBox;
+            })()
+          timeout: 60000
+          interval: 2000
+      - wait: 1500
+      # 等待视频上传完成（进度条到 100% 或 "Uploading" 消失）
+      - wait_until:
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              if (body.includes('Upload complete') || body.includes('上传完成') ||
+                  body.includes('Checks complete') || body.includes('检查完毕') ||
+                  body.includes('Processing will begin shortly') ||
+                  body.includes('SD processing complete') || body.includes('HD processing complete')) return true;
+              var progress = document.querySelector('.progress-bar.ytcp-video-upload-progress, [class*="upload-progress"]');
+              if (progress) {
+                var style = progress.getAttribute('style') || '';
+                if (style.includes('100%')) return true;
+              }
+              var status = document.querySelector('.ytcp-video-upload-progress-renderer');
+              if (status && /100%|complete|完成/.test(status.textContent)) return true;
+              return false;
+            })()
+          timeout: 600000
+          interval: 5000
+      - wait: 1000
+      # 填写标题（YouTube 自动用文件名填充，需要清除再填写）
+      - eval: >-
+          (function(){
+            var titleBox = document.querySelector('#title-textarea #textbox') ||
+                           document.querySelector('ytcp-mention-textbox#title-textarea #textbox') ||
+                           document.querySelector('#title-textarea [contenteditable="true"]') ||
+                           document.querySelector('[aria-label*="title"][contenteditable]');
+            if (!titleBox) return "no_title";
+            titleBox.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("delete", false, null);
+            document.execCommand("insertText", false, "{{title}}");
+            titleBox.dispatchEvent(new Event('input', {bubbles: true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 填写描述
+      - eval: >-
+          (function(){
+            var descBox = document.querySelector('#description-textarea #textbox') ||
+                          document.querySelector('ytcp-mention-textbox#description-textarea #textbox') ||
+                          document.querySelector('#description-textarea [contenteditable="true"]') ||
+                          document.querySelector('[aria-label*="description"][contenteditable]') ||
+                          document.querySelector('[aria-label*="描述"][contenteditable]');
+            if (!descBox) return "no_desc";
+            descBox.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("delete", false, null);
+            document.execCommand("insertText", false, "{{desc}}");
+            descBox.dispatchEvent(new Event('input', {bubbles: true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 封面/缩略图上传（可选，cover 为空时跳过）
+      - eval: >-
+          (function(){
+            var cover = "{{cover}}";
+            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
+            var uploadBtn = document.querySelector('#still-picker-upload-button') ||
+                            document.querySelector('ytcp-thumbnails-compact-editor-uploader button') ||
+                            document.querySelector('[test-id="thumbnail-upload-button"]');
+            if (uploadBtn) { uploadBtn.click(); return "clicked_thumb_upload"; }
+            var btns = document.querySelectorAll('button, ytcp-button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (/Upload thumbnail|上传缩略图|Upload custom thumbnail/i.test(t)) {
+                btns[i].click();
+                return "clicked_thumb_text";
+              }
+            }
+            return "no_thumb_btn";
+          })()
+      - wait: 1500
+      - eval: >-
+          (function(){
+            var cover = "{{cover}}";
+            if (!cover || cover.indexOf("{{") === 0) return "skip";
+            return "upload_cover";
+          })()
+      - upload:
+          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+          file: "{{cover}}"
+      - wait: 3000
+      # 点击 Next（Details → Video elements）
+      - eval: >-
+          (function(){
+            var nextBtn = document.querySelector('#next-button') ||
+                          document.querySelector('ytcp-button#next-button') ||
+                          document.querySelector('[id="next-button"]');
+            if (nextBtn) { nextBtn.click(); return "next_1"; }
+            return "no_next";
+          })()
+      - wait: 2000
+      # 点击 Next（Video elements → Checks）
+      - eval: >-
+          (function(){
+            var nextBtn = document.querySelector('#next-button') ||
+                          document.querySelector('ytcp-button#next-button');
+            if (nextBtn) { nextBtn.click(); return "next_2"; }
+            return "no_next";
+          })()
+      - wait: 2000
+      # 点击 Next（Checks → Visibility）
+      - eval: >-
+          (function(){
+            var nextBtn = document.querySelector('#next-button') ||
+                          document.querySelector('ytcp-button#next-button');
+            if (nextBtn) { nextBtn.click(); return "next_3"; }
+            return "no_next";
+          })()
+      - wait: 2000
+      # 选择可见性（默认 Public）
+      - eval: >-
+          (function(){
+            var vis = "{{visibility}}";
+            if (!vis || vis.indexOf("{{") === 0) vis = "public";
+            vis = vis.toLowerCase();
+            var radioName = vis === 'private' ? 'PRIVATE' :
+                            vis === 'unlisted' ? 'UNLISTED' : 'PUBLIC';
+            var radio = document.querySelector('tp-yt-paper-radio-button[name="' + radioName + '"]') ||
+                        document.querySelector('[name="' + radioName + '"]');
+            if (radio) { radio.click(); return "selected:" + radioName; }
+            var radios = document.querySelectorAll('tp-yt-paper-radio-button, [role="radio"]');
+            for (var i = 0; i < radios.length; i++) {
+              var t = (radios[i].textContent || '').toLowerCase();
+              if (t.includes(vis)) {
+                radios[i].click();
+                return "selected_text:" + vis;
+              }
+            }
+            return "no_radio";
+          })()
+      - wait: 1000
+      # 点击 Publish / 发布（或 Save 保存）
+      - eval: >-
+          (function(){
+            var doneBtn = document.querySelector('#done-button') ||
+                          document.querySelector('ytcp-button#done-button') ||
+                          document.querySelector('[id="done-button"]');
+            if (doneBtn) { doneBtn.click(); return "published"; }
+            return "no_done_btn";
+          })()
+      - wait: 5000
+      # 等待发布完成（对话框关闭或成功提示出现）
+      - wait_until:
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              if (body.includes('Video published') || body.includes('视频已发布') ||
+                  body.includes('Your video is') || body.includes('Video processing') ||
+                  body.includes('Uploading is complete')) return true;
+              var dialog = document.querySelector('ytcp-uploads-dialog');
+              if (dialog && dialog.hasAttribute('hidden')) return true;
+              var link = document.querySelector('a.ytcp-video-info[href*="youtu"]');
+              if (link) return true;
+              return false;
+            })()
+          timeout: 30000
+          interval: 2000
+      # 捕获视频链接
+      - capture:
+          name: video_url
+          eval: >-
+            (function(){
+              var link = document.querySelector('a.ytcp-video-info[href*="youtu"]') ||
+                         document.querySelector('a[href*="youtu.be"]') ||
+                         document.querySelector('a[href*="youtube.com/video"]') ||
+                         document.querySelector('.video-url-fadeable a');
+              return link ? link.href : location.href;
+            })()
+      - capture:
+          name: success
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              return body.includes('Video published') || body.includes('视频已发布') ||
+                     body.includes('Your video is') ||
+                     !!document.querySelector('a.ytcp-video-info[href*="youtu"]');
+            })()
+      - return:
+          - field: 状态
+            value: "{{success === 'true' ? '✅ YouTube 视频发布成功' : '⚠️ 请检查页面'}}"
+          - field: 标题
+            value: "{{title}}"
+          - field: 描述
+            value: "{{desc}}"
+          - field: 可见性
+            value: "{{visibility}}"
+          - field: 视频URL
+            value: "{{video_url}}"
+
+  # ── 搜索视频 ──────────────────────────────────────────────────────────────────
+  search:
+    args: [keyword]
+    steps:
+      - open: "https://www.youtube.com/results?search_query={{keyword}}"
+      - wait: 4000
+      - extract:
+          selector: "ytd-video-renderer, ytd-rich-item-renderer"
+          fields:
+            title: "#video-title"
+            channel: "#channel-name a, .ytd-channel-name a, #text.ytd-channel-name"
+            link:
+              selector: "a#video-title-link, a#thumbnail"
+              attr: href
+
+  # ── 点赞视频 ──────────────────────────────────────────────────────────────────
+  like:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: before
+          eval: >-
+            (function(){
+              var btn = document.querySelector('like-button-view-model button, #top-level-buttons-computed ytd-toggle-button-renderer:first-child button, button[aria-label*="like this video"]');
+              if (!btn) return "no_btn";
+              return btn.getAttribute('aria-pressed') === 'true' ? 'liked' : 'not_liked';
+            })()
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('like-button-view-model button') ||
+                      document.querySelector('#top-level-buttons-computed ytd-toggle-button-renderer:first-child button') ||
+                      document.querySelector('#segmented-like-button button') ||
+                      document.querySelector('button[aria-label*="like this video"]') ||
+                      document.querySelector('button[aria-label*="喜欢"]');
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      - capture:
+          name: after
+          eval: >-
+            (function(){
+              var btn = document.querySelector('like-button-view-model button, #top-level-buttons-computed ytd-toggle-button-renderer:first-child button');
+              if (!btn) return "unknown";
+              return btn.getAttribute('aria-pressed') === 'true' ? 'liked' : 'not_liked';
+            })()
+      - return:
+          - field: 操作
+            value: "{{before === 'liked' ? '取消点赞' : '点赞成功'}}"
+          - field: 当前状态
+            value: "{{after === 'liked' ? '✅ 已点赞' : '❌ 未点赞'}}"
+
+  # ── 发表评论 ──────────────────────────────────────────────────────────────────
+  comment:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      # 滚动到评论区触发懒加载
+      - eval: "window.scrollTo(0, 600)"
+      - wait: 3000
+      # 点击评论输入框占位区域
+      - eval: >-
+          (function(){
+            var placeholder = document.querySelector('#simplebox-placeholder, ytd-comment-simplebox-renderer #placeholder-area') ||
+                              document.querySelector('[placeholder*="Add a comment"]') ||
+                              document.querySelector('[placeholder*="添加评论"]');
+            if (placeholder) { placeholder.click(); return "clicked"; }
+            return "no_placeholder";
+          })()
+      - wait: 1500
+      # 等待评论编辑器出现
+      - wait_until:
+          eval: >-
+            (function(){
+              return !!(document.querySelector('#contenteditable-root[contenteditable="true"]') ||
+                        document.querySelector('ytd-comment-simplebox-renderer [contenteditable="true"]') ||
+                        document.querySelector('#creation-box [contenteditable="true"]'));
+            })()
+          timeout: 10000
+          interval: 500
+      # 输入评论
+      - eval: >-
+          (function(){
+            var editor = document.querySelector('#contenteditable-root[contenteditable="true"]') ||
+                         document.querySelector('ytd-comment-simplebox-renderer [contenteditable="true"]') ||
+                         document.querySelector('#creation-box [contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.focus();
+            document.execCommand("insertText", false, "{{text}}");
+            return "ok";
+          })()
+      - wait: 800
+      # 点击提交按钮
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('#submit-button ytcp-button, #submit-button button') ||
+                      document.querySelector('ytd-comment-simplebox-renderer #submit-button') ||
+                      [...document.querySelectorAll('button, ytcp-button')]
+                        .find(function(b){
+                          var t = b.textContent.trim();
+                          return (t === 'Comment' || t === '评论') && !b.disabled;
+                        });
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ YouTube 评论成功"
+          - field: 评论内容
+            value: "{{text}}"
+
+  # ── 订阅频道 ──────────────────────────────────────────────────────────────────
+  subscribe:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: before
+          eval: >-
+            (function(){
+              var btn = document.querySelector('#subscribe-button button, ytd-subscribe-button-renderer button');
+              if (!btn) return "no_btn";
+              return btn.getAttribute('aria-label') && btn.getAttribute('aria-label').includes('Unsubscribe') ? 'subscribed' : 'not_subscribed';
+            })()
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('#subscribe-button button') ||
+                      document.querySelector('ytd-subscribe-button-renderer button') ||
+                      document.querySelector('[class*="subscribe-button"] button');
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      - return:
+          - field: 操作
+            value: "{{before === 'subscribed' ? '取消订阅' : '订阅成功'}}"

@@ -160,7 +160,10 @@ func RunYAMLCommand(ctx context.Context, adapterPath, commandName string, argVal
 	// Open a new tab in the default browser context so that automation
 	// can access the user's existing cookies and login sessions (required
 	// for posting to social media platforms).
-	cdpClient, err := NewTab(cdpPort)
+	// Note: agent-browser will reuse this tab for the actual automation,
+	// so we must NOT close it — the user needs to interact with it after
+	// the command finishes.
+	cdpClient, _, err := NewTabWithID(cdpPort)
 	if err != nil {
 		return nil, fmt.Errorf("open new tab: %w", err)
 	}
@@ -406,9 +409,13 @@ func executeStep(
 	case step.Upload != nil:
 		sel := interpolate(step.Upload.Selector, vars)
 		f := interpolate(step.Upload.File, vars)
-		log.Printf("  → upload %q ← %s", sel, f)
-		if err := mustOKOrHeal(ctx, exec.Upload(sel, f), "upload failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
-			return err
+		if f == "" || strings.Contains(f, "{{") {
+			log.Printf("  → upload SKIP (file path empty or unresolved: %q)", f)
+		} else {
+			log.Printf("  → upload %q ← %s", sel, f)
+			if err := mustOKOrHeal(ctx, exec.Upload(sel, f), "upload failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+				return err
+			}
 		}
 
 	case step.Screenshot != "":
