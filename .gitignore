@@ -4,6 +4,9 @@ bin/
 # Temp / scratch files
 OPTIMIZATION_PLAN.md
 
+# MCP config (contains API keys)
+.mcp.json
+
 # Compiled binaries (root level, in case built outside bin/)
 /clawfirm
 /whip

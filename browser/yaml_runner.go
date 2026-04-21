@@ -51,6 +51,7 @@ type Step struct {
 	Eval           string          `yaml:"eval,omitempty"`
 	Capture        *CaptureStep    `yaml:"capture,omitempty"`
 	Upload         *UploadStep     `yaml:"upload,omitempty"`
+	CdpUpload      *CdpUploadStep  `yaml:"cdp_upload,omitempty"`
 	Screenshot     string          `yaml:"screenshot,omitempty"`
 	Extract        *ExtractDef     `yaml:"extract,omitempty"`
 	Return         []ReturnRow     `yaml:"return,omitempty"`
@@ -74,6 +75,14 @@ type CaptureStep struct {
 type UploadStep struct {
 	Selector string `yaml:"selector"`
 	File     string `yaml:"file"`
+}
+
+// CdpUploadStep sets files on an input element found via a JS expression
+// (which may traverse shadow DOM). Uses CDP Runtime.evaluate to obtain the
+// element's objectId, then DOM.setFileInputFiles to set the file directly.
+type CdpUploadStep struct {
+	Eval string `yaml:"eval"`
+	File string `yaml:"file"`
 }
 
 type ExtractDef struct {
@@ -416,6 +425,41 @@ func executeStep(
 			if err := mustOKOrHeal(ctx, exec.Upload(sel, f), "upload failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
 				return err
 			}
+		}
+
+	case step.CdpUpload != nil:
+		js := interpolate(step.CdpUpload.Eval, vars)
+		f := interpolate(step.CdpUpload.File, vars)
+		if f == "" || strings.Contains(f, "{{") {
+			log.Printf("  → cdp_upload SKIP (file path empty or unresolved: %q)", f)
+		} else {
+			log.Printf("  → cdp_upload ← %s", f)
+			raw, err := cdpClient.Send("Runtime.evaluate", map[string]any{
+				"expression":    js,
+				"returnByValue": false,
+			})
+			if err != nil {
+				return fmt.Errorf("cdp_upload: eval failed: %w", err)
+			}
+			var evalRes struct {
+				Result struct {
+					ObjectID string `json:"objectId"`
+				} `json:"result"`
+			}
+			if err := json.Unmarshal(raw, &evalRes); err != nil {
+				return fmt.Errorf("cdp_upload: parse eval result: %w", err)
+			}
+			if evalRes.Result.ObjectID == "" {
+				return fmt.Errorf("cdp_upload: element not found (objectId is empty)")
+			}
+			_, err = cdpClient.Send("DOM.setFileInputFiles", map[string]any{
+				"files":    []string{f},
+				"objectId": evalRes.Result.ObjectID,
+			})
+			if err != nil {
+				return fmt.Errorf("cdp_upload: DOM.setFileInputFiles failed: %w", err)
+			}
+			log.Printf("  → cdp_upload OK")
 		}
 
 	case step.Screenshot != "":

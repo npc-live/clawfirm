@@ -46,8 +46,8 @@ func (m *MediaGen) Schema() map[string]any {
 			},
 			"size": map[string]any{
 				"type":        "string",
-				"enum":        []string{"portrait", "landscape", "square"},
-				"description": "Output aspect ratio. portrait=9:16 (竖屏封面), landscape=16:9 (横屏封面), square=1:1. Default: portrait.",
+				"enum":        []string{"portrait", "landscape", "landscape_4x3", "square"},
+				"description": "Output aspect ratio. portrait=9:16 (竖屏封面), landscape=16:9 (横屏封面), landscape_4x3=4:3 (通用横版, 默认必出), square=1:1. Default: portrait.",
 			},
 			"style": map[string]any{
 				"type":        "string",
@@ -164,9 +164,10 @@ func generateGeminiImage(ctx context.Context, apiKey, model, prompt, sizeKey str
 	// Aspect ratio hint appended to prompt since Gemini 2.x flash image gen
 	// does not expose a dedicated size parameter via this endpoint.
 	aspectHints := map[string]string{
-		"portrait":  "vertical 9:16 aspect ratio",
-		"landscape": "horizontal 16:9 aspect ratio",
-		"square":    "square 1:1 aspect ratio",
+		"portrait":      "vertical 9:16 aspect ratio",
+		"landscape":     "horizontal 16:9 aspect ratio",
+		"landscape_4x3": "horizontal 4:3 aspect ratio",
+		"square":        "square 1:1 aspect ratio",
 	}
 	if hint, ok := aspectHints[sizeKey]; ok {
 		prompt = prompt + " (" + hint + ")"
@@ -257,9 +258,10 @@ func generateGeminiImage(ctx context.Context, apiKey, model, prompt, sizeKey str
 // generateOpenAIImage calls the OpenAI Images API and returns raw image bytes.
 func generateOpenAIImage(ctx context.Context, apiKey, model, prompt, sizeKey, quality, style string) ([]byte, error) {
 	sizeMap := map[string]string{
-		"portrait":  "1024x1792",
-		"landscape": "1792x1024",
-		"square":    "1024x1024",
+		"portrait":      "1024x1792",
+		"landscape":     "1792x1024",
+		"landscape_4x3": "1440x1080",
+		"square":        "1024x1024",
 	}
 	size, ok := sizeMap[sizeKey]
 	if !ok {
