@@ -61,6 +61,8 @@ ffmpeg -y -i "$VIDEO_PATH" \
 - `width`, `height`, `fps`, `duration` — 视频技术参数
 - `cover_ref_frame_1.jpg` ~ `cover_ref_frame_3.jpg` — 关键帧参考图
 
+> **人物帧提取策略：** 优先选取包含人物正面清晰面部的帧作为主参考图（ref_frame_1）。如果视频中有数字人口播片段，从该片段中截取面部占比最大的帧。该帧将作为封面人物形象的主要来源。
+
 ---
 
 ## Step 2: 平台封面规格
@@ -69,6 +71,7 @@ ffmpeg -y -i "$VIDEO_PATH" \
 
 | 平台 | 尺寸 | 比例 | media_gen size | 文字规范 |
 |------|------|------|----------------|----------|
+| **通用横版(默认必出)** | **1440×1080** | **4:3** | **`landscape_4x3`** | **≤10字大标题, 适配微信视频号/朋友圈/公众号** |
 | 抖音 | 1080×1440 | 3:4 | `portrait` | ≤8字大标题, 高对比度, 人脸+30% CTR |
 | 抖音(竖) | 1080×1920 | 9:16 | `portrait` | 同上 |
 | 小红书 | 1080×1440 | 3:4 | `portrait` | ≤10字, 关键信息可视化 |
@@ -76,6 +79,8 @@ ffmpeg -y -i "$VIDEO_PATH" \
 | LinkedIn | 1920×1080 | 16:9 | `landscape` | 英文标题, 专业风格 |
 | Twitter | 1600×900 | 16:9 | `landscape` | 简洁大字, 品牌色 |
 | YouTube | 1280×720 | 16:9 | `landscape` | ≤10字, 高饱和度 |
+
+> **注意：** 无论目标平台是什么，都必须生成一张 4:3 横版通用封面。该封面适用于微信视频号、朋友圈分享、公众号文章等场景。
 
 ---
 
@@ -99,7 +104,7 @@ ffmpeg -y -i "$VIDEO_PATH" \
 
 ### 3b. CLI 插件 media-gen
 
-`cmd/media-gen/main.go` — 独立 CLI 工具，支持参考图风格迁移：
+`cmd/media-gen/main.go` — 独立 CLI 工具，支持参考图：
 
 ```bash
 CLAWD_TOOL_INPUT='{"prompt":"...", "output_path":"/tmp/cover.png", "size":"portrait", "reference_images":["/tmp/cover_ref_frame_1.jpg"]}' \
@@ -107,9 +112,9 @@ CLAWD_TOOL_INPUT='{"prompt":"...", "output_path":"/tmp/cover.png", "size":"portr
 ```
 
 **参考图 (reference_images) 用法：**
-- 传入视频关键帧作为风格参考
-- AI 模型会基于参考图风格生成封面
-- 支持多张参考图
+- **人物参考（必须）**：传入包含人物正面的视频帧，prompt 中必须明确要求"将参考图中的人物作为封面主体，保留其面部特征、发型、服装"。仅传入参考图而不在 prompt 中明确要求保留人物，模型只会提取风格而忽略人物本身。
+- **风格参考（可选）**：传入额外图片用于色调/构图参考
+- 支持多张参考图，第一张应为人物帧
 
 ### 3c. 封面 prompt 模板
 
@@ -121,12 +126,14 @@ CLAWD_TOOL_INPUT='{"prompt":"...", "output_path":"/tmp/cover.png", "size":"portr
 
 要求：
 - 尺寸：{平台对应尺寸}
-- 大字标题："{≤N字标题}"，高对比度，加描边/阴影
+- 【人物优先】参考图中的人物必须作为封面主体，清晰可辨，占据封面至少30%面积。保持人物的面部特征、发型、服装与参考图一致。人物位于视觉焦点位置（竖版居中偏上，横版居左或居右三分之一）。
+- 大字标题："{≤N字标题}"，高对比度，加描边/阴影，不遮挡人物面部
 - 风格：{平台风格}
-- 人物/产品突出展示
-- 背景简洁不杂乱
-- 关键数字/利益点可视化
+- 背景简洁不杂乱，衬托人物
+- 关键数字/利益点可视化（放置于人物旁边或下方）
 ```
+
+> **重要：** 如果参考图中包含人物，prompt 必须明确要求"保留并突出参考图中的人物形象"。仅说 "use reference frame as context" 是不够的，模型会将其仅作为风格参考而忽略人物。
 
 ---
 
@@ -303,6 +310,9 @@ eval $(ffprobe -v error -select_streams v:0 \
 # 截取参考帧
 ffmpeg -y -i "$VIDEO" -vf "select=eq(n\,90)" -frames:v 1 -q:v 2 /tmp/ref_frame.jpg
 
+# 通用横版封面（4:3, 默认必出）
+CLAWD_TOOL_INPUT='{"prompt":"制作通用横版视频封面。主题：'$TITLE'。大字标题，高对比度，人物突出，横屏4:3比例，适配微信视频号/朋友圈","output_path":"/tmp/cover_default.png","size":"landscape_4x3","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
+
 # 抖音版封面（竖屏 3:4）
 CLAWD_TOOL_INPUT='{"prompt":"为抖音制作视频封面。主题：'$TITLE'。大字标题，高对比度，人物突出，竖屏3:4比例","output_path":"/tmp/cover_douyin.png","size":"portrait","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
 
@@ -310,12 +320,13 @@ CLAWD_TOOL_INPUT='{"prompt":"为抖音制作视频封面。主题：'$TITLE'。�
 CLAWD_TOOL_INPUT='{"prompt":"为B站制作视频封面。主题：'$TITLE'。【教程】标签，大字标题+描边，横屏16:9比例","output_path":"/tmp/cover_bilibili.png","size":"landscape","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
 
 # 为每个平台合成首帧
-for PLATFORM in douyin bilibili; do
+for PLATFORM in default douyin bilibili; do
   COVER="/tmp/cover_${PLATFORM}.png"
   OUTPUT="./final_${PLATFORM}.mp4"
 
   # 获取目标分辨率
   case $PLATFORM in
+    default)  W=1440; H=1080 ;;
     douyin)   W=1080; H=1920 ;;
     bilibili) W=1920; H=1080 ;;
   esac
