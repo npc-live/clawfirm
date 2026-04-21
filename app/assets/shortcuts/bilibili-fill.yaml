@@ -44,22 +44,42 @@ commands:
         selector: input[placeholder='请输入稿件标题']
         value: '{{title}}'
     - wait: 300
-    - eval: "(function(){\n  var el = document.querySelector(\".ql-editor\");\n  if(!el)\
-        \ return false;\n  el.focus();\n  document.execCommand(\"selectAll\", false,\
-        \ null);\n  document.execCommand(\"delete\", false, null);\n  document.execCommand(\"\
-        insertText\", false, \"{{desc}}\");\n  return el.textContent.trim().slice(0,30);\n\
-        })()"
+    # 清空 Quill 编辑器已有内容
+    - eval: >-
+        (function(){
+          var el = document.querySelector(".ql-editor");
+          if(!el) return false;
+          el.focus();
+          el.innerHTML = '<p><br></p>';
+          return true;
+        })()
+    - wait: 300
+    # 填写描述（用 type_rich 代替已废弃的 execCommand）
+    - type_rich:
+        selector: ".ql-editor"
+        value: "{{desc}}"
     - wait: 500
     - eval: "(function(){\n  var cover = \"{{cover}}\";\n  if (!cover || cover.indexOf(\"\
         {{\") === 0) return \"no_cover\";\n  return \"has_cover\";\n})()"
-    - click:
-        text: 更换封面
+    # 点击封面按钮（兼容"更换封面"和"设置封面"两种状态）
+    - eval: >-
+        (function(){
+          var btn = [...document.querySelectorAll('span,div,button')]
+            .find(function(el){ var t = el.textContent.trim(); return t === '更换封面' || t === '设置封面' || t === '上传封面'; });
+          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
+          return "no_cover_btn";
+        })()
     - wait: 2000
-    - click:
-        text: 上传封面
+    - eval: >-
+        (function(){
+          var btn = [...document.querySelectorAll('span,div,button')]
+            .find(function(el){ return el.textContent.trim() === '上传封面'; });
+          if (btn) { btn.click(); return "clicked"; }
+          return "already_in_upload";
+        })()
     - wait: 1000
     - upload:
-        selector: input[type=file][accept*=image], input[type=file][accept*='.jpg']
+        selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
         file: '{{cover}}'
     - wait: 3000
     - click:
@@ -113,10 +133,9 @@ commands:
           if (!"{{tag1}}") return "skip";
           var input = document.querySelector("input[placeholder*='创建标签']");
           if (!input) return "no_input";
-          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          return "enter";
+          return "ready_for_enter";
         })()
+    - key: "Enter"
     - wait: 500
     # Tag 2
     - eval: >-
@@ -137,10 +156,9 @@ commands:
           if (!"{{tag2}}") return "skip";
           var input = document.querySelector("input[placeholder*='创建标签']");
           if (!input) return "no_input";
-          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          return "enter";
+          return "ready_for_enter";
         })()
+    - key: "Enter"
     - wait: 500
     # Tag 3
     - eval: >-
@@ -161,10 +179,9 @@ commands:
           if (!"{{tag3}}") return "skip";
           var input = document.querySelector("input[placeholder*='创建标签']");
           if (!input) return "no_input";
-          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          return "enter";
+          return "ready_for_enter";
         })()
+    - key: "Enter"
     - wait: 500
     # Tag 4
     - eval: >-
@@ -185,10 +202,9 @@ commands:
           if (!"{{tag4}}") return "skip";
           var input = document.querySelector("input[placeholder*='创建标签']");
           if (!input) return "no_input";
-          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          return "enter";
+          return "ready_for_enter";
         })()
+    - key: "Enter"
     - wait: 500
     # Tag 5
     - eval: >-
@@ -209,10 +225,9 @@ commands:
           if (!"{{tag5}}") return "skip";
           var input = document.querySelector("input[placeholder*='创建标签']");
           if (!input) return "no_input";
-          input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
-          return "enter";
+          return "ready_for_enter";
         })()
+    - key: "Enter"
     - wait: 500
     # ── 标签结束 ──────────────────────────────────────────────────────────────────
     - eval: document.querySelector('span.submit-add')?.scrollIntoView({block:'center'})

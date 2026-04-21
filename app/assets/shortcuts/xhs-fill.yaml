@@ -83,7 +83,7 @@ commands:
         \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
         \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
         \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
-        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));});\
         \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
         ;\n})()"
     - wait: 500
@@ -101,7 +101,7 @@ commands:
         \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
         \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
         \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
-        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));});\
         \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
         ;\n})()"
     - wait: 500
@@ -119,7 +119,7 @@ commands:
         \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
         \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
         \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
-        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));});\
         \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
         ;\n})()"
     - wait: 500
@@ -137,7 +137,7 @@ commands:
         \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
         \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
         \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
-        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));});\
         \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
         ;\n})()"
     - wait: 500
@@ -155,7 +155,7 @@ commands:
         \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
         \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
         \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
-        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));});\
         \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
         ;\n})()"
     - wait: 500

@@ -260,6 +260,22 @@ commands:
           selector: "input[placeholder='填写作品标题，为作品获得更多流量']"
           value: "{{title}}"
       - wait: 500
+      # 清空描述区已有内容（抖音可能自动生成描述）
+      - eval: >-
+          (function(){
+            var editor = document.querySelector('.zone-container.editor-kit-container');
+            if (!editor) return false;
+            editor.focus();
+            var range = document.createRange();
+            range.selectNodeContents(editor);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return true;
+          })()
+      - wait: 200
+      - key: "Backspace"
+      - wait: 300
       # 填写描述（contenteditable）
       - type_rich:
           selector: ".zone-container.editor-kit-container"
@@ -307,7 +323,7 @@ commands:
             for (var s = 0; s < sels.length; s++) {
               var items = document.querySelectorAll(sels[s]);
               for (var i = 0; i < items.length; i++) {
-                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected:" + sels[s]; }
               }
             }
             return "no_suggestion";
@@ -341,7 +357,7 @@ commands:
               '.semi-select-option, [role=option], [role=listbox] > div'
             );
             for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
             }
             return "no_suggestion";
           })()
@@ -374,7 +390,7 @@ commands:
               '.semi-select-option, [role=option], [role=listbox] > div'
             );
             for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
             }
             return "no_suggestion";
           })()
@@ -407,7 +423,7 @@ commands:
               '.semi-select-option, [role=option], [role=listbox] > div'
             );
             for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
             }
             return "no_suggestion";
           })()
@@ -440,31 +456,71 @@ commands:
               '.semi-select-option, [role=option], [role=listbox] > div'
             );
             for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
             }
             return "no_suggestion";
           })()
       - wait: 500
       # ── 话题标签结束 ────────────────────────────────────────────────────────────
-      # 封面上传（可选，cover 为空时自动跳过）
+      # 封面上传（可选，cover 为空时全部跳过）
+      - capture:
+          name: has_cover
+          eval: >-
+            (function(){
+              var cover = "{{cover}}";
+              if (!cover || cover.indexOf("{{") === 0) return "";
+              return "yes";
+            })()
+      # 等待封面按钮出现（视频处理完成后才渲染）
+      - wait_until:
+          eval: >-
+            (function(){
+              if (!"{{has_cover}}") return true;
+              var btn = [...document.querySelectorAll('span,div,button')]
+                .find(function(el){ var t = el.textContent.trim(); return t === '选择封面' || t === '更换封面' || t === '设置封面' || t === '上传封面'; });
+              return !!btn;
+            })()
+          timeout: 120000
+          interval: 3000
       - eval: >-
           (function(){
-            var cover = "{{cover}}";
-            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            return "has_cover";
+            if (!"{{has_cover}}") return "skip";
+            var btn = [...document.querySelectorAll('span,div,button')]
+              .find(function(el){ var t = el.textContent.trim(); return t === '选择封面' || t === '更换封面' || t === '设置封面' || t === '上传封面'; });
+            if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
+            return "no_cover_btn";
           })()
-      - click:
-          text: "选择封面"
       - wait: 2000
-      - click:
-          text: "上传封面"
+      - eval: >-
+          (function(){
+            if (!"{{has_cover}}") return "skip";
+            var btn = [...document.querySelectorAll('span,div,button')]
+              .find(function(el){ return el.textContent.trim() === '上传封面'; });
+            if (btn) { btn.click(); return "clicked"; }
+            return "already_in_upload";
+          })()
       - wait: 1000
+      # 等待封面文件 input 出现
+      - wait_until:
+          eval: >-
+            (function(){
+              if (!"{{has_cover}}") return true;
+              return !!document.querySelector('.semi-upload-hidden-input, input[type=file][accept*=image]');
+            })()
+          timeout: 10000
+          interval: 1000
       - upload:
-          selector: ".semi-upload-hidden-input, input[type=file][accept*=image]"
+          selector: ".semi-upload-hidden-input, input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
           file: "{{cover}}"
       - wait: 3000
-      - click:
-          text: "完成"
+      - eval: >-
+          (function(){
+            if (!"{{has_cover}}") return "skip";
+            var btn = [...document.querySelectorAll('button')]
+              .find(function(b){ return b.textContent.trim() === '完成'; });
+            if (btn) { btn.click(); return "clicked"; }
+            return "no_complete_btn";
+          })()
       - wait: 1000
       - eval: >-
           (function(){

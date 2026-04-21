@@ -178,7 +178,7 @@ commands:
             for (var s = 0; s < sels.length; s++) {
               var items = document.querySelectorAll(sels[s]);
               for (var i = 0; i < items.length; i++) {
-                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected:" + sels[s]; }
               }
             }
             return "no_suggestion";
@@ -210,7 +210,7 @@ commands:
             for (var s = 0; s < sels.length; s++) {
               var items = document.querySelectorAll(sels[s]);
               for (var i = 0; i < items.length; i++) {
-                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected:" + sels[s]; }
               }
             }
             return "no_suggestion";
@@ -242,7 +242,7 @@ commands:
             for (var s = 0; s < sels.length; s++) {
               var items = document.querySelectorAll(sels[s]);
               for (var i = 0; i < items.length; i++) {
-                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected:" + sels[s]; }
               }
             }
             return "no_suggestion";
@@ -274,7 +274,7 @@ commands:
             for (var s = 0; s < sels.length; s++) {
               var items = document.querySelectorAll(sels[s]);
               for (var i = 0; i < items.length; i++) {
-                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected:" + sels[s]; }
               }
             }
             return "no_suggestion";
@@ -306,7 +306,7 @@ commands:
             for (var s = 0; s < sels.length; s++) {
               var items = document.querySelectorAll(sels[s]);
               for (var i = 0; i < items.length; i++) {
-                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected:" + sels[s]; }
               }
             }
             return "no_suggestion";

@@ -1,11 +1,11 @@
 platform: channels
 login_url: https://channels.weixin.qq.com
 login_check:
-  cookie: myuin
+  cookie: wxuin
 
 # 视频号助手使用无界微前端（wujie-app），所有 DOM 在 shadow root 内。
 # 选择器统一通过 eval 操作 document.querySelector("wujie-app").shadowRoot。
-# 上传文件：先将 shadow root 内的 file input 移至顶层 document，再用 upload 步骤。
+# 上传文件：使用 cdp_upload 步骤，通过 Runtime.evaluate + DOM.setFileInputFiles 穿透 shadow DOM。
 
 commands:
 
@@ -24,19 +24,9 @@ commands:
             });
           })()
       - wait: 1000
-      # 将 shadow root 内的 file input 暴露到顶层 document，以便 upload 步骤访问
-      - eval: >-
-          (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var fi = sr.querySelector("input[type=file][accept*=video]");
-            if(!fi) return "no file input";
-            fi.id = "__upload_input";
-            document.body.appendChild(fi);
-            return "ok";
-          })()
-      # 上传视频
-      - upload:
-          selector: "#__upload_input"
+      # 通过 CDP 直接设置 shadow DOM 内的 file input（无需移出 shadow root）
+      - cdp_upload:
+          eval: 'document.querySelector("wujie-app").shadowRoot.querySelector("input[type=file][accept*=video]")'
           file: "{{video}}"
       # 等待上传完成（发表按钮可用）
       - wait_until:
@@ -76,11 +66,30 @@ commands:
             return "ok";
           })()
       - wait: 500
-      # 封面上传（可选，cover 为空时自动跳过；shadow DOM 需先移出 file input）
+      # 封面上传（可选，cover 为空时全部跳过）
+      - capture:
+          name: has_cover
+          eval: >-
+            (function(){
+              var cover = "{{cover}}";
+              if (!cover || cover.indexOf("{{") === 0) return "";
+              return "yes";
+            })()
+      # 等待封面按钮出现（视频处理完后才渲染）
+      - wait_until:
+          eval: >-
+            (function(){
+              if (!"{{has_cover}}") return true;
+              var sr = document.querySelector("wujie-app").shadowRoot;
+              var btn = [...sr.querySelectorAll('span,div,button')]
+                .find(function(el){ var t = el.textContent.trim(); return t.includes('封面') || t.includes('更换'); });
+              return !!btn;
+            })()
+          timeout: 120000
+          interval: 3000
       - eval: >-
           (function(){
-            var cover = "{{cover}}";
-            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
+            if (!"{{has_cover}}") return "skip";
             var sr = document.querySelector("wujie-app").shadowRoot;
             var btn = [...sr.querySelectorAll('span,div,button')]
               .find(function(el){ var t = el.textContent.trim(); return t.includes('封面') || t.includes('更换'); });
@@ -88,21 +97,23 @@ commands:
             return btn ? "opened" : "no_btn";
           })()
       - wait: 2000
-      - eval: >-
-          (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var fi = sr.querySelector("input[type=file][accept*=image]");
-            if (!fi) return "no_cover_input";
-            fi.id = "__cover_upload_input";
-            document.body.appendChild(fi);
-            return "ok";
-          })()
-      - upload:
-          selector: "#__cover_upload_input"
+      # 等待封面图片 file input 出现
+      - wait_until:
+          eval: >-
+            (function(){
+              if (!"{{has_cover}}") return true;
+              var sr = document.querySelector("wujie-app").shadowRoot;
+              return !!sr.querySelector("input[type=file][accept*=image]");
+            })()
+          timeout: 10000
+          interval: 1000
+      - cdp_upload:
+          eval: 'document.querySelector("wujie-app").shadowRoot.querySelector("input[type=file][accept*=image]")'
           file: "{{cover}}"
       - wait: 3000
       - eval: >-
           (function(){
+            if (!"{{has_cover}}") return "skip";
             var sr = document.querySelector("wujie-app").shadowRoot;
             var btn = [...sr.querySelectorAll('button')]
               .find(function(b){ return b.textContent.trim() === '完成'; });
