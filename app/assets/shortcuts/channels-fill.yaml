@@ -1,0 +1,111 @@
+platform: channels
+login_url: https://channels.weixin.qq.com
+login_check:
+  cookie: myuin
+
+commands:
+  post:
+    args: [video, title, desc, cover]
+    steps:
+      - open: "https://channels.weixin.qq.com/platform/post/create"
+      - wait: 3000
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            ["我知道了","不保存","取消"].forEach(function(t){
+              var btn = [...sr.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === t; });
+              if(btn) btn.click();
+            });
+          })()
+      - wait: 1000
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var fi = sr.querySelector("input[type=file][accept*=video]");
+            if(!fi) return "no file input";
+            fi.id = "__upload_input";
+            document.body.appendChild(fi);
+            return "ok";
+          })()
+      - upload:
+          selector: "#__upload_input"
+          file: "{{video}}"
+      - wait_until:
+          eval: >-
+            (function(){
+              var sr = document.querySelector("wujie-app").shadowRoot;
+              var btn = [...sr.querySelectorAll("button")].find(function(b){
+                return b.textContent.trim() === "发表" && !b.disabled;
+              });
+              return !!btn;
+            })()
+          timeout: 600000
+          interval: 5000
+      - wait: 1500
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var el = sr.querySelector(".input-editor");
+            if(!el) return "no desc editor";
+            el.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("insertText", false, "{{desc}}");
+            return "ok";
+          })()
+      - wait: 500
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var el = sr.querySelector("input[placeholder*=6-16]");
+            if(!el) return "no title input";
+            el.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            setter.call(el, "{{title}}");
+            el.dispatchEvent(new Event("input", {bubbles:true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 封面上传（可选，cover 为空时自动跳过；shadow DOM 需先移出 file input）
+      - eval: >-
+          (function(){
+            var cover = "{{cover}}";
+            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var btn = [...sr.querySelectorAll('span,div,button')]
+              .find(function(el){ var t = el.textContent.trim(); return t.includes('封面') || t.includes('更换'); });
+            if (btn) btn.click();
+            return btn ? "opened" : "no_btn";
+          })()
+      - wait: 2000
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var fi = sr.querySelector("input[type=file][accept*=image]");
+            if (!fi) return "no_cover_input";
+            fi.id = "__cover_upload_input";
+            document.body.appendChild(fi);
+            return "ok";
+          })()
+      - upload:
+          selector: "#__cover_upload_input"
+          file: "{{cover}}"
+      - wait: 3000
+      - eval: >-
+          (function(){
+            var sr = document.querySelector("wujie-app").shadowRoot;
+            var btn = [...sr.querySelectorAll('button')]
+              .find(function(b){ return b.textContent.trim() === '完成'; });
+            if (btn) btn.click();
+            return !!btn;
+          })()
+      - wait: 1000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - return:
+          - field: 状态
+            value: "✅ 视频号内容已填写，请手动确认后点击发表"
+          - field: 标题
+            value: "{{title}}"
+          - field: 页面URL
+            value: "{{result_url}}"

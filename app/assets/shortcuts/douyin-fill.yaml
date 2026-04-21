@@ -1,0 +1,174 @@
+platform: douyin
+login_url: https://www.douyin.com
+login_check:
+  cookie: passport_csrf_token
+commands:
+  post:
+    args:
+    - video
+    - title
+    - desc
+    - cover
+    - tags
+    steps:
+    - open: https://creator.douyin.com/creator-micro/content/upload
+    - wait: 4000
+    - upload:
+        selector: input[type=file]
+        file: '{{video}}'
+    - wait:
+        selector: input[placeholder='填写作品标题，为作品获得更多流量']
+    - wait: 1000
+    - wait_until:
+        eval: "(function(){\n  var body = document.body.innerText;\n  if (body.includes('上传完成')\
+          \ || body.includes('Upload complete')) return true;\n  var progress = document.querySelector('.progress-bar,\
+          \ .upload-progress, [class*=progress]');\n  if (!progress) return true;\n\
+          \  var text = progress.textContent || '';\n  if (text.includes('100%'))\
+          \ return true;\n  var btn = [...document.querySelectorAll('button')].find(function(b){\
+          \ return b.textContent.trim() === '发布' && !b.disabled; });\n  return !!btn;\n\
+          })()"
+        timeout: 300000
+        interval: 3000
+    - fill:
+        selector: input[placeholder='填写作品标题，为作品获得更多流量']
+        value: '{{title}}'
+    - wait: 500
+    - type_rich:
+        selector: .zone-container.editor-kit-container
+        value: '{{desc}}'
+    - wait: 800
+    - capture:
+        name: tag1
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[0]||''; })()
+    - capture:
+        name: tag2
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[1]||''; })()
+    - capture:
+        name: tag3
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[2]||''; })()
+    - capture:
+        name: tag4
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[3]||''; })()
+    - capture:
+        name: tag5
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[4]||''; })()
+    - eval: "(function(){\n  var tag = \"{{tag1}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.zone-container');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag1}}'
+    - wait: 2000
+    - eval: "(function(){\n  if (!\"{{tag1}}\") return \"skip\";\n  var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hashtag]','[class*=suggest-item]','.semi-select-option','[role=option]','[role=listbox]\
+        \ > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list]\
+        \ > div'];\n  for (var s = 0; s < sels.length; s++) {\n    var items = document.querySelectorAll(sels[s]);\n\
+        \    for (var i = 0; i < items.length; i++) {\n      if (items[i].offsetHeight\
+        \ > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'});\
+        \ items[i].click(); return \"selected:\" + sels[s]; }\n    }\n  }\n  return\
+        \ \"no_suggestion\";\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag2}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.zone-container');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag2}}'
+    - wait: 1500
+    - eval: "(function(){\n  if (!\"{{tag2}}\") return \"skip\";\n  var items = document.querySelectorAll(\n\
+        \    '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +\n\
+        \    '[class*=hashtag], [class*=suggest-item], ' +\n    '.semi-select-option,\
+        \ [role=option], [role=listbox] > div'\n  );\n  for (var i = 0; i < items.length;\
+        \ i++) {\n    if (items[i].offsetHeight > 0) { items[i].click(); return \"\
+        selected\"; }\n  }\n  return \"no_suggestion\";\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag3}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.zone-container');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag3}}'
+    - wait: 1500
+    - eval: "(function(){\n  if (!\"{{tag3}}\") return \"skip\";\n  var items = document.querySelectorAll(\n\
+        \    '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +\n\
+        \    '[class*=hashtag], [class*=suggest-item], ' +\n    '.semi-select-option,\
+        \ [role=option], [role=listbox] > div'\n  );\n  for (var i = 0; i < items.length;\
+        \ i++) {\n    if (items[i].offsetHeight > 0) { items[i].click(); return \"\
+        selected\"; }\n  }\n  return \"no_suggestion\";\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag4}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.zone-container');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag4}}'
+    - wait: 1500
+    - eval: "(function(){\n  if (!\"{{tag4}}\") return \"skip\";\n  var items = document.querySelectorAll(\n\
+        \    '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +\n\
+        \    '[class*=hashtag], [class*=suggest-item], ' +\n    '.semi-select-option,\
+        \ [role=option], [role=listbox] > div'\n  );\n  for (var i = 0; i < items.length;\
+        \ i++) {\n    if (items[i].offsetHeight > 0) { items[i].click(); return \"\
+        selected\"; }\n  }\n  return \"no_suggestion\";\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag5}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.zone-container');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag5}}'
+    - wait: 1500
+    - eval: "(function(){\n  if (!\"{{tag5}}\") return \"skip\";\n  var items = document.querySelectorAll(\n\
+        \    '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +\n\
+        \    '[class*=hashtag], [class*=suggest-item], ' +\n    '.semi-select-option,\
+        \ [role=option], [role=listbox] > div'\n  );\n  for (var i = 0; i < items.length;\
+        \ i++) {\n    if (items[i].offsetHeight > 0) { items[i].click(); return \"\
+        selected\"; }\n  }\n  return \"no_suggestion\";\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var cover = \"{{cover}}\";\n  if (!cover || cover.indexOf(\"\
+        {{\") === 0) return \"no_cover\";\n  return \"has_cover\";\n})()"
+    - click:
+        text: 选择封面
+    - wait: 2000
+    - click:
+        text: 上传封面
+    - wait: 1000
+    - upload:
+        selector: .semi-upload-hidden-input, input[type=file][accept*=image]
+        file: '{{cover}}'
+    - wait: 3000
+    - click:
+        text: 完成
+    - wait: 1000
+    - eval: "(function(){\n  var btn = [...document.querySelectorAll('button')]\n\
+        \    .find(function(b){ return b.textContent.trim() === '暂不设置'; });\n  if\
+        \ (btn) btn.click();\n  return !!btn;\n})()"
+    - wait: 500
+    - capture:
+        name: result_url
+        eval: location.href
+    - return:
+      - field: 状态
+        value: ✅ 内容已填写，请手动设置封面后点击发布
+      - field: 标题
+        value: '{{title}}'
+      - field: 页面URL
+        value: '{{result_url}}'

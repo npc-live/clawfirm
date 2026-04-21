@@ -120,10 +120,16 @@ commands:
           timeout: 300000
           interval: 3000
       - wait: 1000
-      # 填写标题
-      - fill:
-          selector: "input.d-text"
-          value: "{{title}}"
+      # 填写标题（小红书限制 20 字）
+      - eval: >-
+          (function(){
+            var el = document.querySelector('input.d-text');
+            if (!el) return 'no_title_input';
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(el, '{{title}}'.slice(0, 20));
+            el.dispatchEvent(new Event('input', {bubbles: true}));
+            return el.value;
+          })()
       - wait: 500
       # 填写描述（ProseMirror 富文本）
       - type_rich:
@@ -164,17 +170,16 @@ commands:
           })()
       - wait: 300
       - keyboard_insert: "#{{tag1}}"
-      - wait: 1500
+      - wait: 2000
       - eval: >-
           (function(){
             if (!"{{tag1}}") return "skip";
-            var items = document.querySelectorAll(
-              '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +
-              '[class*=hash-tag], [class*=suggest], ' +
-              '.tippy-content li, [role=option], [role=listbox] > div'
-            );
-            for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+            var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list] > div'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+              }
             }
             return "no_suggestion";
           })()
@@ -197,17 +202,16 @@ commands:
           })()
       - wait: 300
       - keyboard_insert: "#{{tag2}}"
-      - wait: 1500
+      - wait: 2000
       - eval: >-
           (function(){
             if (!"{{tag2}}") return "skip";
-            var items = document.querySelectorAll(
-              '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +
-              '[class*=hash-tag], [class*=suggest], ' +
-              '.tippy-content li, [role=option], [role=listbox] > div'
-            );
-            for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+            var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list] > div'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+              }
             }
             return "no_suggestion";
           })()
@@ -230,17 +234,16 @@ commands:
           })()
       - wait: 300
       - keyboard_insert: "#{{tag3}}"
-      - wait: 1500
+      - wait: 2000
       - eval: >-
           (function(){
             if (!"{{tag3}}") return "skip";
-            var items = document.querySelectorAll(
-              '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +
-              '[class*=hash-tag], [class*=suggest], ' +
-              '.tippy-content li, [role=option], [role=listbox] > div'
-            );
-            for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+            var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list] > div'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+              }
             }
             return "no_suggestion";
           })()
@@ -263,17 +266,16 @@ commands:
           })()
       - wait: 300
       - keyboard_insert: "#{{tag4}}"
-      - wait: 1500
+      - wait: 2000
       - eval: >-
           (function(){
             if (!"{{tag4}}") return "skip";
-            var items = document.querySelectorAll(
-              '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +
-              '[class*=hash-tag], [class*=suggest], ' +
-              '.tippy-content li, [role=option], [role=listbox] > div'
-            );
-            for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+            var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list] > div'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+              }
             }
             return "no_suggestion";
           })()
@@ -296,17 +298,16 @@ commands:
           })()
       - wait: 300
       - keyboard_insert: "#{{tag5}}"
-      - wait: 1500
+      - wait: 2000
       - eval: >-
           (function(){
             if (!"{{tag5}}") return "skip";
-            var items = document.querySelectorAll(
-              '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +
-              '[class*=hash-tag], [class*=suggest], ' +
-              '.tippy-content li, [role=option], [role=listbox] > div'
-            );
-            for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+            var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list] > div'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+              }
             }
             return "no_suggestion";
           })()
@@ -317,24 +318,20 @@ commands:
           (function(){
             var cover = "{{cover}}";
             if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            var btn = document.querySelector('[class*=cover]') ||
-                      [...document.querySelectorAll('div,span')]
-                        .find(function(el){ return el.textContent.trim().includes('封面') && el.offsetHeight > 0 && el.offsetHeight < 200; });
-            if (btn) btn.click();
-            return btn ? "opened" : "no_btn";
+            return "has_cover";
           })()
+      - click:
+          text: "设置封面"
       - wait: 2000
+      - click:
+          text: "本地上传"
+      - wait: 1000
       - upload:
-          selector: "input[type=file][accept*=image], .upload-input"
+          selector: "input[type=file][accept*=image]"
           file: "{{cover}}"
       - wait: 3000
-      - eval: >-
-          (function(){
-            var btn = [...document.querySelectorAll('button')]
-              .find(function(b){ var t = b.textContent.trim(); return t === '完成' || t === '确认'; });
-            if (btn) btn.click();
-            return !!btn;
-          })()
+      - click:
+          text: "完成"
       - wait: 1000
       # 点击发布
       - eval: >-

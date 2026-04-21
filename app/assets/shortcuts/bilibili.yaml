@@ -197,7 +197,7 @@ commands:
 
   # ── 投稿（发布视频）──────────────────────────────────────────────────────────
   post:
-    args: [video, title, desc, cover]   # video: 本地视频路径（必填）, cover: 封面图片路径（可选）
+    args: [video, title, desc, cover, tags]   # video: 本地视频路径（必填）, cover: 封面图片路径（可选）, tags: 逗号分隔标签（可选，最多7个）
     steps:
       - open: "https://member.bilibili.com/platform/upload/video/frame"
       - wait: 4000
@@ -272,33 +272,171 @@ commands:
           (function(){
             var cover = "{{cover}}";
             if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            var btn = document.querySelector('.cover-v2-edit-btn, [class*=cover-edit], [class*=change-cover]') ||
-                      [...document.querySelectorAll('span,div,button')]
-                        .find(function(el){ var t = el.textContent.trim(); return t === '更换封面' || t === '选择封面'; });
-            if (btn) btn.click();
-            return btn ? "opened" : "no_btn";
+            return "has_cover";
           })()
+      - click:
+          text: "更换封面"
       - wait: 2000
-      - eval: >-
-          (function(){
-            var tab = [...document.querySelectorAll('span,div,button,li')]
-              .find(function(el){ var t = el.textContent.trim(); return t === '上传封面' || t === '本地上传'; });
-            if (tab) tab.click();
-            return !!tab;
-          })()
+      - click:
+          text: "上传封面"
       - wait: 1000
       - upload:
           selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg']"
           file: "{{cover}}"
       - wait: 3000
+      - click:
+          text: "完成"
+      - wait: 1000
+      # ── 标签输入（可选，tags 为逗号分隔，最多7个）──────────────────────────────
+      # 先清除系统自动推荐的不相关标签
       - eval: >-
           (function(){
-            var btn = [...document.querySelectorAll('button')]
-              .find(function(b){ return b.textContent.trim() === '完成'; });
-            if (btn) btn.click();
-            return !!btn;
+            var tags = "{{tags}}";
+            if (!tags || tags.indexOf("{{") === 0) return "no_tags";
+            var preWrp = document.querySelector(".tag-pre-wrp");
+            if (preWrp) {
+              var closes = preWrp.querySelectorAll("[class*=close], [class*=remove], .icon-close, svg");
+              closes.forEach(function(c){ c.click(); });
+            }
+            return "cleared";
           })()
-      - wait: 1000
+      - wait: 500
+      - capture:
+          name: tag1
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; return t.split(',').map(function(s){return s.trim()}).filter(Boolean)[0]||''; })()"
+      - capture:
+          name: tag2
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; return t.split(',').map(function(s){return s.trim()}).filter(Boolean)[1]||''; })()"
+      - capture:
+          name: tag3
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; return t.split(',').map(function(s){return s.trim()}).filter(Boolean)[2]||''; })()"
+      - capture:
+          name: tag4
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; return t.split(',').map(function(s){return s.trim()}).filter(Boolean)[3]||''; })()"
+      - capture:
+          name: tag5
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; return t.split(',').map(function(s){return s.trim()}).filter(Boolean)[4]||''; })()"
+      # Tag 1
+      - eval: >-
+          (function(){
+            var tag = "{{tag1}}";
+            if (!tag) return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, tag);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            return "typed:" + tag;
+          })()
+      - wait: 300
+      - eval: >-
+          (function(){
+            if (!"{{tag1}}") return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            return "enter";
+          })()
+      - wait: 500
+      # Tag 2
+      - eval: >-
+          (function(){
+            var tag = "{{tag2}}";
+            if (!tag) return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, tag);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            return "typed:" + tag;
+          })()
+      - wait: 300
+      - eval: >-
+          (function(){
+            if (!"{{tag2}}") return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            return "enter";
+          })()
+      - wait: 500
+      # Tag 3
+      - eval: >-
+          (function(){
+            var tag = "{{tag3}}";
+            if (!tag) return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, tag);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            return "typed:" + tag;
+          })()
+      - wait: 300
+      - eval: >-
+          (function(){
+            if (!"{{tag3}}") return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            return "enter";
+          })()
+      - wait: 500
+      # Tag 4
+      - eval: >-
+          (function(){
+            var tag = "{{tag4}}";
+            if (!tag) return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, tag);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            return "typed:" + tag;
+          })()
+      - wait: 300
+      - eval: >-
+          (function(){
+            if (!"{{tag4}}") return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            return "enter";
+          })()
+      - wait: 500
+      # Tag 5
+      - eval: >-
+          (function(){
+            var tag = "{{tag5}}";
+            if (!tag) return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, tag);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            return "typed:" + tag;
+          })()
+      - wait: 300
+      - eval: >-
+          (function(){
+            if (!"{{tag5}}") return "skip";
+            var input = document.querySelector("input[placeholder*='创建标签']");
+            if (!input) return "no_input";
+            input.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            input.dispatchEvent(new KeyboardEvent('keyup', {key:'Enter', code:'Enter', keyCode:13, bubbles:true}));
+            return "enter";
+          })()
+      - wait: 500
+      # ── 标签结束 ────────────────────────────────────────────────────────────────
       # 点击"立即投稿"（用 agent-browser click 发送真实鼠标事件，JS .click() 在此无效）
       - eval: "document.querySelector('span.submit-add')?.scrollIntoView({block:'center'})"
       - wait: 500

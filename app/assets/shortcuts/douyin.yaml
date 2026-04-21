@@ -299,17 +299,16 @@ commands:
           })()
       - wait: 300
       - keyboard_insert: "#{{tag1}}"
-      - wait: 1500
+      - wait: 2000
       - eval: >-
           (function(){
             if (!"{{tag1}}") return "skip";
-            var items = document.querySelectorAll(
-              '[class*=topic-card], [class*=topic-item], [class*=mention-item], ' +
-              '[class*=hashtag], [class*=suggest-item], ' +
-              '.semi-select-option, [role=option], [role=listbox] > div'
-            );
-            for (var i = 0; i < items.length; i++) {
-              if (items[i].offsetHeight > 0) { items[i].click(); return "selected"; }
+            var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hashtag]','[class*=suggest-item]','.semi-select-option','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list] > div','[class*=at-list] > div'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) { items[i].scrollIntoView({block:'center'}); items[i].click(); return "selected:" + sels[s]; }
+              }
             }
             return "no_suggestion";
           })()
@@ -452,31 +451,20 @@ commands:
           (function(){
             var cover = "{{cover}}";
             if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            var btn = document.querySelector('.cover-Jg3T4p') ||
-                      document.querySelector('[class*=cover-select], [class*=cover-edit]');
-            if (btn) btn.click();
-            return btn ? "opened" : "no_btn";
+            return "has_cover";
           })()
+      - click:
+          text: "选择封面"
       - wait: 2000
-      - eval: >-
-          (function(){
-            var tab = [...document.querySelectorAll('span,div,button,li')]
-              .find(function(el){ var t = el.textContent.trim(); return t === '上传封面' || t === '本地上传'; });
-            if (tab) tab.click();
-            return !!tab;
-          })()
+      - click:
+          text: "上传封面"
       - wait: 1000
       - upload:
           selector: ".semi-upload-hidden-input, input[type=file][accept*=image]"
           file: "{{cover}}"
       - wait: 3000
-      - eval: >-
-          (function(){
-            var btn = [...document.querySelectorAll('button')]
-              .find(function(b){ return b.textContent.trim() === '完成'; });
-            if (btn) btn.click();
-            return !!btn;
-          })()
+      - click:
+          text: "完成"
       - wait: 1000
       - eval: >-
           (function(){

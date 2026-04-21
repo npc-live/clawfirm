@@ -1,0 +1,188 @@
+platform: xiaohongshu
+login_url: https://www.xiaohongshu.com
+login_check:
+  cookie: web_session
+commands:
+  post_video:
+    args:
+    - video
+    - title
+    - desc
+    - cover
+    - tags
+    steps:
+    - open: https://creator.xiaohongshu.com/publish/publish?source=official
+    - wait: 3000
+    - wait_until:
+        eval: '!!document.querySelector(''input.upload-input, input.upload-input-el,
+          input[type=file], input[accept*=video]'')'
+        timeout: 15000
+        interval: 1000
+    - upload:
+        selector: input.upload-input, input.upload-input-el, input[type=file], input[accept*=video]
+        file: '{{video}}'
+    - wait_until:
+        eval: '!!document.querySelector(''input.d-text, input[placeholder*=标题], #title'')'
+        timeout: 120000
+        interval: 2000
+    - wait_until:
+        eval: "(function(){\n  var body = document.body.innerText;\n  if (body.includes('上传完成')\
+          \ || body.includes('转码完成')) return true;\n  var progress = document.querySelector('[class*=progress],[class*=uploading],[class*=upload-progress]');\n\
+          \  if (progress) {\n    var text = progress.textContent || '';\n    if (text.includes('100%'))\
+          \ return true;\n  }\n  var btn = [...document.querySelectorAll('button')].filter(function(b){\
+          \ return b.textContent.trim() === '发布'; }).pop();\n  return !!(btn && !btn.disabled);\n\
+          })()"
+        timeout: 300000
+        interval: 3000
+    - wait: 1000
+    - eval: "(function(){\n  var el = document.querySelector('input.d-text');\n  if\
+        \ (!el) return 'no_title_input';\n  var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,\
+        \ 'value').set;\n  setter.call(el, '{{title}}'.slice(0, 20));\n  el.dispatchEvent(new\
+        \ Event('input', {bubbles: true}));\n  return el.value;\n})()"
+    - wait: 500
+    - type_rich:
+        selector: .tiptap.ProseMirror
+        value: '{{desc}}'
+    - wait: 800
+    - capture:
+        name: tag1
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[0]||''; })()
+    - capture:
+        name: tag2
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[1]||''; })()
+    - capture:
+        name: tag3
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[2]||''; })()
+    - capture:
+        name: tag4
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[3]||''; })()
+    - capture:
+        name: tag5
+        eval: (function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return '';
+          var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return
+          a[4]||''; })()
+    - eval: "(function(){\n  var tag = \"{{tag1}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.tiptap.ProseMirror');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag1}}'
+    - wait: 2000
+    - eval: "(function(){\n  if (!\"{{tag1}}\") return \"skip\";\n  var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content\
+        \ li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list]\
+        \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
+        \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
+        \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
+        ;\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag2}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.tiptap.ProseMirror');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag2}}'
+    - wait: 2000
+    - eval: "(function(){\n  if (!\"{{tag2}}\") return \"skip\";\n  var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content\
+        \ li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list]\
+        \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
+        \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
+        \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
+        ;\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag3}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.tiptap.ProseMirror');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag3}}'
+    - wait: 2000
+    - eval: "(function(){\n  if (!\"{{tag3}}\") return \"skip\";\n  var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content\
+        \ li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list]\
+        \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
+        \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
+        \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
+        ;\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag4}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.tiptap.ProseMirror');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag4}}'
+    - wait: 2000
+    - eval: "(function(){\n  if (!\"{{tag4}}\") return \"skip\";\n  var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content\
+        \ li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list]\
+        \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
+        \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
+        \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
+        ;\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var tag = \"{{tag5}}\";\n  if (!tag) { if(document.activeElement)\
+        \ document.activeElement.blur(); return \"skip\"; }\n  var editor = document.querySelector('.tiptap.ProseMirror');\n\
+        \  if (!editor) return \"no_editor\";\n  editor.click(); editor.focus();\n\
+        \  var sel = window.getSelection();\n  var range = document.createRange();\n\
+        \  range.selectNodeContents(editor);\n  range.collapse(false);\n  sel.removeAllRanges();\n\
+        \  sel.addRange(range);\n  return \"ready:\" + tag;\n})()"
+    - wait: 300
+    - keyboard_insert: '#{{tag5}}'
+    - wait: 2000
+    - eval: "(function(){\n  if (!\"{{tag5}}\") return \"skip\";\n  var sels = ['[class*=topic-card]','[class*=topic-item]','[class*=mention-item]','[class*=hash-tag]','[class*=suggest]','[class*=hashtag]','.tippy-content\
+        \ li','[role=option]','[role=listbox] > div','[class*=publish-topic]','[class*=topic-list]\
+        \ > div','[class*=at-list] > div'];\n  for (var s = 0; s < sels.length; s++)\
+        \ {\n    var items = document.querySelectorAll(sels[s]);\n    for (var i =\
+        \ 0; i < items.length; i++) {\n      if (items[i].offsetHeight > 0 && items[i].offsetParent\
+        \ !== null) { items[i].scrollIntoView({block:'center'}); items[i].click();\
+        \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
+        ;\n})()"
+    - wait: 500
+    - eval: "(function(){\n  var cover = \"{{cover}}\";\n  if (!cover || cover.indexOf(\"\
+        {{\") === 0) return \"no_cover\";\n  return \"has_cover\";\n})()"
+    - click:
+        text: 设置封面
+    - wait: 2000
+    - click:
+        text: 本地上传
+    - wait: 1000
+    - upload:
+        selector: input[type=file][accept*=image]
+        file: '{{cover}}'
+    - wait: 3000
+    - click:
+        text: 完成
+    - wait: 1000
+    - capture:
+        name: result_url
+        eval: location.href
+    - return:
+      - field: 状态
+        value: ✅ 内容已填写，请手动确认后点击发布
+      - field: 标题
+        value: '{{title}}'
+      - field: 描述
+        value: '{{desc}}'
+      - field: 页面URL
+        value: '{{result_url}}'
