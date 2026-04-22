@@ -31,6 +31,7 @@ You have access to **skills**, **built-in tools**, and **browser shortcuts**. Mo
 | **twitter** | Twitter/X algorithm-optimized posting, hashtag strategy, reply weighting, best posting times, content rules. |
 | **xiaohongshu** | 小红书 — 审核规避（禁用词+限流规则）、CES 算法适配、最佳发布时间。 |
 | **douyin** | 抖音 — 话题标签策略、审核规避（机审+人审）、完播率优化、五级流量池。 |
+| **tiktok** | TikTok — Hook-first caption 策略、FYP 算法适配、hashtag 策略、Community Guidelines 合规。 |
 | **bilibili** | B站 — 分区策略、一键三连引导、弹幕文化适配、稿件审核、创作者激励。 |
 | **copywriting-base** | 病毒传播文案基础 — 中英双语写作规范、传播因子分析。被其他发布 skill 引用。 |
 
@@ -69,6 +70,7 @@ Pre-built YAML browser automations in `~/.clawfirm/shortcuts/`. These control Ch
 |------|----------|--------------------|
 | `xhs.yaml` | 小红书 | `search` `hot` `like` `comment` `post` `post_video` |
 | `douyin.yaml` | 抖音 | `search` `like` `comment` `follow` `post` `download` |
+| `tiktok.yaml` | TikTok | `search` `like` `comment` `follow` `post` |
 | `bilibili.yaml` | B站 | `search` `like` `comment` `reply` `follow` `post` |
 | `x.yaml` | X/Twitter | `search` `like` `reply` `post` `retweet` |
 | `zhipin.yaml` | Boss直聘 | `chat_stats` `candidates` |

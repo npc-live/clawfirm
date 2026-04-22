@@ -36,6 +36,32 @@ mobile/node_modules/
 .clawfirm/sessions/*.jsonl
 .claw/
 
+# Ops internal files (finance, legal, demos, PPT, etc.)
+# Keep only explicitly tracked docs (business-modules.md, cover-workflow.md, repo-structure.md)
+_ops/.env
+_ops/DigitarAvatar/
+_ops/LegalEntity/
+_ops/OPC_Hackathon/
+_ops/PPT/
+_ops/demo-manual/
+_ops/demo-video/
+_ops/finance/
+_ops/generate_finance.py
+_ops/generate_sectors_en.py
+_ops/incubator/
+_ops/logo/
+_ops/product-research/
+_ops/reports/
+_ops/sectors-CN.png
+_ops/sectors-EN.html
+_ops/sectors-EN.png
+_ops/xianyu/
+_ops/线下活动/
+_ops/黑客松/
+_ops/ClawFirm_vs_HermesAgent_对比分析.md
+_ops/ClawFirm_蹭Hermes热度策略.md
+_ops/ManagedAgents_vs_ClawFirm_对比分析.md
+
 # Media assets (large files, not source)
 cover-asset/
 mac_to_wsl2

@@ -1,0 +1,635 @@
+platform: tiktok
+login_url: https://www.tiktok.com
+login_check:
+  cookie: sessionid
+
+# TikTok Studio 上传流程：
+# 1. 打开 tiktokstudio/upload → 选择视频文件
+# 2. 等待上传完成 → 填写 caption/描述
+# 3. 输入 hashtag 标签 → 上传横版封面 → 上传竖版封面
+# 4. 点击 Post 发布
+
+commands:
+
+  # ── 发布视频 ──────────────────────────────────────────────────────────────────
+  post:
+    args: [video, title, desc, tags, cover_h, cover_v]   # video: 本地视频路径（必填）, title: 标题（可选）, desc: 描述文案（必填）, tags: 逗号分隔话题标签（可选，最多5个）, cover_h: 横版封面路径（可选）, cover_v: 竖版封面路径（可选）
+    steps:
+      - open: "https://www.tiktok.com/tiktokstudio/upload"
+      - wait: 4000
+      # 关闭可能出现的弹窗/引导
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll(
+              '[class*=modal] button, [class*=dialog] button, [class*=popup] button'
+            );
+            btns.forEach(function(b){
+              var t = b.textContent.trim().toLowerCase();
+              if (t === 'got it' || t === 'dismiss' || t === 'close' || t === 'ok' || t === '知道了') b.click();
+            });
+            return btns.length;
+          })()
+      - wait: 500
+      # 等待文件上传 input 出现
+      - wait_until:
+          eval: "!!document.querySelector('input[type=\"file\"][accept*=\"video\"], input[type=\"file\"]')"
+          timeout: 10000
+          interval: 500
+      # 上传视频文件
+      - upload:
+          selector: "input[type=file][accept*=video], input[type=file]"
+          file: "{{video}}"
+      # 等待编辑器渲染（caption 输入区出现）
+      - wait_until:
+          eval: >-
+            (function(){
+              return !!(
+                document.querySelector('[contenteditable="true"][data-text]') ||
+                document.querySelector('[contenteditable="true"]') ||
+                document.querySelector('.public-DraftEditor-content') ||
+                document.querySelector('[class*=caption] [contenteditable]') ||
+                document.querySelector('[class*=editor] [contenteditable]') ||
+                document.querySelector('[data-e2e="caption-editor"]')
+              );
+            })()
+          timeout: 60000
+          interval: 2000
+      - wait: 1500
+      # 等待视频上传完成
+      - wait_until:
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              if (body.includes('Upload complete') || body.includes('上传完成') ||
+                  body.includes('Uploaded') || body.includes('Ready to post')) return true;
+              var progress = document.querySelector('[class*=progress], [class*=upload-progress]');
+              if (progress) {
+                var text = progress.textContent || '';
+                if (text.includes('100%')) return true;
+              }
+              if (!progress && document.querySelector('[contenteditable="true"]')) return true;
+              var postBtn = [...document.querySelectorAll('button')].find(function(b){
+                return /^Post$/i.test(b.textContent.trim()) && !b.disabled;
+              });
+              return !!postBtn;
+            })()
+          timeout: 600000
+          interval: 5000
+      - wait: 1000
+      # 填写标题（TikTok Studio 可能有独立标题输入框）
+      - eval: >-
+          (function(){
+            var title = "{{title}}";
+            if (!title || title.indexOf("{{") === 0) return "no_title";
+            var input = document.querySelector('input[placeholder*="title" i], input[placeholder*="标题"]');
+            if (!input) return "no_title_input";
+            input.focus();
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(input, title);
+            input.dispatchEvent(new Event('input', {bubbles: true}));
+            input.dispatchEvent(new Event('change', {bubbles: true}));
+            return "ok";
+          })()
+      - wait: 500
+      # 清空 caption 编辑器已有内容
+      - eval: >-
+          (function(){
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[class*=caption] [contenteditable="true"]') ||
+                         document.querySelector('[class*=editor] [contenteditable="true"]') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.focus();
+            document.execCommand("selectAll", false, null);
+            document.execCommand("delete", false, null);
+            return "cleared";
+          })()
+      - wait: 300
+      # 填写描述文案
+      - eval: >-
+          (function(){
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[class*=caption] [contenteditable="true"]') ||
+                         document.querySelector('[class*=editor] [contenteditable="true"]') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.focus();
+            document.execCommand("insertText", false, "{{desc}}");
+            editor.dispatchEvent(new Event('input', {bubbles: true}));
+            return "ok";
+          })()
+      - wait: 800
+      # ── 话题标签（可选，tags 为空时全部跳过）──────────────────────────────────
+      - capture:
+          name: tag1
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return a[0]||''; })()"
+      - capture:
+          name: tag2
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return a[1]||''; })()"
+      - capture:
+          name: tag3
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return a[2]||''; })()"
+      - capture:
+          name: tag4
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return a[3]||''; })()"
+      - capture:
+          name: tag5
+          eval: "(function(){ var t='{{tags}}'; if(!t||t.indexOf('{{')==0) return ''; var a=t.split(',').map(function(s){return s.trim()}).filter(Boolean); return a[4]||''; })()"
+      # ── Tag 1 ──
+      - eval: >-
+          (function(){
+            var tag = "{{tag1}}";
+            if (!tag) { if(document.activeElement) document.activeElement.blur(); return "skip"; }
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.click(); editor.focus();
+            var sel = window.getSelection();
+            var range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return "ready:" + tag;
+          })()
+      - wait: 300
+      - keyboard_insert: " #{{tag1}}"
+      - wait: 2000
+      - eval: >-
+          (function(){
+            if (!"{{tag1}}") return "skip";
+            var sels = ['[class*=mention-list] [class*=item]','[class*=hashtag-list] [class*=item]','[class*=suggest]','[class*=autocomplete] [class*=item]','[role=option]','[role=listbox] > div','[class*=search-result]','[class*=tag-suggestion]'];
+            for (var s = 0; s < sels.length; s++) {
+              var items = document.querySelectorAll(sels[s]);
+              for (var i = 0; i < items.length; i++) {
+                if (items[i].offsetHeight > 0 && items[i].offsetParent !== null) {
+                  items[i].scrollIntoView({block:'center'});
+                  var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};
+                  ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));});
+                  return "selected:" + sels[s];
+                }
+              }
+            }
+            return "no_suggestion";
+          })()
+      - wait: 500
+      # ── Tag 2 ──
+      - eval: >-
+          (function(){
+            var tag = "{{tag2}}";
+            if (!tag) { if(document.activeElement) document.activeElement.blur(); return "skip"; }
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.click(); editor.focus();
+            var sel = window.getSelection();
+            var range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return "ready:" + tag;
+          })()
+      - wait: 300
+      - keyboard_insert: " #{{tag2}}"
+      - wait: 1500
+      - eval: >-
+          (function(){
+            if (!"{{tag2}}") return "skip";
+            var items = document.querySelectorAll(
+              '[class*=mention-list] [class*=item], [class*=hashtag-list] [class*=item], ' +
+              '[class*=suggest], [class*=autocomplete] [class*=item], ' +
+              '[role=option], [role=listbox] > div'
+            );
+            for (var i = 0; i < items.length; i++) {
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
+            }
+            return "no_suggestion";
+          })()
+      - wait: 500
+      # ── Tag 3 ──
+      - eval: >-
+          (function(){
+            var tag = "{{tag3}}";
+            if (!tag) { if(document.activeElement) document.activeElement.blur(); return "skip"; }
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.click(); editor.focus();
+            var sel = window.getSelection();
+            var range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return "ready:" + tag;
+          })()
+      - wait: 300
+      - keyboard_insert: " #{{tag3}}"
+      - wait: 1500
+      - eval: >-
+          (function(){
+            if (!"{{tag3}}") return "skip";
+            var items = document.querySelectorAll(
+              '[class*=mention-list] [class*=item], [class*=hashtag-list] [class*=item], ' +
+              '[class*=suggest], [class*=autocomplete] [class*=item], ' +
+              '[role=option], [role=listbox] > div'
+            );
+            for (var i = 0; i < items.length; i++) {
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
+            }
+            return "no_suggestion";
+          })()
+      - wait: 500
+      # ── Tag 4 ──
+      - eval: >-
+          (function(){
+            var tag = "{{tag4}}";
+            if (!tag) { if(document.activeElement) document.activeElement.blur(); return "skip"; }
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.click(); editor.focus();
+            var sel = window.getSelection();
+            var range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return "ready:" + tag;
+          })()
+      - wait: 300
+      - keyboard_insert: " #{{tag4}}"
+      - wait: 1500
+      - eval: >-
+          (function(){
+            if (!"{{tag4}}") return "skip";
+            var items = document.querySelectorAll(
+              '[class*=mention-list] [class*=item], [class*=hashtag-list] [class*=item], ' +
+              '[class*=suggest], [class*=autocomplete] [class*=item], ' +
+              '[role=option], [role=listbox] > div'
+            );
+            for (var i = 0; i < items.length; i++) {
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
+            }
+            return "no_suggestion";
+          })()
+      - wait: 500
+      # ── Tag 5 ──
+      - eval: >-
+          (function(){
+            var tag = "{{tag5}}";
+            if (!tag) { if(document.activeElement) document.activeElement.blur(); return "skip"; }
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[contenteditable="true"]');
+            if (!editor) return "no_editor";
+            editor.click(); editor.focus();
+            var sel = window.getSelection();
+            var range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return "ready:" + tag;
+          })()
+      - wait: 300
+      - keyboard_insert: " #{{tag5}}"
+      - wait: 1500
+      - eval: >-
+          (function(){
+            if (!"{{tag5}}") return "skip";
+            var items = document.querySelectorAll(
+              '[class*=mention-list] [class*=item], [class*=hashtag-list] [class*=item], ' +
+              '[class*=suggest], [class*=autocomplete] [class*=item], ' +
+              '[role=option], [role=listbox] > div'
+            );
+            for (var i = 0; i < items.length; i++) {
+              if (items[i].offsetHeight > 0) { var r=items[i].getBoundingClientRect(),o={bubbles:true,cancelable:true,composed:true,view:window,clientX:r.left+r.width/2,clientY:r.top+r.height/2};['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(e){items[i].dispatchEvent(new (e.startsWith('pointer')?PointerEvent:MouseEvent)(e,o));}); return "selected"; }
+            }
+            return "no_suggestion";
+          })()
+      - wait: 500
+      # ── 话题标签结束 ────────────────────────────────────────────────────────────
+      # ── 横版封面上传（可选，cover_h 为空时跳过）────────────────────────────────
+      - capture:
+          name: has_cover_h
+          eval: >-
+            (function(){
+              var cover = "{{cover_h}}";
+              if (!cover || cover.indexOf("{{") === 0) return "";
+              return "yes";
+            })()
+      # 点击封面编辑按钮
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_h}}") return "skip";
+            var btn = [...document.querySelectorAll('button,div,span')]
+              .find(function(el){
+                var t = el.textContent.trim().toLowerCase();
+                return t === 'edit cover' || t === '编辑封面' || t === 'select cover' || t === '选择封面' || t === 'change cover' || t === '更换封面';
+              });
+            if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
+            var coverArea = document.querySelector('[class*=cover-edit], [class*=cover-upload], [class*=thumbnail]');
+            if (coverArea) { coverArea.click(); return "clicked_cover_area"; }
+            return "no_cover_btn";
+          })()
+      - wait: 2000
+      # 点击上传封面按钮（封面面板内）
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_h}}") return "skip";
+            var btn = [...document.querySelectorAll('button,div,span')]
+              .find(function(el){
+                var t = el.textContent.trim().toLowerCase();
+                return t === 'upload cover' || t === '上传封面' || t === 'upload image' || t === 'upload';
+              });
+            if (btn) { btn.click(); return "clicked"; }
+            return "already_in_upload";
+          })()
+      - wait: 1000
+      # 等待封面文件 input 出现
+      - wait_until:
+          eval: >-
+            (function(){
+              if (!"{{has_cover_h}}") return true;
+              return !!document.querySelector('input[type=file][accept*=image], input[type=file][accept*=".jpg"], input[type=file][accept*=".png"]');
+            })()
+          timeout: 10000
+          interval: 1000
+      # 上传横版封面文件
+      - upload:
+          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+          file: "{{cover_h}}"
+      - wait: 3000
+      # 点击确认/完成（横版封面）
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_h}}") return "skip";
+            var btn = [...document.querySelectorAll('button')]
+              .find(function(b){
+                var t = b.textContent.trim().toLowerCase();
+                return t === 'done' || t === '完成' || t === 'confirm' || t === '确认' || t === 'save' || t === '保存';
+              });
+            if (btn) { btn.click(); return "clicked"; }
+            return "no_done_btn";
+          })()
+      - wait: 1500
+      # ── 竖版封面上传（可选，cover_v 为空时跳过）────────────────────────────────
+      - capture:
+          name: has_cover_v
+          eval: >-
+            (function(){
+              var cover = "{{cover_v}}";
+              if (!cover || cover.indexOf("{{") === 0) return "";
+              return "yes";
+            })()
+      # 点击封面编辑按钮（竖版封面入口）
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_v}}") return "skip";
+            var btn = [...document.querySelectorAll('button,div,span')]
+              .find(function(el){
+                var t = el.textContent.trim().toLowerCase();
+                return t === 'edit cover' || t === '编辑封面' || t === 'select cover' || t === '选择封面' || t === 'change cover' || t === '更换封面';
+              });
+            if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
+            var coverArea = document.querySelector('[class*=cover-edit], [class*=cover-upload], [class*=thumbnail]');
+            if (coverArea) { coverArea.click(); return "clicked_cover_area"; }
+            return "no_cover_btn";
+          })()
+      - wait: 2000
+      # 切换到竖版封面 tab/选项
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_v}}") return "skip";
+            var tabs = [...document.querySelectorAll('[role=tab], [class*=tab], button, div')]
+              .filter(function(el){
+                var t = el.textContent.trim().toLowerCase();
+                return t === 'vertical' || t === '竖版' || t === '9:16' || t === 'portrait';
+              });
+            if (tabs.length > 0) { tabs[0].click(); return "switched_vertical"; }
+            return "no_vertical_tab";
+          })()
+      - wait: 1000
+      # 点击上传封面按钮
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_v}}") return "skip";
+            var btn = [...document.querySelectorAll('button,div,span')]
+              .find(function(el){
+                var t = el.textContent.trim().toLowerCase();
+                return t === 'upload cover' || t === '上传封面' || t === 'upload image' || t === 'upload';
+              });
+            if (btn) { btn.click(); return "clicked"; }
+            return "already_in_upload";
+          })()
+      - wait: 1000
+      # 等待文件 input
+      - wait_until:
+          eval: >-
+            (function(){
+              if (!"{{has_cover_v}}") return true;
+              return !!document.querySelector('input[type=file][accept*=image], input[type=file][accept*=".jpg"], input[type=file][accept*=".png"]');
+            })()
+          timeout: 10000
+          interval: 1000
+      # 上传竖版封面文件
+      - upload:
+          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+          file: "{{cover_v}}"
+      - wait: 3000
+      # 点击确认/完成（竖版封面）
+      - eval: >-
+          (function(){
+            if (!"{{has_cover_v}}") return "skip";
+            var btn = [...document.querySelectorAll('button')]
+              .find(function(b){
+                var t = b.textContent.trim().toLowerCase();
+                return t === 'done' || t === '完成' || t === 'confirm' || t === '确认' || t === 'save' || t === '保存';
+              });
+            if (btn) { btn.click(); return "clicked"; }
+            return "no_done_btn";
+          })()
+      - wait: 1500
+      # ── 封面结束 ────────────────────────────────────────────────────────────────
+      # 点击发布
+      - eval: >-
+          (function(){
+            var btn = [...document.querySelectorAll('button')].find(function(b){
+              var t = b.textContent.trim();
+              return (t === 'Post' || t === '发布') && !b.disabled;
+            });
+            if (btn) { btn.click(); return "posted"; }
+            return "no_post_btn";
+          })()
+      - wait: 5000
+      # 等待发布完成
+      - wait_until:
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              if (body.includes('Your video is being uploaded') ||
+                  body.includes('posted') || body.includes('Published') ||
+                  body.includes('发布成功') || body.includes('Video posted') ||
+                  location.href.includes('/manage') || location.href.includes('/content')) return true;
+              return false;
+            })()
+          timeout: 30000
+          interval: 2000
+      - capture:
+          name: result_url
+          eval: "location.href"
+      - capture:
+          name: success
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              return body.includes('posted') || body.includes('Published') ||
+                     body.includes('发布成功') || body.includes('Your video') ||
+                     location.href.includes('/manage') || location.href.includes('/content') ||
+                     location.href !== 'https://www.tiktok.com/tiktokstudio/upload';
+            })()
+      - return:
+          - field: 状态
+            value: "{{success === 'true' ? '✅ TikTok 视频发布成功' : '⚠️ 请检查页面'}}"
+          - field: 标题
+            value: "{{title}}"
+          - field: 描述
+            value: "{{desc}}"
+          - field: 跳转URL
+            value: "{{result_url}}"
+
+  # ── 搜索视频 ──────────────────────────────────────────────────────────────────
+  search:
+    args: [keyword]
+    steps:
+      - open: "https://www.tiktok.com/search?q={{keyword}}"
+      - wait: 4000
+      - extract:
+          selector: "[data-e2e='search_top-item'], [class*=DivItemCard], [class*=video-card]"
+          fields:
+            link:
+              selector: "a[href*='/video/']"
+              attr: href
+            text: "[data-e2e='search-card-desc'], [class*=desc], [class*=title]"
+
+  # ── 点赞视频 ──────────────────────────────────────────────────────────────────
+  like:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: before
+          eval: >-
+            (function(){
+              var btn = document.querySelector('[data-e2e="like-icon"], [class*=like-button], button[aria-label*="Like"]');
+              if (!btn) return "no_btn";
+              return btn.classList.contains('active') || btn.getAttribute('aria-pressed') === 'true' ? 'liked' : 'not_liked';
+            })()
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[data-e2e="like-icon"], [class*=like-button], button[aria-label*="Like"]');
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      - capture:
+          name: after
+          eval: >-
+            (function(){
+              var btn = document.querySelector('[data-e2e="like-icon"], [class*=like-button], button[aria-label*="Like"]');
+              if (!btn) return "unknown";
+              return btn.classList.contains('active') || btn.getAttribute('aria-pressed') === 'true' ? 'liked' : 'not_liked';
+            })()
+      - return:
+          - field: 操作
+            value: "{{before === 'liked' ? '取消点赞' : '点赞成功'}}"
+          - field: 当前状态
+            value: "{{after === 'liked' ? '✅ 已点赞' : '❌ 未点赞'}}"
+
+  # ── 发表评论 ──────────────────────────────────────────────────────────────────
+  comment:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      # 点击评论输入区域
+      - eval: >-
+          (function(){
+            var placeholder = document.querySelector('[data-e2e="comment-input"], [class*=comment-input], [placeholder*="comment" i], [placeholder*="评论"]');
+            if (placeholder) { placeholder.click(); return "clicked"; }
+            return "no_placeholder";
+          })()
+      - wait: 1200
+      # focus 评论编辑器
+      - eval: >-
+          (function(){
+            var editor = document.querySelector('[contenteditable="true"]') ||
+                         document.querySelector('.public-DraftEditor-content') ||
+                         document.querySelector('[data-e2e="comment-input"] [contenteditable]');
+            if (editor) { editor.focus(); return true; }
+            return false;
+          })()
+      - wait: 300
+      # 插入评论文字
+      - keyboard_insert: "{{text}}"
+      - wait: 600
+      # 发送评论
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[data-e2e="comment-post"], [class*=comment-post]') ||
+                      [...document.querySelectorAll('button')]
+                        .find(function(b){
+                          var t = b.textContent.trim();
+                          return (t === 'Post' || t === '发布' || t === 'Reply' || t === '回复') && !b.disabled;
+                        });
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ TikTok 评论成功"
+          - field: 评论内容
+            value: "{{text}}"
+
+  # ── 关注用户 ──────────────────────────────────────────────────────────────────
+  follow:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 4000
+      - capture:
+          name: before
+          eval: >-
+            (function(){
+              var btn = document.querySelector('[data-e2e="follow-button"], button[class*=follow]');
+              if (!btn) return "no_btn";
+              var t = btn.textContent.trim().toLowerCase();
+              return (t === 'following' || t === '已关注') ? 'following' : 'not_following';
+            })()
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[data-e2e="follow-button"], button[class*=follow]');
+            if (btn) { btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1500
+      - return:
+          - field: 操作
+            value: "{{before === 'following' ? '取消关注' : '关注成功'}}"

@@ -56,6 +56,9 @@ social-publish/
 ├── douyin/                           ← 抖音专属
 │   ├── SKILL.md
 │   └── references/
+├── tiktok/                           ← TikTok 国际版专属
+│   ├── SKILL.md
+│   └── references/
 ├── bilibili/                         ← B站专属
 │   ├── SKILL.md
 │   └── references/
@@ -94,7 +97,8 @@ Step 1: copywriting-base → 核心文案 + 标题 + CTA
 Step 2: parallel
   ├── xiaohongshu/SKILL.md → 小红书版本
   ├── twitter/SKILL.md     → Twitter 版本
-  └── douyin/SKILL.md      → 抖音版本
+  ├── douyin/SKILL.md      → 抖音版本
+  └── tiktok/SKILL.md      → TikTok 版本
 ```
 
 ### 与 video-skills 联动
@@ -148,6 +152,7 @@ social-publish/bilibili → B站标题 + 简介 + 分区标签
 | 小红书 | 图文 + 短视频 | CES 分数、完读率 | 种草、姐妹分享、emoji |
 | Twitter | 文字 + Thread | 回复率、引用率 | 犀利、观点驱动、简洁 |
 | 抖音 | 短视频 | 完播率、互动率 | 口语化、前3秒、信息密度 |
+| TikTok | 短视频 | FYP 完播率、分享率 | Authentic、Hook-first、Trend-driven |
 | B站 | 中视频 + 短视频 | 播放+弹幕+投币 | 二次元、技术、一键三连 |
 | 币安广场 | 短帖 + 长文 + 视频 | 互动量、阅读时间 | 专业分析、数据驱动、NFA/DYOR |
 
@@ -166,6 +171,7 @@ AI（Skill）生成文案 → CDP（Adapter）自动发布
 | `adapters/xiaohongshu.yaml` | 小红书 | 图文/视频发布 |
 | `adapters/x.yaml` | Twitter/X | 推文/Thread 发布 |
 | `adapters/douyin.yaml` | 抖音 | 视频发布 |
+| `adapters/tiktok.yaml` | TikTok | 视频发布 |
 | `adapters/bilibili.yaml` | B站 | 视频投稿 |
 | `adapters/binance-square.yaml` | 币安广场 | 短帖/图文/视频/长文发布 |
 
