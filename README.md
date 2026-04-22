@@ -212,6 +212,14 @@ go run ./cmd/gateway
 go run ./cmd/whip example.whip
 ```
 
+## 社群入口 / Community
+
+- **Discord:** [Join our Discord](https://discord.gg/JNXz2utFW8)
+- **X (Twitter):** [@0xOliviaPp](https://x.com/0xOliviaPp)
+- **WeChat 微信:** PpCiting
+
+---
+
 ## 免责声明 / Disclaimer
 
 **中文**
