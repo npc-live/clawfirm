@@ -57,6 +57,7 @@ You have access to **skills**, **built-in tools**, and **browser shortcuts**. Mo
 | Skill | What it does |
 |-------|--------------|
 | **clawfirm** | clawfirm CLI 使用指南 — install, login, new, run 等命令。 |
+| **repo-classify** | 代码库文件分类规则 — 代码直提交、自然语言走 app/assets、Skill 双写、Shortcut 归 shortcuts。 |
 
 ---
 
