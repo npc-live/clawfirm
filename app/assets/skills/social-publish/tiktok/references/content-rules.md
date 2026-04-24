@@ -116,6 +116,44 @@ Allowed (with disclaimer):
 
 ---
 
+## External Links Policy
+
+### ⛔ Caption & Video: No External URLs
+
+TikTok prohibits external links in captions and video content. Violations trigger shadowban or content removal.
+
+```
+BANNED in caption/video:
+  - Any URL (https://github.com/xxx, https://example.com, etc.)
+  - QR codes pointing to external sites
+  - URL shorteners (bit.ly, t.co, etc.)
+  - Spelled-out domains ("visit example dot com")
+
+ALLOWED:
+  - Bio link (one link in profile bio)
+  - TikTok Shop links (for eligible accounts)
+  - @mentions of other TikTok users
+
+SAFE REDIRECT PHRASES:
+  - "Link in bio"
+  - "Check my profile for the link"
+  - "Bio has everything you need"
+  - "Tap my profile → link"
+
+COMMON MISTAKE:
+  ❌ Inserting GitHub/website/product links in caption
+  ✅ Put the link in Bio, caption says "Link in bio"
+```
+
+### Why This Matters
+
+- TikTok's algorithm detects URLs and suppresses distribution
+- Videos with external links get significantly lower FYP reach
+- Repeated violations lead to shadowban (0 views on new content)
+- QR codes are scanned by TikTok's image recognition and treated as external links
+
+---
+
 ## Shadowban Prevention
 
 ### Content Hygiene

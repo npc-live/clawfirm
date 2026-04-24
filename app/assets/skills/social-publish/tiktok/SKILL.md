@@ -60,6 +60,9 @@ DON'T:
   - Use all caps excessively (looks spammy)
   - Promise what the video doesn't deliver (reduces retention)
   - Use banned/restricted words (see content-rules.md)
+  - ⛔ Insert ANY external URLs in caption (GitHub, website, shop links, etc.)
+  - ⛔ Put QR codes in video frames
+  - External links ONLY allowed in Bio — use "Link in bio" to redirect
 ```
 
 ---
@@ -356,5 +359,6 @@ Estimated Duration: {X}s
   - Banned words: ✅ None
   - Copyright risk: ✅ Clear
   - Branded content: ✅ Toggled if needed
-  - External links: ✅ None in video
+  - External links: ✅ No URLs in caption or video (GitHub, website, etc.)
+  - QR codes: ✅ None in video frames
 ```
