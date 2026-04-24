@@ -150,14 +150,16 @@ COVER_IMAGE="$1"   # 封面图片路径
 VIDEO_INPUT="$2"   # 原始视频路径
 VIDEO_OUTPUT="$3"  # 输出视频路径
 
-# Step 4a: 获取原视频的分辨率和帧率
+# Step 4a: 获取原视频的分辨率、帧率和 timescale
 eval $(ffprobe -v error -select_streams v:0 \
-  -show_entries stream=width,height,r_frame_rate \
+  -show_entries stream=width,height,r_frame_rate,time_base \
   -of default=noprint_wrappers=1 "$VIDEO_INPUT")
 FPS=$(echo "$r_frame_rate" | bc -l | xargs printf "%.0f")
+TIMESCALE=$(echo "$time_base" | sed 's|1/||')
 
 # Step 4b: 将封面图片转为 0.1 秒的视频片段
-# 匹配原视频的分辨率、帧率、编码，确保无缝拼接
+# 匹配原视频的分辨率、帧率、编码和 timescale，确保无缝拼接
+# ⚠️ -video_track_timescale 必须匹配原视频，否则 concat -c copy 会导致画面加速
 ffmpeg -y \
   -loop 1 -i "$COVER_IMAGE" \
   -t 0.1 \
@@ -165,6 +167,7 @@ ffmpeg -y \
   -r "$FPS" \
   -c:v libx264 -preset fast -crf 18 \
   -pix_fmt yuv420p \
+  -video_track_timescale "$TIMESCALE" \
   "/tmp/cover_clip.mp4"
 
 # Step 4c: 统一原视频编码格式（确保 concat 兼容）
@@ -173,6 +176,7 @@ ffmpeg -y \
   -c:v libx264 -preset fast -crf 18 \
   -pix_fmt yuv420p \
   -r "$FPS" \
+  -video_track_timescale "$TIMESCALE" \
   -c:a aac -b:a 128k \
   "/tmp/video_normalized.mp4"
 
@@ -199,11 +203,12 @@ echo "Done: $VIDEO_OUTPUT"
 如果原视频已经是标准 H.264 编码，可以跳过重编码步骤，只需要保证封面片段格式一致：
 
 ```bash
-# 封面 → 0.1s 视频（匹配原视频参数）
+# 封面 → 0.1s 视频（匹配原视频参数 + timescale）
 ffmpeg -y -loop 1 -i "$COVER_IMAGE" \
   -t 0.1 \
   -vf "scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black" \
   -r "$FPS" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p \
+  -video_track_timescale "$TIMESCALE" \
   -an \
   "/tmp/cover_clip.mp4"
 
@@ -226,6 +231,7 @@ ffmpeg -y -f concat -safe 0 -i /tmp/concat_list.txt -c copy "$VIDEO_OUTPUT"
 | `pad=W:H` | 居中填充黑边（当比例不一致时） |
 | `-r $FPS` | 匹配原视频帧率 |
 | `-pix_fmt yuv420p` | 标准像素格式，确保 concat 兼容 |
+| `-video_track_timescale` | **必须匹配原视频的 timescale，否则 concat copy 会导致画面加速** |
 | `-crf 18` | 高质量编码 |
 | `-c copy` | concat 阶段零损耗拷贝 |
 
@@ -234,12 +240,13 @@ ffmpeg -y -f concat -safe 0 -i /tmp/concat_list.txt -c copy "$VIDEO_OUTPUT"
 如果原视频有音频轨道，封面片段需要添加静音音轨才能使用 concat 协议：
 
 ```bash
-# 封面 → 0.1s 视频 + 静音音轨
+# 封面 → 0.1s 视频 + 静音音轨（匹配 timescale）
 ffmpeg -y -loop 1 -i "$COVER_IMAGE" \
   -f lavfi -i anullsrc=r=44100:cl=stereo \
   -t 0.1 \
   -vf "scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black" \
   -r "$FPS" -c:v libx264 -preset fast -crf 18 -pix_fmt yuv420p \
+  -video_track_timescale "$TIMESCALE" \
   -c:a aac -b:a 128k \
   -shortest \
   "/tmp/cover_clip.mp4"

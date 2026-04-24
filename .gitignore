@@ -3,6 +3,14 @@ bin/
 
 # Temp / scratch files
 OPTIMIZATION_PLAN.md
+.sandbox-home/
+
+# Build artifacts
+claw-code/rust/target/
+
+# Demo video build outputs
+demo-video/node_modules/
+demo-video/out/
 
 # MCP config (contains API keys)
 .mcp.json
