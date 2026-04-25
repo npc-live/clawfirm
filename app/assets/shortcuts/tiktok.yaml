@@ -159,8 +159,10 @@ commands:
             return "ready:" + tag;
           })()
       - wait: 300
-      - keyboard_insert: " #{{tag1}}"
-      - wait: 2000
+      - keyboard_insert: " #"
+      - wait: 800
+      - keyboard_insert: "{{tag1}}"
+      - wait: 2500
       - eval: >-
           (function(){
             if (!"{{tag1}}") return "skip";
@@ -199,8 +201,10 @@ commands:
             return "ready:" + tag;
           })()
       - wait: 300
-      - keyboard_insert: " #{{tag2}}"
-      - wait: 1500
+      - keyboard_insert: " #"
+      - wait: 800
+      - keyboard_insert: "{{tag2}}"
+      - wait: 2500
       - eval: >-
           (function(){
             if (!"{{tag2}}") return "skip";
@@ -235,8 +239,10 @@ commands:
             return "ready:" + tag;
           })()
       - wait: 300
-      - keyboard_insert: " #{{tag3}}"
-      - wait: 1500
+      - keyboard_insert: " #"
+      - wait: 800
+      - keyboard_insert: "{{tag3}}"
+      - wait: 2500
       - eval: >-
           (function(){
             if (!"{{tag3}}") return "skip";
@@ -271,8 +277,10 @@ commands:
             return "ready:" + tag;
           })()
       - wait: 300
-      - keyboard_insert: " #{{tag4}}"
-      - wait: 1500
+      - keyboard_insert: " #"
+      - wait: 800
+      - keyboard_insert: "{{tag4}}"
+      - wait: 2500
       - eval: >-
           (function(){
             if (!"{{tag4}}") return "skip";
@@ -307,8 +315,10 @@ commands:
             return "ready:" + tag;
           })()
       - wait: 300
-      - keyboard_insert: " #{{tag5}}"
-      - wait: 1500
+      - keyboard_insert: " #"
+      - wait: 800
+      - keyboard_insert: "{{tag5}}"
+      - wait: 2500
       - eval: >-
           (function(){
             if (!"{{tag5}}") return "skip";

@@ -161,8 +161,10 @@ commands:
           return "ready:" + tag;
         })()
     - wait: 300
-    - keyboard_insert: ' #{{tag1}}'
-    - wait: 2000
+    - keyboard_insert: ' #'
+    - wait: 800
+    - keyboard_insert: '{{tag1}}'
+    - wait: 2500
     - eval: >-
         (function(){
           if (!"{{tag1}}") return "skip";
@@ -201,8 +203,10 @@ commands:
           return "ready:" + tag;
         })()
     - wait: 300
-    - keyboard_insert: ' #{{tag2}}'
-    - wait: 1500
+    - keyboard_insert: ' #'
+    - wait: 800
+    - keyboard_insert: '{{tag2}}'
+    - wait: 2500
     - eval: >-
         (function(){
           if (!"{{tag2}}") return "skip";
@@ -237,8 +241,10 @@ commands:
           return "ready:" + tag;
         })()
     - wait: 300
-    - keyboard_insert: ' #{{tag3}}'
-    - wait: 1500
+    - keyboard_insert: ' #'
+    - wait: 800
+    - keyboard_insert: '{{tag3}}'
+    - wait: 2500
     - eval: >-
         (function(){
           if (!"{{tag3}}") return "skip";
@@ -273,8 +279,10 @@ commands:
           return "ready:" + tag;
         })()
     - wait: 300
-    - keyboard_insert: ' #{{tag4}}'
-    - wait: 1500
+    - keyboard_insert: ' #'
+    - wait: 800
+    - keyboard_insert: '{{tag4}}'
+    - wait: 2500
     - eval: >-
         (function(){
           if (!"{{tag4}}") return "skip";
@@ -309,8 +317,10 @@ commands:
           return "ready:" + tag;
         })()
     - wait: 300
-    - keyboard_insert: ' #{{tag5}}'
-    - wait: 1500
+    - keyboard_insert: ' #'
+    - wait: 800
+    - keyboard_insert: '{{tag5}}'
+    - wait: 2500
     - eval: >-
         (function(){
           if (!"{{tag5}}") return "skip";
@@ -358,6 +368,15 @@ commands:
           return "already_in_upload";
         })()
     - wait: 1000
+    - wait_until:
+        eval: >-
+          (function(){
+            var cover = "{{cover_h}}";
+            if (!cover || cover.indexOf("{{") === 0) return true;
+            return !!document.querySelector('input[type=file][accept*=image], input[type=file][accept*=".jpg"], input[type=file][accept*=".png"]');
+          })()
+        timeout: 10000
+        interval: 1000
     - upload:
         selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
         file: '{{cover_h}}'
@@ -415,6 +434,15 @@ commands:
           return "already_in_upload";
         })()
     - wait: 1000
+    - wait_until:
+        eval: >-
+          (function(){
+            var cover = "{{cover_v}}";
+            if (!cover || cover.indexOf("{{") === 0) return true;
+            return !!document.querySelector('input[type=file][accept*=image], input[type=file][accept*=".jpg"], input[type=file][accept*=".png"]');
+          })()
+        timeout: 10000
+        interval: 1000
     - upload:
         selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
         file: '{{cover_v}}'
