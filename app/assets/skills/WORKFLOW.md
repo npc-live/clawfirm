@@ -1,284 +1,300 @@
-# Video Skills 编排工作流
+# 短视频制作工作流
 
-## 概览
-
-从产品描述到成片的完整视频制作流水线。
+## 架构概览
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        输入：产品/主题描述                        │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  ↓
-┌─────────────────────────────────────────────────────────────────┐
-│              Step 1: video-script-generator                      │
-│              脚本 + 分镜生成                                      │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  ↓
-                    ┌─────────────┴─────────────┐
-                    ↓                           ↓
-            ┌───────────────┐           ┌───────────────┐
-            │  口播场景      │           │  非口播场景    │
-            │  (有数字人)    │           │  (纯AI/Demo)  │
-            └───────┬───────┘           └───────┬───────┘
-                    ↓                           ↓
-┌───────────────────────────────┐   ┌───────────────────────────┐
-│  Step 2a: digital-avatar      │   │  Step 2b: scene-video-gen │
-│  数字人 + 声纹 + 口播          │   │  AI场景视频               │
-│  ⚠️ 全程同一后端              │   │  (无数字人)               │
-│  (可灵 / 即梦 / HeyGen)       │   │  (可灵/即梦/Runway/Pika)  │
-└───────────────┬───────────────┘   └─────────────┬─────────────┘
-                │                                 │
-                │   ┌─────────────────────────┐   │
-                │   │  Step 2c: demo-recorder │   │
-                │   │  产品演示录屏           │   │
-                │   │  (Screen Studio等)      │   │
-                │   └────────────┬────────────┘   │
-                │                │                │
-                └────────────────┼────────────────┘
-                                 ↓
-┌─────────────────────────────────────────────────────────────────┐
-│              Step 3: video-stitcher                              │
-│              视频拼接 + 转场 + BGM + 字幕                         │
-└─────────────────────────────────┬───────────────────────────────┘
-                                  ↓
-┌─────────────────────────────────────────────────────────────────┐
-│                        输出：最终成片                            │
+│                        video-skills Pipeline                      │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌──────────────────────┐                                        │
+│  │ video-script-generator│  Step 1: 生成脚本+分镜                │
+│  │  └─ scripts/generate.mjs                                      │
+│  └──────────┬───────────┘                                        │
+│             │                                                     │
+│             ▼                                                     │
+│  ┌──────────────────────┐                                        │
+│  │   voice-clone-tts    │  Step 2: 生成配音                      │
+│  │  ├─ scripts/minimax.mjs                                       │
+│  │  └─ scripts/elevenlabs.mjs                                    │
+│  └──────────┬───────────┘                                        │
+│             │                                                     │
+│     ┌───────┴───────┐                                            │
+│     ▼               ▼                                            │
+│  ┌────────────┐  ┌────────────────────┐                          │
+│  │digital-    │  │scene-video-        │  Step 3: 生成视频片段    │
+│  │avatar      │  │generator           │                          │
+│  │(口播场景)  │  │(AI场景)            │                          │
+│  │ ├─kling.mjs│  │ ├─kling-video.mjs  │                          │
+│  │ └─jimeng   │  │ └─runway.mjs       │                          │
+│  └─────┬──────┘  └─────────┬──────────┘                          │
+│        │                   │                                      │
+│        └─────────┬─────────┘                                      │
+│                  ▼                                                │
+│  ┌──────────────────────┐                                        │
+│  │    video-stitcher    │  Step 4: 拼接成品                      │
+│  │  └─ scripts/stitch.mjs                                        │
+│  └──────────────────────┘                                        │
+│                                                                   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Step 1: video-script-generator
+## Quick Start
 
-**输入：**
-- 产品/主题描述
-- 目标受众
-- 时长（15s/30s/60s）
-- 平台（抖音/小红书/YouTube）
-- 模板（痛点-解决/before-after/反转）
+### 一键 Pipeline
 
-**输出：**
+```bash
+# 完整流程
+node scripts/pipeline.mjs --topic "AI写作工具" --duration 30s --backend kling
+
+# 使用配置文件
+node scripts/pipeline.mjs --config project.yaml
+```
+
+### 分步执行
+
+```bash
+# 1. 生成脚本
+cd video-script-generator
+node scripts/generate.mjs --topic "AI写作工具" --duration 30s --output script.yaml
+
+# 2. 生成配音
+cd ../voice-clone-tts
+node scripts/minimax.mjs batch --input scenes.json --voice-id female-tianmei --output-dir ./audio
+
+# 3. 生成视频片段
+cd ../scene-video-generator
+node scripts/kling-video.mjs generate --prompt "xxx" --duration 5
+
+# 或数字人口播
+cd ../digital-avatar
+node scripts/kling.mjs generate --avatar-id xxx --text "大家好"
+
+# 4. 拼接成品
+cd ../video-stitcher
+node scripts/stitch.mjs concat --dir ./clips -t fade -o final.mp4
+```
+
+---
+
+## 环境配置
+
+### 1. 安装依赖
+
+```bash
+# FFmpeg（拼接必需）
+winget install FFmpeg    # Windows
+brew install ffmpeg      # macOS
+
+# Node.js 依赖
+npm install yaml
+```
+
+### 2. 配置 API Keys
+
+在 shell 或 `.env` 中设置：
+
+```bash
+# Kling 可灵（推荐）
+export KLING_ACCESS_KEY="your_key"
+export KLING_SECRET_KEY="your_secret"
+
+# 即梦 Jimeng
+export JIMENG_API_KEY="ak-xxx"
+
+# MiniMax TTS（推荐）
+export MINIMAX_API_KEY="your_key"
+export MINIMAX_GROUP_ID="your_group"
+
+# ElevenLabs（可选）
+export ELEVENLABS_API_KEY="your_key"
+
+# Runway（可选）
+export RUNWAY_API_KEY="your_key"
+```
+
+---
+
+## 各 Skill 详情
+
+### video-script-generator
+
+生成脚本和分镜结构。
+
+```bash
+# 列出模板
+node scripts/generate.mjs templates
+
+# 生成脚本
+node scripts/generate.mjs --topic "xxx" --duration 30s --template pain-solution
+```
+
+输出示例：
 ```yaml
-scenes:
-  - id: 1
-    type: hook          # 场景类型
-    duration: 3s
-    narration: "..."    # 台词（talking模式必填）
-    shot_description: "..." # 画面描述
-    avatar_mode: talking    # ← 关键：talking / acting / none
-    demo_insert: false
+meta:
+  title: "脚本标题"
+  duration: "30s"
+script:
+  scenes:
+    - id: 1
+      type: hook
+      narration: "你是不是也..."
+      shot_description: "特写表情"
 ```
 
-**场景类型判断：**
-| type | avatar_mode | 处理方式 |
-|------|-------------|----------|
-| hook (口播开场) | talking | → digital-avatar (口播) |
-| pain (痛点展示) | none / acting | → scene-video-gen 或 digital-avatar (表演) |
-| solution (口播) | talking | → digital-avatar (口播) |
-| demo (产品演示) | none | → demo-recorder |
-| result (效果) | talking / acting | → digital-avatar |
-| cta (号召) | talking | → digital-avatar (口播) |
+### voice-clone-tts
 
-**avatar_mode 说明：**
-| 模式 | 说明 | 示例 |
-|------|------|------|
-| `talking` | 数字人口播，有台词 | "大家好，今天教大家..." |
-| `acting` | 数字人出镜但不说话 | 皱眉看电脑、开心喝咖啡 |
-| `none` | 无数字人，纯场景/产品 | 产品界面、空镜头 |
+声纹克隆和语音合成。
 
-**用户可根据需求灵活选择：同一个场景可以选择用数字人表演或纯AI场景。**
+```bash
+# 列出预设声音
+node scripts/minimax.mjs voices
 
----
+# 克隆声纹
+node scripts/minimax.mjs clone --audio sample.mp3 --name "我的声音"
 
-## Step 2a: digital-avatar
+# 单条合成
+node scripts/minimax.mjs tts --text "你好" --voice female-tianmei
 
-**处理 `avatar_mode: talking` 或 `avatar_mode: acting` 的场景**
-
-| 模式 | 输入 | 输出 |
-|------|------|------|
-| talking | avatar_id + voice_id + narration | 口播视频 |
-| acting | avatar_id + action_description | 表演视频（无台词）|
-
-**⚠️ 重要：后端一致性原则**
-- 选定一个平台后，全程使用
-- 形象创建、声纹克隆、口播生成都用同一后端
-- 不同平台的 avatar_id 不互通
-
-**子流程：**
-```
-首次使用:
-  1. 上传音频样本 → 声纹克隆 → voice_id
-  2. 上传照片/描述 → 创建形象 → avatar_id
-
-生成口播:
-  avatar_id + voice_id + narration → 口播视频
+# 批量合成
+node scripts/minimax.mjs batch --input scenes.json --voice-id xxx --output-dir ./audio
 ```
 
-**输入：**
-- scenes[] 中 requires_avatar=true 的场景
-- avatar_id（已创建的数字人）
-- voice_id（已克隆的声纹）或 预设声音
+### digital-avatar
 
-**输出：**
-- 每个场景的口播视频文件
+数字人创建和口播视频生成。
 
----
+```bash
+# 从照片创建
+node scripts/kling.mjs create --photo ./photo.jpg
 
-## Step 2b: scene-video-generator
+# 克隆声纹（平台内）
+node scripts/kling.mjs voice-clone --audio sample.mp3
 
-**处理 `avatar_mode: none` 或用户选择纯AI生成的场景**
-
-也可用于 `avatar_mode: acting`（用AI生成人物动作，而非数字人平台）。
-
-**输入：**
-- scenes[].shot_description（作为 prompt）
-- 时长
-- 画面比例
-
-**输出：**
-- AI 生成的场景视频
-
-**注意：**
-- 不涉及数字人，后端可以独立选择
-- 可以和 digital-avatar 用不同的平台
-
----
-
-## Step 2c: demo-recorder（已有）
-
-**处理 `demo_insert: true` 的场景**
-
-**输入：**
-- 产品界面/录屏指令
-- 音频轨道（可选）
-
-**输出：**
-- 产品演示视频
-
----
-
-## Step 3: video-stitcher
-
-**拼接所有视频片段**
-
-**输入：**
-```yaml
-clips:
-  - scene_id: 1
-    source: digital-avatar    # 来源
-    path: "./videos/scene_01.mp4"
-    transition: fade
-
-  - scene_id: 2
-    source: scene-video-gen
-    path: "./videos/scene_02.mp4"
-    transition: dissolve
-
-  # ...
-
-bgm: "./assets/music.mp3"
-bgm_volume: 0.2
-
-output:
-  path: "./final/output.mp4"
-  resolution: "1080x1920"
-  fps: 30
+# 生成口播
+node scripts/kling.mjs generate --avatar-id xxx --text "大家好"
 ```
 
-**输出：**
-- 最终成片
+⚠️ **重要**：同一项目必须使用同一后端！
+
+### scene-video-generator
+
+AI 场景视频生成（非数字人）。
+
+```bash
+# 文生视频
+node scripts/kling-video.mjs generate --prompt "A cat playing piano" --duration 5
+
+# 图生视频
+node scripts/kling-video.mjs generate --prompt "xxx" --image ref.jpg
+
+# 查询状态
+node scripts/kling-video.mjs status --task-id xxx
+```
+
+### video-stitcher
+
+视频拼接和后期处理。
+
+```bash
+# 简单拼接
+node scripts/stitch.mjs concat clip1.mp4 clip2.mp4 -o output.mp4
+
+# 带转场
+node scripts/stitch.mjs concat clip1.mp4 clip2.mp4 -t fade -d 0.5 -o output.mp4
+
+# 添加BGM
+node scripts/stitch.mjs add-bgm video.mp4 bgm.mp3 -v 0.3 -o output.mp4
+
+# 添加字幕
+node scripts/stitch.mjs add-subs video.mp4 captions.srt -o output.mp4
+
+# 调整分辨率
+node scripts/stitch.mjs resize video.mp4 -r 1080x1920 -o output.mp4
+
+# 完整配置
+node scripts/stitch.mjs concat --config project.yaml -o output.mp4
+```
 
 ---
 
 ## 后端选择指南
 
-### 数字人平台（需全程一致）
-
-| 平台 | 数字人 | 声纹克隆 | 口播 | 适用 |
-|------|--------|----------|------|------|
-| 可灵 Kling | ✓ | ✓ | ✓ | 高质量 |
-| 即梦 Jimeng | ✓ | ✓ | ✓ | 快速/中文 |
-| HeyGen | ✓ | ✓ | ✓ | 出海/英文 |
-
-### AI 视频平台（可独立选择）
-
-| 平台 | 特点 |
-|------|------|
-| 可灵 Kling | 质量高 |
-| 即梦 Jimeng | 快速 |
-| Runway | 顶级质量 |
-| Pika | 风格化 |
+| 场景 | 推荐后端 | 原因 |
+|------|----------|------|
+| 国内抖音/小红书 | Kling 或 Jimeng | 国内快，中文口型好 |
+| 出海/英文内容 | HeyGen | 模板丰富，英文自然 |
+| 最高质量场景 | Runway Gen-3 | 质量顶级 |
+| 中文配音 | MiniMax | 效果好，有情绪控制 |
+| 英文配音 | ElevenLabs | 质量顶级 |
+| 预算有限 | Jimeng + MiniMax | 有免费额度 |
 
 ---
 
-## 完整示例
+## 文件结构
 
-**输入：**
 ```
-产品：AI写作助手
-受众：自媒体博主
-时长：30秒
-平台：抖音
-```
-
-**Step 1 输出（分镜）：**
-```yaml
-scenes:
-  - id: 1, type: hook, avatar_mode: talking     # 口播开场
-  - id: 2, type: pain, avatar_mode: acting      # 数字人表演（皱眉看电脑）
-  - id: 3, type: solution, avatar_mode: talking # 口播介绍
-  - id: 4, type: demo, avatar_mode: none        # 纯产品演示
-  - id: 5, type: result, avatar_mode: acting    # 数字人表演（开心喝咖啡）
-  - id: 6, type: cta, avatar_mode: talking      # 口播号召
-```
-
-**路由：**
-- 场景 1,3,6（talking）→ digital-avatar 口播
-- 场景 2,5（acting）→ digital-avatar 表演 或 scene-video-generator
-- 场景 4（none）→ demo-recorder
-
-**Step 3：**
-- 6 个视频 → video-stitcher → 成片
-
----
-
-## API 配置
-
-```json
-// openclaw.json > services
-{
-  "kling": {
-    "access_key": "xxx",
-    "secret_key": "xxx"
-  },
-  "jimeng": {
-    "api_key": "xxx"
-  },
-  "minimax": {
-    "api_key": "xxx",
-    "group_id": "xxx"
-  }
-}
+video-skills/
+├── WORKFLOW.md              # 本文档
+├── scripts/
+│   └── pipeline.mjs         # 一键 Pipeline
+│
+├── video-script-generator/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   └── generate.mjs
+│   └── templates/
+│       ├── pain-solution.md
+│       ├── before-after.md
+│       └── plot-twist.md
+│
+├── voice-clone-tts/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── minimax.mjs
+│   │   └── elevenlabs.mjs
+│   └── references/
+│       └── backend-setup.md
+│
+├── digital-avatar/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── kling.mjs
+│   │   └── jimeng.mjs
+│   └── references/
+│       └── backend-setup.md
+│
+├── scene-video-generator/
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── kling-video.mjs
+│   │   └── runway.mjs
+│   └── references/
+│       ├── backend-setup.md
+│       └── prompt-guide.md
+│
+└── video-stitcher/
+    ├── SKILL.md
+    ├── scripts/
+    │   └── stitch.mjs
+    └── references/
+        └── ffmpeg-guide.md
 ```
 
 ---
 
-## 简化流程（推荐）
+## 常见问题
 
-如果数字人平台支持声纹克隆，可以跳过 voice-clone-tts：
+### Q: 数字人 API 返回错误？
+A: 检查后端一致性，同一项目不要混用可灵和即梦。
 
-```
-video-script-generator
-        ↓
-   digital-avatar（形象+克隆+口播一站式）
-        +
-   scene-video-generator（AI场景）
-        +
-   demo-recorder（产品演示）
-        ↓
-   video-stitcher
-        ↓
-      成片
-```
+### Q: 配音速度/情绪不对？
+A: MiniMax 支持 `--speed` 和 `--emotion` 参数调整。
 
-**只需配置一个后端（可灵或即梦），全流程打通。**
+### Q: 拼接后画面模糊？
+A: 确保输入视频分辨率一致，或使用 `resize` 统一处理。
+
+### Q: 转场不生效？
+A: 需要 FFmpeg 4.3+，检查版本 `ffmpeg -version`。
