@@ -1,0 +1,34 @@
+{
+  "name": "raphael-solana",
+  "version": "1.0.0",
+  "description": "Autonomous Solana agent wallet — installable as an OpenClaw skill",
+  "type": "module",
+  "bin": {
+    "solana-wallet": "./bin/solana-wallet.ts"
+  },
+  "scripts": {
+    "dev": "tsx bin/solana-wallet.ts",
+    "build": "tsc",
+    "start": "node dist/bin/solana-wallet.js",
+    "setup": "tsx scripts/setup-master-key.ts"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.9",
+    "@solana/web3.js": "^1.98.0",
+    "@twitter-api-v2/plugin-rate-limit": "^1.1.0",
+    "bs58": "^6.0.0",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.16.0",
+    "twitter-api-v2": "^1.29.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "openclaw": {
+    "main": "dist/plugin.js"
+  }
+}
