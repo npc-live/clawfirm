@@ -523,19 +523,282 @@ commands:
           - field: 跳转URL
             value: "{{result_url}}"
 
-  # ── 搜索视频 ──────────────────────────────────────────────────────────────────
+  # ── 搜索视频（爆款采集）─────────────────────────────────────────────────────
   search:
     args: [keyword]
     steps:
-      - open: "https://www.tiktok.com/search?q={{keyword}}"
-      - wait: 4000
-      - extract:
-          selector: "[data-e2e='search_top-item'], [class*=DivItemCard], [class*=video-card]"
-          fields:
-            link:
-              selector: "a[href*='/video/']"
-              attr: href
-            text: "[data-e2e='search-card-desc'], [class*=desc], [class*=title]"
+      - open: "https://www.tiktok.com/search/video?q={{keyword}}"
+      - wait: 5000
+      # 关闭可能出现的登录弹窗
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll(
+              '[class*=modal] button, [class*=dialog] button, [class*=popup] button, [data-e2e="modal-close-inner-button"]'
+            );
+            btns.forEach(function(b){
+              var t = b.textContent.trim().toLowerCase();
+              if (t === 'not now' || t === 'close' || t === '关闭' || t === 'dismiss' ||
+                  b.getAttribute('data-e2e') === 'modal-close-inner-button') b.click();
+            });
+            return btns.length;
+          })()
+      - wait: 1000
+      # 滚动加载更多结果
+      - eval: "window.scrollBy(0, 2000)"
+      - wait: 2000
+      - eval: "window.scrollBy(0, 2000)"
+      - wait: 2000
+      # 提取搜索结果 + 互动数据
+      - capture:
+          name: results
+          eval: >-
+            (function(){
+              var cards = document.querySelectorAll('[data-e2e="search_top-item"], [data-e2e="search-common-link"]');
+              if (!cards.length) cards = document.querySelectorAll('[class*=DivItemCardContainer], [class*=DivWrapper]');
+              if (!cards.length) {
+                var links = document.querySelectorAll('a[href*="/video/"]');
+                var seen = [];
+                links.forEach(function(l){
+                  var p = l.closest('div[class]');
+                  while (p && p.querySelectorAll('a[href*="/video/"]').length < 1) p = p.parentElement;
+                  if (p && seen.indexOf(p) === -1) seen.push(p);
+                });
+                cards = seen;
+              }
+              var results = [];
+              (cards.forEach ? cards : Array.from(cards)).forEach(function(card, i){
+                var linkEl = card.querySelector('a[href*="/video/"]') || card.closest('a[href*="/video/"]');
+                if (!linkEl) return;
+                var link = linkEl.href;
+                if (results.some(function(r){ return r.link === link; })) return;
+                var descEl = card.querySelector('[data-e2e="search-card-desc"]') ||
+                             card.querySelector('[class*=SpanText], [class*=desc], [class*=title], [class*=caption]');
+                var desc = descEl ? descEl.textContent.trim().slice(0, 120) : '';
+                var authorEl = card.querySelector('[data-e2e="search-card-user-unique-id"]') ||
+                               card.querySelector('[data-e2e="search-card-user-name"]') ||
+                               card.querySelector('[class*=SpanUniqueId], [class*=author], [class*=user-name]');
+                var author = authorEl ? authorEl.textContent.trim() : '';
+                if (!author) {
+                  var aLink = card.querySelector('a[href*="/@"]');
+                  if (aLink) { var m = aLink.href.match(/@([^/?]+)/); author = m ? '@' + m[1] : ''; }
+                }
+                var views = '';
+                var statsEls = card.querySelectorAll('strong, [class*=Count], [class*=count], [class*=Stats] span, [class*=video-count]');
+                for (var s = 0; s < statsEls.length; s++) {
+                  var t = statsEls[s].textContent.trim();
+                  if (/^[\d.]+\s*[KMBkmb]?$/.test(t) || /^\d[\d,.]*$/.test(t)) { views = t; break; }
+                }
+                results.push({ rank: results.length + 1, link: link, desc: desc, author: author, views: views });
+              });
+              return JSON.stringify(results);
+            })()
+      - return:
+          - field: 关键词
+            value: "{{keyword}}"
+          - field: 结果数
+            value: "{{results}}"
+
+  # ── 热门/趋势视频 ────────────────────────────────────────────────────────────
+  hot:
+    args: []
+    steps:
+      - open: "https://www.tiktok.com/explore"
+      - wait: 5000
+      # 关闭弹窗
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll(
+              '[data-e2e="modal-close-inner-button"], [class*=modal] button, [class*=dialog] button'
+            );
+            btns.forEach(function(b){
+              var t = b.textContent.trim().toLowerCase();
+              if (t === 'not now' || t === 'close' || t === '关闭' || t === 'dismiss' ||
+                  b.getAttribute('data-e2e') === 'modal-close-inner-button') b.click();
+            });
+            return btns.length;
+          })()
+      - wait: 1000
+      # 滚动加载更多
+      - eval: "window.scrollBy(0, 2000)"
+      - wait: 2000
+      - eval: "window.scrollBy(0, 2000)"
+      - wait: 2000
+      # 提取趋势视频列表
+      - capture:
+          name: trending
+          eval: >-
+            (function(){
+              var cards = document.querySelectorAll('[data-e2e="explore-item"], [class*=DivItemCard]');
+              if (!cards.length) {
+                var links = document.querySelectorAll('a[href*="/video/"]');
+                var seen = [];
+                links.forEach(function(l){
+                  var p = l.closest('div[class]');
+                  while (p && p.querySelectorAll('a[href*="/video/"]').length < 1) p = p.parentElement;
+                  if (p && seen.indexOf(p) === -1) seen.push(p);
+                });
+                cards = seen;
+              }
+              var results = [];
+              (cards.forEach ? cards : Array.from(cards)).forEach(function(card, i){
+                var linkEl = card.querySelector('a[href*="/video/"]') || card.closest('a[href*="/video/"]');
+                if (!linkEl) return;
+                var link = linkEl.href;
+                if (results.some(function(r){ return r.link === link; })) return;
+                var descEl = card.querySelector('[data-e2e="explore-card-desc"], [class*=desc], [class*=title], [class*=caption]');
+                var desc = descEl ? descEl.textContent.trim().slice(0, 120) : '';
+                var authorEl = card.querySelector('[data-e2e="explore-card-user-unique-id"], [class*=author], [class*=user-name]');
+                var author = authorEl ? authorEl.textContent.trim() : '';
+                if (!author) {
+                  var aLink = card.querySelector('a[href*="/@"]');
+                  if (aLink) { var m = aLink.href.match(/@([^/?]+)/); author = m ? '@' + m[1] : ''; }
+                }
+                var views = '';
+                var statsEls = card.querySelectorAll('strong, [class*=Count], [class*=count], [class*=Stats] span');
+                for (var s = 0; s < statsEls.length; s++) {
+                  var t = statsEls[s].textContent.trim();
+                  if (/^[\d.]+\s*[KMBkmb]?$/.test(t) || /^\d[\d,.]*$/.test(t)) { views = t; break; }
+                }
+                results.push({ rank: results.length + 1, link: link, desc: desc, author: author, views: views });
+              });
+              return JSON.stringify(results);
+            })()
+      - return:
+          - field: 趋势视频
+            value: "{{trending}}"
+
+  # ── 下载视频 ──────────────────────────────────────────────────────────────────
+  download:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 5000
+      # 关闭弹窗
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll(
+              '[data-e2e="modal-close-inner-button"], [class*=modal] button, [class*=dialog] button'
+            );
+            btns.forEach(function(b){
+              var t = b.textContent.trim().toLowerCase();
+              if (t === 'not now' || t === 'close' || t === '关闭' ||
+                  b.getAttribute('data-e2e') === 'modal-close-inner-button') b.click();
+            });
+            return btns.length;
+          })()
+      - wait: 1500
+      # 提取视频信息
+      - capture:
+          name: video_desc
+          eval: >-
+            (function(){
+              var el = document.querySelector('[data-e2e="browse-video-desc"], [data-e2e="video-desc"]') ||
+                       document.querySelector('h1') ||
+                       document.querySelector('[class*=SpanText], [class*=desc], [class*=caption]');
+              return el ? el.textContent.trim().slice(0, 120) : 'untitled';
+            })()
+      - capture:
+          name: video_author
+          eval: >-
+            (function(){
+              var el = document.querySelector('[data-e2e="browse-username"], [data-e2e="video-author-uniqueid"]') ||
+                       document.querySelector('a[href*="/@"] [class*=SpanUniqueId], a[href*="/@"] span');
+              if (el) return el.textContent.trim();
+              var a = document.querySelector('a[href*="/@"]');
+              if (a) { var m = a.href.match(/@([^/?]+)/); return m ? '@' + m[1] : ''; }
+              return 'unknown';
+            })()
+      - capture:
+          name: video_id
+          eval: >-
+            (function(){
+              var m = location.href.match(/\/video\/(\d+)/);
+              return m ? m[1] : '';
+            })()
+      # 提取互动数据
+      - capture:
+          name: stats
+          eval: >-
+            (function(){
+              var likes = '', comments = '', shares = '', saves = '';
+              var likeEl = document.querySelector('[data-e2e="like-count"], [data-e2e="browse-like-count"]');
+              if (likeEl) likes = likeEl.textContent.trim();
+              var commentEl = document.querySelector('[data-e2e="comment-count"], [data-e2e="browse-comment-count"]');
+              if (commentEl) comments = commentEl.textContent.trim();
+              var shareEl = document.querySelector('[data-e2e="share-count"], [data-e2e="browse-share-count"]');
+              if (shareEl) shares = shareEl.textContent.trim();
+              var saveEl = document.querySelector('[data-e2e="undefined-count"], [data-e2e="browse-save-count"]');
+              if (saveEl) saves = saveEl.textContent.trim();
+              return JSON.stringify({ likes: likes, comments: comments, shares: shares, saves: saves });
+            })()
+      # 尝试下载视频
+      - capture:
+          name: dl_result
+          eval: >-
+            (async function(){
+              var videoId = (location.href.match(/\/video\/(\d+)/) || [])[1] || 'unknown';
+              var desc = (document.querySelector('[data-e2e="browse-video-desc"], [data-e2e="video-desc"], h1') || {}).textContent || 'untitled';
+              desc = desc.trim().slice(0, 60).replace(/[\\/:*?"<>|\r\n\t]/g, '');
+              var filename = 'tiktok_' + desc + '_' + videoId;
+              var video = document.querySelector('video');
+              var videoUrl = video ? (video.currentSrc || video.src) : '';
+              if (videoUrl && !videoUrl.startsWith('blob:')) {
+                try {
+                  var resp = await fetch(videoUrl);
+                  var blob = await resp.blob();
+                  var a = document.createElement('a');
+                  a.href = URL.createObjectURL(blob);
+                  a.download = filename + '.mp4';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(a.href);
+                  return 'downloading';
+                } catch(e) { return 'fetch_error: ' + e.message; }
+              }
+              if (videoUrl && videoUrl.startsWith('blob:')) {
+                try {
+                  var nd = document.getElementById('__NEXT_DATA__');
+                  if (nd) {
+                    var json = JSON.parse(nd.textContent);
+                    var playAddr = '';
+                    var str = JSON.stringify(json);
+                    var m = str.match(/"playAddr":"(https?:[^"]+)"/);
+                    if (m) playAddr = m[1].replace(/\\u002F/g, '/');
+                    if (!playAddr) {
+                      m = str.match(/"downloadAddr":"(https?:[^"]+)"/);
+                      if (m) playAddr = m[1].replace(/\\u002F/g, '/');
+                    }
+                    if (playAddr) {
+                      var r2 = await fetch(playAddr);
+                      var b2 = await r2.blob();
+                      var a2 = document.createElement('a');
+                      a2.href = URL.createObjectURL(b2);
+                      a2.download = filename + '.mp4';
+                      document.body.appendChild(a2);
+                      a2.click();
+                      document.body.removeChild(a2);
+                      URL.revokeObjectURL(a2.href);
+                      return 'downloading_from_next_data';
+                    }
+                  }
+                } catch(e2) {}
+                return 'blob_url_cannot_direct_download';
+              }
+              return 'no_video_found';
+            })()
+      - wait: 5000
+      - return:
+          - field: 作者
+            value: "{{video_author}}"
+          - field: 描述
+            value: "{{video_desc}}"
+          - field: 视频ID
+            value: "{{video_id}}"
+          - field: 互动数据
+            value: "{{stats}}"
+          - field: 下载状态
+            value: "{{dl_result}}"
 
   # ── 点赞视频 ──────────────────────────────────────────────────────────────────
   like:

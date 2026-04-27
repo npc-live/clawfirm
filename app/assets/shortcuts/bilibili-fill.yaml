@@ -61,11 +61,11 @@ commands:
     - wait: 500
     - eval: "(function(){\n  var cover = \"{{cover}}\";\n  if (!cover || cover.indexOf(\"\
         {{\") === 0) return \"no_cover\";\n  return \"has_cover\";\n})()"
-    # 点击封面按钮（兼容"更换封面"和"设置封面"两种状态）
+    # 点击封面按钮（兼容多种文字状态）
     - eval: >-
         (function(){
           var btn = [...document.querySelectorAll('span,div,button')]
-            .find(function(el){ var t = el.textContent.trim(); return t === '更换封面' || t === '设置封面' || t === '上传封面'; });
+            .find(function(el){ var t = el.textContent.trim(); return t === '封面设置' || t === '更换封面' || t === '设置封面' || t === '上传封面'; });
           if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
           return "no_cover_btn";
         })()
@@ -82,8 +82,9 @@ commands:
         selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
         file: '{{cover}}'
     - wait: 3000
+    - wait: 5000
     - click:
-        text: 完成
+        selector: ".cover-editor-button .button.submit"
     - wait: 1000
     # ── 标签输入（可选，tags 为逗号分隔，最多7个）──────────────────────────────
     # 先清除系统自动推荐的不相关标签
@@ -93,10 +94,12 @@ commands:
           if (!tags || tags.indexOf("{{") === 0) return "no_tags";
           var preWrp = document.querySelector(".tag-pre-wrp");
           if (preWrp) {
-            var closes = preWrp.querySelectorAll("[class*=close], [class*=remove], .icon-close, svg");
-            closes.forEach(function(c){ c.click(); });
+            var closes = preWrp.querySelectorAll("[class*=close], [class*=remove], .icon-close");
+            var n = 0;
+            closes.forEach(function(c){ if (typeof c.click === 'function') { c.click(); n++; } });
+            return "cleared:" + n;
           }
-          return "cleared:" + (closes ? closes.length : 0);
+          return "no_pre_wrp";
         })()
     - wait: 500
     - capture:

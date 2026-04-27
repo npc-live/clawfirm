@@ -276,6 +276,107 @@ Example: `投稿B站 /tmp/tutorial.mp4 "Go教程第1集" "从零开始学Go"`
 
 ---
 
+## TikTok — `tiktok.yaml`
+
+Login URL: `https://www.tiktok.com`
+Session cookie: `sessionid`
+
+### `search` — 搜索视频（爆款采集）
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `keyword` | string | yes | 搜索关键词 |
+
+Returns: JSON 数组，每条含 `rank`, `link`, `desc`, `author`, `views`
+
+Note: 自动滚动加载更多结果。使用 video 专项搜索 (`/search/video`) 以获取视频类结果。返回结构化互动数据供爆款分析使用。
+
+Example: `搜索TikTok cooking recipe`
+
+---
+
+### `hot` — 热门/趋势视频
+
+No parameters.
+
+Returns: JSON 数组，每条含 `rank`, `link`, `desc`, `author`, `views` (TikTok Explore 页热门视频)
+
+Note: 采集 TikTok Explore 页面的推荐趋势视频，自动滚动加载更多内容。
+
+Example: `看看TikTok热门`
+
+---
+
+### `download` — 下载视频
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | 视频 URL (`tiktok.com/@user/video/xxx`) |
+
+Returns: `作者`, `描述`, `视频ID`, `互动数据` (likes/comments/shares/saves JSON), `下载状态`
+
+Note: 先尝试通过 `video.currentSrc` 直接下载；若为 blob URL 则从页面 `__NEXT_DATA__` 提取 playAddr/downloadAddr。互动数据含点赞、评论、分享、收藏四项指标，可直接用于爆款分析。
+
+Example: `下载TikTok视频 https://www.tiktok.com/@user/video/123456`
+
+---
+
+### `like` — 点赞/取消点赞
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | 视频 URL |
+
+Returns: `操作` (点赞成功/取消点赞), `当前状态`
+
+Example: `点赞TikTok https://www.tiktok.com/@user/video/xxx`
+
+---
+
+### `comment` — 发表评论
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | 视频 URL |
+| `text` | string | yes | 评论内容 |
+
+Returns: `状态`, `评论内容`
+
+Example: `评论TikTok https://www.tiktok.com/@user/video/xxx Love this!`
+
+---
+
+### `follow` — 关注用户
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `url` | string | yes | 视频 URL (从视频页关注作者) |
+
+Returns: `操作` (关注成功/取消关注)
+
+Example: `关注TikTok作者 https://www.tiktok.com/@user/video/xxx`
+
+---
+
+### `post` — 发布视频
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `video` | string | yes | 本地视频文件路径 (绝对路径) |
+| `title` | string | no | 视频标题 |
+| `desc` | string | yes | 视频描述/文案 |
+| `tags` | string | no | 逗号分隔话题标签 (最多5个) |
+| `cover_h` | string | no | 横版封面图路径 |
+| `cover_v` | string | no | 竖版封面图路径 |
+
+Returns: `状态`, `标题`, `描述`, `跳转URL`
+
+Note: 通过 TikTok Studio 上传。自动等待上传完成（最长 10 分钟），支持 hashtag 标签系统联想选择，支持横竖版封面上传。
+
+Example: `发TikTok视频 /tmp/vlog.mp4 "Day in my life" "Morning routine vlog" "morning,routine,vlog"`
+
+---
+
 ## X/Twitter — `x.yaml`
 
 Login URL: `https://x.com`
@@ -551,6 +652,13 @@ Example: `发币安广场长文 "以太坊 Dencun 升级全解析" "正文内容
 | B站 | `comment` | `url`, `text` | 发表评论 |
 | B站 | `reply` | `url`, `text` | 回复评论 |
 | B站 | `post` | `video`, `title`, `desc` | 投稿视频 |
+| TikTok | `search` | `keyword` | 搜索视频（爆款采集） |
+| TikTok | `hot` | — | 热门/趋势视频 |
+| TikTok | `download` | `url` | 下载视频+互动数据 |
+| TikTok | `like` | `url` | 点赞/取消 |
+| TikTok | `comment` | `url`, `text` | 发表评论 |
+| TikTok | `follow` | `url` | 关注用户 |
+| TikTok | `post` | `video`, `title`, `desc`, `tags`, `cover_h`, `cover_v` | 发布视频 |
 | X | `search` | `keyword` | 搜索推文 |
 | X | `like` | `url` | 点赞/取消 |
 | X | `reply` | `url`, `text` | 回复推文 |
