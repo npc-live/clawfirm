@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -132,7 +133,10 @@ type ProgressFunc func(text string)
 // will attempt auto-healing via an LLM before returning an error.
 // onProgress may be nil; when set, it emits SSE updates so the user can see
 // what's happening in real time.
-func RunYAMLCommand(ctx context.Context, adapterPath, commandName string, argValues []string, cdpPort int, healer *HealerConfig, onProgress ProgressFunc) ([]map[string]any, error) {
+// targetType is "chrome" for external browser (CDP :9222) or "app" for App WKWebView (HTTP :9310).
+func RunYAMLCommand(ctx context.Context, adapterPath, commandName string, argValues []string, cdpPort int, healer *HealerConfig, onProgress ProgressFunc, targetType string) ([]map[string]any, error) {
+	forApp := targetType == "app"
+
 	adapter, err := LoadAdapterYAML(adapterPath)
 	if err != nil {
 		return nil, err
@@ -160,40 +164,42 @@ func RunYAMLCommand(ctx context.Context, adapterPath, commandName string, argVal
 		}
 	}
 
-	// Ensure Chrome is running with CDP enabled.
-	progress(fmt.Sprintf("🌐 Connecting to Chrome (port %d)...", cdpPort))
-	if err := ensureChromeRunning(cdpPort); err != nil {
-		return nil, err
-	}
+	var exec *StepExecutor
+	var cdpClient *CDPClient
 
-	// Open a new tab in the default browser context so that automation
-	// can access the user's existing cookies and login sessions (required
-	// for posting to social media platforms).
-	// Note: agent-browser will reuse this tab for the actual automation,
-	// so we must NOT close it — the user needs to interact with it after
-	// the command finishes.
-	cdpClient, _, err := NewTabWithID(cdpPort)
-	if err != nil {
-		return nil, fmt.Errorf("open new tab: %w", err)
-	}
-	defer cdpClient.Close()
-
-	// Verify login state before running any steps.
-	if adapter.LoginCheck.Cookie != "" {
-		progress(fmt.Sprintf("🔑 Checking %s login...", adapter.Platform))
-		if err := verifyLoginWithRetry(ctx, cdpClient, adapter, progress); err != nil {
+	if !forApp {
+		// Ensure Chrome is running with CDP enabled.
+		progress(fmt.Sprintf("🌐 Connecting to Chrome (port %d)...", cdpPort))
+		if err := ensureChromeRunning(cdpPort); err != nil {
 			return nil, err
 		}
+
+		// Open a new tab in the default browser context so that automation
+		// can access the user's existing cookies and login sessions (required
+		// for posting to social media platforms).
+		cdpClient, err = NewTab(cdpPort)
+		if err != nil {
+			return nil, fmt.Errorf("open new tab: %w", err)
+		}
+		defer cdpClient.Close()
+
+		// Verify login state before running any steps.
+		if adapter.LoginCheck.Cookie != "" {
+			progress(fmt.Sprintf("🔑 Checking %s login...", adapter.Platform))
+			if err := verifyLoginWithRetry(ctx, cdpClient, adapter, progress); err != nil {
+				return nil, err
+			}
+		}
+
+		// Connect agent-browser to the CDP port directly (not a per-tab WebSocket
+		// URL). This lets agent-browser pick/manage the tab internally and avoids
+		// "Session with given id not found" errors from stale ws URLs.
+		exec = NewStepExecutor(fmt.Sprintf("%d", cdpPort))
+		exec.Connect()
+		globalExec = exec // allow interpolate() to evaluate JS expressions
 	}
 
-	// Connect agent-browser to the CDP port directly (not a per-tab WebSocket
-	// URL). This lets agent-browser pick/manage the tab internally and avoids
-	// "Session with given id not found" errors from stale ws URLs.
-	exec := NewStepExecutor(fmt.Sprintf("%d", cdpPort))
-	exec.Connect()
-	globalExec = exec // allow interpolate() to evaluate JS expressions
-
-	log.Printf("browser: connected to %s", adapter.Platform)
+	log.Printf("browser: connected to %s (target=%s)", adapter.Platform, targetType)
 	log.Printf("browser: running %s %s %s", adapter.Platform, commandName, strings.Join(argValues, " "))
 	progress(fmt.Sprintf("▶ Running %s/%s...", adapter.Platform, commandName))
 
@@ -204,15 +210,17 @@ func RunYAMLCommand(ctx context.Context, adapterPath, commandName string, argVal
 
 	for i, step := range steps {
 		progress(fmt.Sprintf("▶ Running %s/%s — step %d/%d...", adapter.Platform, commandName, i+1, len(steps)))
-		err := executeStep(ctx, step, vars, exec, cdpClient, &extractedRows, &returnRows, healer, adapterPath, adapter.Platform, commandName, i, steps, progress)
+		err := executeStep(ctx, step, vars, exec, cdpClient, forApp, &extractedRows, &returnRows, healer, adapterPath, adapter.Platform, commandName, i, steps, progress)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Save session cookies for future restoration.
-	if _, err := CaptureSession(cdpClient, adapter.Platform); err != nil {
-		log.Printf("browser: warning: failed to save session for %s: %v", adapter.Platform, err)
+	// Save session cookies for future restoration (Chrome only).
+	if !forApp && cdpClient != nil {
+		if _, err := CaptureSession(cdpClient, adapter.Platform); err != nil {
+			log.Printf("browser: warning: failed to save session for %s: %v", adapter.Platform, err)
+		}
 	}
 
 	// Build output.
@@ -314,6 +322,7 @@ func executeStep(
 	vars map[string]string,
 	exec *StepExecutor,
 	cdpClient *CDPClient,
+	forApp bool,
 	extractedRows *[]map[string]any,
 	returnRows *[]ReturnRow,
 	healer *HealerConfig,
@@ -322,73 +331,134 @@ func executeStep(
 	allSteps []Step,
 	progress ProgressFunc,
 ) error {
+	// appEval calls the App WKWebView eval server (HTTP :9310).
+	appEval := func(js string) StepResult {
+		return appEvalJS(js)
+	}
+
 	switch {
 	case step.Open != "":
 		u := interpolate(step.Open, vars)
 		log.Printf("  → open %s", u)
-		exec.Open(u)
+		if forApp {
+			log.Printf("  → [App] open: skipped (App loads URL on startup)")
+		} else {
+			exec.Open(u)
+		}
 
 	case step.Click != nil:
-		switch v := step.Click.(type) {
-		case string:
-			sel := interpolate(v, vars)
-			log.Printf("  → click %q", sel)
-			if err := mustOKOrHeal(ctx, exec.Click(sel), "click failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
-				return err
+		if forApp {
+			var sel string
+			switch v := step.Click.(type) {
+			case string:
+				sel = interpolate(v, vars)
+			case map[string]any:
+				if s, ok := v["selector"].(string); ok {
+					sel = interpolate(s, vars)
+				}
 			}
-		case map[string]any:
-			if text, ok := v["text"].(string); ok {
-				t := interpolate(text, vars)
-				log.Printf("  → click text=%q", t)
-				if err := mustOKOrHeal(ctx, exec.ClickText(t), "text not found: "+t, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+			if sel != "" {
+				js := fmt.Sprintf(`(function(){var el=document.querySelector(%s);if(el){el.click();return true;}return false;})()`, jsonString(sel))
+				r := appEval(js)
+				log.Printf("  → [App] click %q → %v", sel, r.Value)
+			}
+		} else {
+			switch v := step.Click.(type) {
+			case string:
+				sel := interpolate(v, vars)
+				log.Printf("  → click %q", sel)
+				if err := mustOKOrHeal(ctx, exec.Click(sel), "click failed: "+sel, healer, step, exec, false, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
 					return err
 				}
-			} else if sel, ok := v["selector"].(string); ok {
-				s := interpolate(sel, vars)
-				log.Printf("  → click selector=%q", s)
-				if err := mustOKOrHeal(ctx, exec.Click(s), "click failed: "+s, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
-					return err
+			case map[string]any:
+				if text, ok := v["text"].(string); ok {
+					t := interpolate(text, vars)
+					log.Printf("  → click text=%q", t)
+					if err := mustOKOrHeal(ctx, exec.ClickText(t), "text not found: "+t, healer, step, exec, false, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+						return err
+					}
+				} else if sel, ok := v["selector"].(string); ok {
+					s := interpolate(sel, vars)
+					log.Printf("  → click selector=%q", s)
+					if err := mustOKOrHeal(ctx, exec.Click(s), "click failed: "+s, healer, step, exec, false, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+						return err
+					}
 				}
 			}
 		}
 
 	case step.Fill != nil:
-		sel := interpolate(step.Fill.Selector, vars)
-		val := interpolate(step.Fill.Value, vars)
-		log.Printf("  → fill %q", sel)
-		if err := mustOKOrHeal(ctx, exec.Fill(sel, val), "fill failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
-			return err
+		if forApp {
+			sel := interpolate(step.Fill.Selector, vars)
+			val := interpolate(step.Fill.Value, vars)
+			js := fmt.Sprintf(`(function(){var el=document.querySelector(%s);if(!el)return false;el.focus();var nativeSet=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')||Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value');if(nativeSet&&nativeSet.set)nativeSet.set.call(el,%s);else el.value=%s;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));return true;})()`, jsonString(sel), jsonString(val), jsonString(val))
+			r := appEval(js)
+			log.Printf("  → [App] fill %q → %v", sel, r.Value)
+		} else {
+			sel := interpolate(step.Fill.Selector, vars)
+			val := interpolate(step.Fill.Value, vars)
+			log.Printf("  → fill %q", sel)
+			if err := mustOKOrHeal(ctx, exec.Fill(sel, val), "fill failed: "+sel, healer, step, exec, false, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+				return err
+			}
 		}
 
 	case step.TypeRich != nil:
 		sel := interpolate(step.TypeRich.Selector, vars)
 		val := interpolate(step.TypeRich.Value, vars)
 		log.Printf("  → type_rich %q", sel)
-		if err := mustOKOrHeal(ctx, exec.TypeContentEditable(sel, val), "type_rich failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
-			return err
+		if forApp {
+			js := fmt.Sprintf(`(function(){var el=document.querySelector(%s);if(!el)return false;el.focus();document.execCommand('selectAll',false,null);document.execCommand('insertText',false,%s);return el.textContent||el.value||true;})()`, jsonString(sel), jsonString(val))
+			r := appEval(js)
+			log.Printf("  → [App] type_rich → %v", r.Value)
+		} else {
+			if err := mustOKOrHeal(ctx, exec.TypeContentEditable(sel, val), "type_rich failed: "+sel, healer, step, exec, false, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+				return err
+			}
 		}
 
 	case step.Wait != nil:
 		switch v := step.Wait.(type) {
 		case int:
-			log.Printf("  → wait %dms", v)
-			exec.Wait(strconv.Itoa(v))
+			ms := v
+			log.Printf("  → wait %dms", ms)
+			if forApp {
+				time.Sleep(time.Duration(ms) * time.Millisecond)
+			} else {
+				exec.Wait(strconv.Itoa(ms))
+			}
 		case float64:
 			ms := int(v)
 			log.Printf("  → wait %dms", ms)
-			exec.Wait(strconv.Itoa(ms))
+			if forApp {
+				time.Sleep(time.Duration(ms) * time.Millisecond)
+			} else {
+				exec.Wait(strconv.Itoa(ms))
+			}
 		case string:
 			sel := interpolate(v, vars)
 			log.Printf("  → wait selector=%q", sel)
-			if err := waitSelectorWithTimeout(exec, sel, 30000); err != nil {
-				log.Printf("  → wait WARNING: %v", err)
+			if forApp {
+				if err := appWaitSelector(sel, 30000); err != nil {
+					log.Printf("  → wait WARNING: %v", err)
+				}
+			} else {
+				if err := waitSelectorWithTimeout(exec, sel, 30000, false); err != nil {
+					log.Printf("  → wait WARNING: %v", err)
+				}
 			}
 		case map[string]any:
 			if sel, ok := v["selector"].(string); ok {
 				s := interpolate(sel, vars)
 				log.Printf("  → wait selector=%q", s)
-				if err := waitSelectorWithTimeout(exec, s, 30000); err != nil {
-					log.Printf("  → wait WARNING: %v", err)
+				if forApp {
+					if err := appWaitSelector(s, 30000); err != nil {
+						log.Printf("  → wait WARNING: %v", err)
+					}
+				} else {
+					if err := waitSelectorWithTimeout(exec, s, 30000, false); err != nil {
+						log.Printf("  → wait WARNING: %v", err)
+					}
 				}
 			}
 		}
@@ -396,7 +466,12 @@ func executeStep(
 	case step.Eval != "":
 		js := interpolate(step.Eval, vars)
 		log.Printf("  → eval ...")
-		r := exec.Eval(js)
+		var r StepResult
+		if forApp {
+			r = appEval(js)
+		} else {
+			r = exec.Eval(js)
+		}
 		if !r.OK {
 			log.Printf("  → eval WARNING: %s", r.Error)
 		}
@@ -404,7 +479,12 @@ func executeStep(
 	case step.Capture != nil:
 		js := interpolate(step.Capture.Eval, vars)
 		log.Printf("  → capture %s", step.Capture.Name)
-		r := exec.Eval(js)
+		var r StepResult
+		if forApp {
+			r = appEval(js)
+		} else {
+			r = exec.Eval(js)
+		}
 		if !r.OK {
 			log.Printf("  → capture WARNING: eval failed for %s: %s", step.Capture.Name, r.Error)
 		}
@@ -416,13 +496,13 @@ func executeStep(
 		vars[step.Capture.Name] = val
 
 	case step.Upload != nil:
-		sel := interpolate(step.Upload.Selector, vars)
-		f := interpolate(step.Upload.File, vars)
-		if f == "" || strings.Contains(f, "{{") {
-			log.Printf("  → upload SKIP (file path empty or unresolved: %q)", f)
+		if forApp {
+			log.Printf("  → upload: not supported in App mode")
 		} else {
+			sel := interpolate(step.Upload.Selector, vars)
+			f := interpolate(step.Upload.File, vars)
 			log.Printf("  → upload %q ← %s", sel, f)
-			if err := mustOKOrHeal(ctx, exec.Upload(sel, f), "upload failed: "+sel, healer, step, exec, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
+			if err := mustOKOrHeal(ctx, exec.Upload(sel, f), "upload failed: "+sel, healer, step, exec, false, adapterPath, platform, commandName, stepIndex, allSteps, vars); err != nil {
 				return err
 			}
 		}
@@ -463,49 +543,61 @@ func executeStep(
 		}
 
 	case step.Screenshot != "":
-		p := interpolate(step.Screenshot, vars)
-		log.Printf("  → screenshot → %s", p)
-		exec.Screenshot(p)
+		if forApp {
+			log.Printf("  → screenshot: not supported in App mode")
+		} else {
+			p := interpolate(step.Screenshot, vars)
+			log.Printf("  → screenshot → %s", p)
+			exec.Screenshot(p)
+		}
 
 	case step.Extract != nil:
-		log.Printf("  → extract %q", step.Extract.Selector)
-		rows := runExtract(exec, step.Extract, vars)
-		if len(rows) == 0 && healer != nil {
-			log.Printf("  → extract returned 0 rows, attempting heal...")
-			if progress != nil {
-				progress(fmt.Sprintf("🔧 Healing empty extract at step %d...", stepIndex+1))
+		if forApp {
+			log.Printf("  → extract: not supported in App mode")
+		} else {
+			log.Printf("  → extract %q", step.Extract.Selector)
+			rows := runExtract(exec, step.Extract, vars)
+			if len(rows) == 0 && healer != nil {
+				log.Printf("  → extract returned 0 rows, attempting heal...")
+				if progress != nil {
+					progress(fmt.Sprintf("🔧 Healing empty extract at step %d...", stepIndex+1))
+				}
+				failure := StepFailure{
+					AdapterPath: adapterPath, Platform: platform,
+					CommandName: commandName, StepIndex: stepIndex,
+					Step: step, Preceding: precedingSteps(allSteps, stepIndex),
+					Remaining: remainingSteps(allSteps, stepIndex),
+					Error: fmt.Sprintf("extract %q returned 0 rows", step.Extract.Selector), Vars: vars,
+				}
+				if healed, action, _ := healStep(ctx, healer, failure, exec); healed && action != nil && action.Selector != "" {
+					healedDef := &ExtractDef{Selector: action.Selector, Fields: step.Extract.Fields}
+					rows = runExtract(exec, healedDef, vars)
+					log.Printf("  → extract (healed) → %d rows", len(rows))
+				}
 			}
-			failure := StepFailure{
-				AdapterPath: adapterPath, Platform: platform,
-				CommandName: commandName, StepIndex: stepIndex,
-				Step: step, Preceding: precedingSteps(allSteps, stepIndex),
-				Remaining: remainingSteps(allSteps, stepIndex),
-				Error: fmt.Sprintf("extract %q returned 0 rows", step.Extract.Selector), Vars: vars,
+			if len(rows) == 0 {
+				log.Printf("  → extract WARNING: 0 rows returned")
 			}
-			if healed, action, _ := healStep(ctx, healer, failure, exec); healed && action != nil && action.Selector != "" {
-				// Retry extract with the healed selector.
-				healedDef := &ExtractDef{Selector: action.Selector, Fields: step.Extract.Fields}
-				rows = runExtract(exec, healedDef, vars)
-				log.Printf("  → extract (healed) → %d rows", len(rows))
-			}
+			*extractedRows = rows
 		}
-		if len(rows) == 0 {
-			log.Printf("  → extract WARNING: 0 rows returned")
-		}
-		*extractedRows = rows
 
 	case step.Return != nil:
 		*returnRows = step.Return
 
 	case step.Assert != nil:
 		js := interpolate(step.Assert.Eval, vars)
-		r := exec.Eval(js)
+		var r StepResult
+		if forApp {
+			r = appEval(js)
+		} else {
+			r = exec.Eval(js)
+		}
 		if r.Value == nil || r.Value == false || r.Value == "" {
 			msg := step.Assert.Message
 			if msg == "" {
 				msg = "assertion failed: " + step.Assert.Eval
 			}
-			if healer != nil {
+			if healer != nil && !forApp {
 				if progress != nil {
 					progress(fmt.Sprintf("🔧 Healing assert failure at step %d...", stepIndex+1))
 				}
@@ -517,7 +609,6 @@ func executeStep(
 					Error: msg, Vars: vars,
 				}
 				if healed, _, healErr := healStep(ctx, healer, failure, exec); healed {
-					// Re-evaluate the assertion after healing.
 					r2 := exec.Eval(js)
 					if r2.Value != nil && r2.Value != false && r2.Value != "" {
 						log.Printf("  → assert OK (healed)")
@@ -534,34 +625,52 @@ func executeStep(
 	case step.Key != "":
 		k := interpolate(step.Key, vars)
 		log.Printf("  → key %q", k)
-		if k == "Enter" || k == "Control+Enter" {
-			modifiers := 0
-			if strings.HasPrefix(k, "Control") {
-				modifiers = 2
-			}
-			cdpClient.DispatchKeyEvent("keyDown", "Enter", "Enter", 13, modifiers)
-			cdpClient.DispatchKeyEvent("keyUp", "Enter", "Enter", 13, modifiers)
+		if forApp {
+			log.Printf("  → [App] key: not directly supported")
 		} else {
-			exec.PressKey(k)
+			if k == "Enter" || k == "Control+Enter" {
+				modifiers := 0
+				if strings.HasPrefix(k, "Control") {
+					modifiers = 2
+				}
+				cdpClient.DispatchKeyEvent("keyDown", "Enter", "Enter", 13, modifiers)
+				cdpClient.DispatchKeyEvent("keyUp", "Enter", "Enter", 13, modifiers)
+			} else {
+				exec.PressKey(k)
+			}
 		}
 
 	case step.KeyboardInsert != "":
-		text := interpolate(step.KeyboardInsert, vars)
-		log.Printf("  → keyboard_insert %q", truncStr(text, 40))
-		for _, ch := range text {
-			s := string(ch)
-			code := int(ch)
-			cdpClient.DispatchKeyEvent("keyDown", s, "", code, 0)
-			cdpClient.Send("Input.dispatchKeyEvent", map[string]any{
-				"type": "char", "key": s, "text": s,
-			})
-			cdpClient.DispatchKeyEvent("keyUp", s, "", code, 0)
+		if forApp {
+			text := interpolate(step.KeyboardInsert, vars)
+			log.Printf("  → [App] keyboard_insert %q", truncStr(text, 40))
+			js := fmt.Sprintf(`(function(){var ta=document.querySelector('textarea');if(ta){ta.focus();var setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;setter.call(ta,%s);ta.dispatchEvent(new Event('input',{bubbles:true}));}})()`, jsonString(text))
+			appEval(js)
+		} else {
+			text := interpolate(step.KeyboardInsert, vars)
+			log.Printf("  → keyboard_insert %q", truncStr(text, 40))
+			for _, ch := range text {
+				s := string(ch)
+				code := int(ch)
+				cdpClient.DispatchKeyEvent("keyDown", s, "", code, 0)
+				cdpClient.Send("Input.dispatchKeyEvent", map[string]any{
+					"type": "char", "key": s, "text": s,
+				})
+				cdpClient.DispatchKeyEvent("keyUp", s, "", code, 0)
+			}
 		}
 
 	case step.InsertText != "":
-		text := interpolate(step.InsertText, vars)
-		log.Printf("  → insert_text %q", truncStr(text, 40))
-		cdpClient.InsertText(text)
+		if forApp {
+			text := interpolate(step.InsertText, vars)
+			log.Printf("  → [App] insert_text %q", truncStr(text, 40))
+			js := fmt.Sprintf(`(function(){var ta=document.querySelector('textarea');if(ta){ta.focus();var setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;setter.call(ta,%s);ta.dispatchEvent(new Event('input',{bubbles:true}));}})()`, jsonString(text))
+			appEval(js)
+		} else {
+			text := interpolate(step.InsertText, vars)
+			log.Printf("  → insert_text %q", truncStr(text, 40))
+			cdpClient.InsertText(text)
+		}
 
 	case step.WaitUntil != nil:
 		timeout := step.WaitUntil.Timeout
@@ -577,16 +686,25 @@ func executeStep(
 		deadline := time.Now().Add(time.Duration(timeout) * time.Millisecond)
 		resolved := false
 		for time.Now().Before(deadline) {
-			r := exec.Eval(js)
+			var r StepResult
+			if forApp {
+				r = appEval(js)
+			} else {
+				r = exec.Eval(js)
+			}
 			if r.OK && r.Value != nil && r.Value != false && r.Value != "" && r.Value != 0.0 {
 				resolved = true
 				break
 			}
-			exec.Wait(strconv.Itoa(interval))
+			if forApp {
+				time.Sleep(time.Duration(interval) * time.Millisecond)
+			} else {
+				exec.Wait(strconv.Itoa(interval))
+			}
 		}
 		if !resolved {
 			errMsg := fmt.Sprintf("wait_until timed out after %ds", timeout/1000)
-			if healer != nil {
+			if healer != nil && !forApp {
 				if progress != nil {
 					progress(fmt.Sprintf("🔧 Healing wait_until timeout at step %d...", stepIndex+1))
 				}
@@ -672,6 +790,43 @@ func evalExpression(expr string, vars map[string]string) string {
 // globalExec is set during RunYAMLCommand so interpolate can evaluate expressions.
 var globalExec *StepExecutor
 
+// appEvalJS evaluates JavaScript in the App WKWebView via HTTP eval server.
+func appEvalJS(js string) StepResult {
+	body, err := json.Marshal(map[string]string{"script": js})
+	if err != nil {
+		return StepResult{OK: false, Error: err.Error()}
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Post("http://localhost:9310/api/eval", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return StepResult{OK: false, Error: err.Error()}
+	}
+	defer resp.Body.Close()
+	var result map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return StepResult{OK: false, Error: err.Error()}
+	}
+	val := result["result"]
+	if strings.HasPrefix(val, "Error: ") {
+		return StepResult{OK: false, Error: val}
+	}
+	return StepResult{OK: true, Value: val}
+}
+
+// appWaitSelector waits for a CSS selector to appear in the App WKWebView.
+func appWaitSelector(selector string, timeoutMs int) error {
+	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
+	js := fmt.Sprintf("!!document.querySelector(%s)", jsonString(selector))
+	for time.Now().Before(deadline) {
+		r := appEvalJS(js)
+		if r.OK && r.Value == true {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return fmt.Errorf("selector %q not found after %dms", selector, timeoutMs)
+}
+
 // mustOKOrHeal checks a step result. When healer is nil, it logs a warning
 // (preserving original behavior). When healer is set, it attempts auto-healing.
 func mustOKOrHeal(
@@ -680,6 +835,7 @@ func mustOKOrHeal(
 	healer *HealerConfig,
 	step Step,
 	exec *StepExecutor,
+	forApp bool,
 	adapterPath, platform, commandName string,
 	stepIndex int,
 	allSteps []Step,
@@ -688,7 +844,7 @@ func mustOKOrHeal(
 	if r.OK {
 		return nil
 	}
-	if healer == nil {
+	if healer == nil || forApp {
 		log.Printf("WARNING: %s: %s", msg, r.Error)
 		return nil
 	}
@@ -715,7 +871,10 @@ func mustOKOrHeal(
 
 // waitSelectorWithTimeout polls for a CSS selector to appear, with a timeout (ms).
 // Unlike exec.Wait(selector) which can hang indefinitely, this returns an error.
-func waitSelectorWithTimeout(exec *StepExecutor, selector string, timeoutMs int) error {
+func waitSelectorWithTimeout(exec *StepExecutor, selector string, timeoutMs int, forApp bool) error {
+	if forApp {
+		return appWaitSelector(selector, timeoutMs)
+	}
 	deadline := time.Now().Add(time.Duration(timeoutMs) * time.Millisecond)
 	for time.Now().Before(deadline) {
 		r := exec.Eval(fmt.Sprintf("!!document.querySelector(%s)", jsonString(selector)))
