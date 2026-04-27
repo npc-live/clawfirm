@@ -1,0 +1,60 @@
+# dev-refactor.whip
+# 功能：安全地重构代码（重命名、提取、合并等）
+# 输入：重构目标描述
+# 输出：重构后的代码 + 验证结果
+
+ask goal: "要重构什么？（如：把 X 提取成独立包、重命名 Y、合并 A 和 B）"
+
+agent analyst:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的代码架构师。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  重构前必须：
+  1. 找出所有引用和依赖
+  2. 评估影响范围
+  3. 制定安全的重构步骤
+  """
+
+agent refactorer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 Go 开发者，擅长代码重构。
+  项目根目录：/Users/qing/projects/pi-go
+
+  重构原则：
+  - 每步改动尽量小，保持可编译
+  - 先改接口再改实现
+  - 用 grep 确认所有引用都已更新
+  - 重构后跑测试
+  """
+
+# ── 第一步：影响分析 ──
+let impact = session: analyst
+  prompt: """
+  重构目标：{goal}
+
+  在 /Users/qing/projects/pi-go 中分析：
+  1. 涉及哪些文件和包
+  2. 有多少处引用需要更新
+  3. 是否会破坏 public API
+  4. 推荐的重构步骤（按顺序）
+  5. 风险评估
+
+  输出详细的影响分析报告。
+  """
+
+# ── 第二步：执行重构 ──
+let result = session: refactorer
+  prompt: """
+  按照以下分析执行重构：
+  {impact}
+
+  每完成一步，运行 go build ./... 确认编译通过。
+  全部完成后运行 go test ./cmd/func/ ./funcs/... ./skill/... ./agent/...
+  汇报最终结果。
+  """
+
+print result

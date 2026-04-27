@@ -1,0 +1,144 @@
+# dev-qa.whip
+# 功能：完整 QA 流水线 — build → vet → test → coverage → 回归检查
+# 输入：无（自动执行全套检查）
+# 输出：综合质量报告
+
+agent qa:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的质量保障工程师。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  你执行的每个命令都要完整记录输出，作为证据。
+  不要跳过任何步骤。如果某一步失败，记录失败但继续下一步。
+  """
+
+agent fixer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 Go 开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  修复 QA 发现的问题。只修复确定的 bug，不做风格改动。
+  """
+
+# ── 阶段 1：编译检查 ──
+let build = session: qa
+  prompt: """
+  在 /Users/qing/projects/pi-go 执行编译检查：
+
+  1. go build ./...
+     - 记录是否成功，如果失败列出所有错误
+
+  2. go vet ./...
+     - 记录所有 warning/error
+
+  输出：
+  ## 编译检查
+  - build: ✅/❌ (详情)
+  - vet: ✅/❌ (详情)
+  """
+
+# ── 阶段 2：全量测试 + 覆盖率 ──
+let tests = session: qa
+  prompt: """
+  在 /Users/qing/projects/pi-go 运行全量测试：
+
+  go test -count=1 -timeout 180s -race -coverprofile=/tmp/clawfirm-qa-cover.out -covermode=atomic ./...
+
+  注意：某些包可能有需要网络或 API key 的测试会跳过，这是正常的。
+
+  然后分析覆盖率：
+  go tool cover -func=/tmp/clawfirm-qa-cover.out
+
+  输出：
+  ## 测试结果
+  - 总包数 / 通过包数 / 失败包数
+  - 总测试数 / PASS / FAIL / SKIP
+  - 总耗时
+
+  ## 失败的测试（如有）
+  按包分组列出失败的测试和错误信息
+
+  ## 覆盖率
+  - 总覆盖率
+  - 各包覆盖率（只列出低于 60% 的包）
+  - 零覆盖率的文件列表
+  """
+
+# ── 阶段 3：回归检查（基于 git diff）──
+let regression = session: qa
+  prompt: """
+  检查当前改动是否可能引入回归：
+
+  1. git diff --name-only HEAD~3 获取最近改动的文件
+  2. 对每个改动的 .go 文件：
+     a. 检查它是否有对应的 _test.go
+     b. 如果有，该测试是否覆盖了改动的函数
+     c. 用 grep 检查其他包是否 import 了这个包（间接影响）
+  3. 检查是否有新增的 public 函数/方法没有测试
+
+  输出：
+  ## 回归风险分析
+  - 🔴 高风险：改了代码但无测试覆盖的文件
+  - 🟡 中风险：有测试但覆盖不完整的文件
+  - 🟢 低风险：有充分测试覆盖的文件
+  - 📋 新增未测试的 public API 列表
+  """
+
+# ── 阶段 4：汇总报告 ──
+let report = session: qa
+  prompt: """
+  汇总以下三个阶段的结果，生成最终 QA 报告：
+
+  --- 编译检查 ---
+  {build}
+
+  --- 测试结果 ---
+  {tests}
+
+  --- 回归风险 ---
+  {regression}
+
+  输出格式：
+  # QA 报告
+
+  ## 综合评级：🟢/🟡/🔴
+  （全部通过=🟢，有警告=🟡，有失败=🔴）
+
+  ## 各项结果摘要
+  | 检查项 | 状态 | 详情 |
+  |--------|------|------|
+  | 编译 | ✅/❌ | ... |
+  | go vet | ✅/❌ | ... |
+  | 测试 | N pass / M fail | ... |
+  | 覆盖率 | XX% | ... |
+  | 回归风险 | 高/中/低 | ... |
+
+  ## 必须修复（🔴）
+  列出必须修复才能发布的问题
+
+  ## 建议改进（🟡）
+  列出建议但非必须的改进
+
+  ## 下一步
+  具体的行动建议
+  """
+
+# ── 如果有必须修复的问题，自动修 ──
+if [report 中有 🔴 必须修复的问题]:
+  let fix = session: fixer
+    prompt: """
+    QA 报告发现必须修复的问题：
+    {report}
+
+    逐个修复 🔴 问题：
+    1. 修复代码
+    2. go build ./... 确认编译
+    3. 重跑失败的测试确认 PASS
+    汇报修复结果。
+    """
+  print fix
+end
+
+print report

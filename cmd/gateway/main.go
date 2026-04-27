@@ -15,7 +15,9 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -34,7 +36,7 @@ import (
 //go:embed all:frontend/dist
 var frontendAssets embed.FS
 
-var version = "dev"
+var version = "dev" // rebuild
 
 func main() {
 	cfgPath := flag.String("config", "", "path to config.yml (default: ~/.clawfirm/config.yml)")
@@ -87,8 +89,9 @@ func main() {
 		// Build tools (same as app.go).
 		tools := agentbuilder.BuildTools(ac.Tools, nil, cfg, nil, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
-		// Load skills.
-		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+		// Load skills (bundled dir as fallback).
+		allSkillPaths := append(append([]string{}, ac.SkillPaths...), bundledSkillsDir())
+		skillResult := skill.Load(skill.LoadOptions{SkillPaths: allSkillPaths})
 		for _, d := range skillResult.Diagnostics {
 			log.Printf("agent %s: skill warning: %s: %s", agentName, d.Path, d.Message)
 		}
@@ -119,6 +122,7 @@ func main() {
 			TransformContext: temporal.TransformContext,
 		}
 
+		storeChannelID := "webchat/" + agentName
 		factory := gateway.AgentFactory(func(channelID, userID string) gateway.AgentRunner {
 			opts := []agent.AgentOption{
 				agent.WithModel(model),
@@ -130,7 +134,6 @@ func main() {
 			}
 			ag := agent.NewAgent(prov, opts...)
 			// Restore message history from store.
-			storeChannelID := "webchat/" + agentName
 			if history, err := msgStore.ListMessages(store.QueryParams{
 				ChannelID: storeChannelID,
 				UserID:    userID,
@@ -142,8 +145,8 @@ func main() {
 				switch ev.Type {
 				case types.EventMessageEnd:
 					if ev.AssistantMsg != nil {
-						if err := msgStore.SaveMessage(channelID, userID, ev.AssistantMsg); err != nil {
-							log.Printf("[%s] session %s/%s: save assistant message: %v", agentName, channelID, userID, err)
+						if err := msgStore.SaveMessage(storeChannelID, userID, ev.AssistantMsg); err != nil {
+							log.Printf("[%s] session %s/%s: save assistant message: %v", agentName, storeChannelID, userID, err)
 						}
 					}
 				}
@@ -152,8 +155,8 @@ func main() {
 		})
 
 		mgr := gateway.NewSessionManager(factory, gateway.ManagerConfig{
-			OnUserMessage: func(channelID, userID string, msg types.Message) error {
-				if err := msgStore.SaveMessage(channelID, userID, msg); err != nil {
+			OnUserMessage: func(_, userID string, msg types.Message) error {
+				if err := msgStore.SaveMessage(storeChannelID, userID, msg); err != nil {
 					log.Printf("[%s] save user message: %v", agentName, err)
 					return err
 				}
@@ -380,4 +383,9 @@ func extractText(m types.Message) string {
 		return strings.Join(parts, "")
 	}
 	return ""
+}
+
+func bundledSkillsDir() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".clawfirm", "bundled", "skills")
 }

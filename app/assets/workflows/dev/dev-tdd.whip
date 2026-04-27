@@ -1,0 +1,121 @@
+# dev-tdd.whip
+# 功能：TDD 驱动开发 — 先写测试，再实现，循环直到全部通过
+# 输入：需求描述
+# 输出：测试 + 实现代码
+
+ask feature: "要实现什么功能？（描述需求和期望行为）"
+
+agent designer:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的测试设计师。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  你的工作是根据需求设计测试用例。
+  测试要覆盖：正常路径、边界条件、错误处理。
+  参考项目现有测试风格（table-driven tests, sub-tests）。
+  """
+
+agent test_writer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的测试开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  编写测试规范：
+  - 遵循项目现有测试风格
+  - table-driven tests 用 []struct 匿名结构体
+  - sub-test 用 t.Run(tc.name, ...)
+  - assert 用标准库 testing，不引入额外依赖
+  - 测试函数名要描述行为，不是实现
+  """
+
+agent coder:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 Go 开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  实现代码让测试通过。最小实现，不过度设计。
+  """
+
+# ── 第一步：分析需求，设计测试用例 ──
+let test_cases = session: designer
+  prompt: """
+  需求：{feature}
+
+  在 /Users/qing/projects/pi-go 中：
+  1. 找到相关的包和现有代码
+  2. 阅读相邻的测试文件，了解风格
+  3. 设计测试用例
+
+  输出：
+  ## 测试计划
+  - 测试文件：哪个_test.go
+  - 测试函数名列表
+
+  ## 测试用例
+  对每个测试函数，列出：
+  - 函数签名
+  - 输入 / 期望输出 / 期望行为
+  - 覆盖场景（正常、边界、错误）
+  """
+
+# ── 第二步：编写测试（此时应该全部 FAIL）──
+let tests = session: test_writer
+  prompt: """
+  根据以下测试计划编写测试代码：
+  {test_cases}
+
+  1. 先读相关现有测试文件了解风格
+  2. 编写所有测试函数
+  3. 运行 go build ./... 确保编译通过（可以用空函数/接口占位）
+  4. 运行测试，确认测试存在且能执行（预期 FAIL）
+
+  输出：写了哪些测试、在哪个文件、运行结果。
+  """
+
+# ── 第三步：实现代码让测试通过 ──
+let impl = session: coder
+  prompt: """
+  以下测试已经写好但 FAIL：
+  {tests}
+
+  请实现代码让所有测试通过：
+  1. 阅读测试代码理解期望行为
+  2. 实现最小可行代码
+  3. 每实现一部分就跑测试看进展
+  4. 直到所有测试 PASS
+  """
+
+# ── 第四步：验证循环 ──
+loop until **impl 表明所有测试 PASS** (max: 3):
+  let impl = session: coder
+    prompt: """
+    还有测试未通过：
+    {impl}
+
+    继续修复实现代码，直到所有测试 PASS。
+    每次修改后跑 go test -v -count=1 -run TestXxx ./包/...
+    """
+end
+
+# ── 第五步：最终确认 ──
+let final = session: designer
+  prompt: """
+  TDD 循环完成，实现结果：
+  {impl}
+
+  做最终检查：
+  1. 重跑所有新写的测试，确认 PASS
+  2. 跑 go vet 检查
+  3. 检查是否有遗漏的边界场景
+  4. 如果发现遗漏，列出建议补充的测试
+
+  输出最终报告。
+  """
+
+print final

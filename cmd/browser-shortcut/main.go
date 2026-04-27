@@ -52,16 +52,24 @@ func main() {
 		fatal("both 'file' and 'command' are required")
 	}
 
-	// Resolve shortcut file path.
+	// Resolve shortcut file path — user dir first, bundled fallback.
 	home, _ := os.UserHomeDir()
-	fp := filepath.Join(home, ".clawfirm", "shortcuts", in.File)
+	userDir := filepath.Join(home, ".clawfirm", "shortcuts")
+	bDir := filepath.Join(home, ".clawfirm", "bundled", "shortcuts")
+	fp := filepath.Join(userDir, in.File)
 	if _, err := os.Stat(fp); err != nil {
+		fp = filepath.Join(bDir, in.File)
+	}
+	if _, err := os.Stat(fp); err != nil {
+		seen := make(map[string]bool)
 		var available []string
-		dir := filepath.Join(home, ".clawfirm", "shortcuts")
-		if entries, err := os.ReadDir(dir); err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-					available = append(available, e.Name())
+		for _, dir := range []string{userDir, bDir} {
+			if entries, err := os.ReadDir(dir); err == nil {
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") && !seen[e.Name()] {
+						seen[e.Name()] = true
+						available = append(available, e.Name())
+					}
 				}
 			}
 		}
@@ -82,7 +90,11 @@ func main() {
 	}
 
 	// Execute.
-	rows, err := browser.RunYAMLCommand(context.Background(), fp, in.Command, in.Args, 9222, nil, nil)
+	targetType := "chrome"
+	if strings.HasPrefix(adapter.Platform, "clawfirm") || adapter.Platform == "clawfirm_test" {
+		targetType = "app"
+	}
+	rows, err := browser.RunYAMLCommand(context.Background(), fp, in.Command, in.Args, 9222, nil, nil, targetType)
 	if err != nil {
 		fatal("browser shortcut error: %v", err)
 	}

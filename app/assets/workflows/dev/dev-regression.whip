@@ -1,0 +1,107 @@
+# dev-regression.whip
+# 功能：回归测试 — 验证改动没有破坏现有功能
+# 输入：可选指定 commit 范围（默认 HEAD vs main）
+# 输出：回归分析报告
+
+ask range: "对比范围？（如 HEAD~5, 某个 commit hash，留空=当前未提交的改动）"
+
+agent analyst:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的回归测试专家。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  回归分析方法：
+  1. 找出所有改动的文件和函数
+  2. 追踪依赖链（谁 import 了改动的包）
+  3. 找出可能受影响的测试
+  4. 运行这些测试
+  5. 分析结果
+  """
+
+# ── 第一步：变更影响分析 ──
+let impact = session: analyst
+  prompt: """
+  在 /Users/qing/projects/pi-go 中分析变更影响。
+
+  对比范围：{range}
+
+  如果用户留空：分析 git diff（未提交的改动）+ git diff --cached（暂存的改动）
+  否则：用 git diff {range}..HEAD 分析
+
+  步骤：
+  1. 获取所有改动的文件列表（git diff --name-only）
+  2. 对每个 .go 文件，用 git diff 看具体改了什么函数
+  3. 构建依赖图：
+     - 用 grep -r "import" 找出谁引用了改动的包
+     - 记录直接依赖和间接依赖（最多2层）
+  4. 找出所有可能受影响的测试文件
+
+  输出：
+  ## 改动概要
+  | 文件 | 改动类型 | 改动函数 |
+  |---|---|---|
+  | ... | 新增/修改/删除 | func1, func2 |
+
+  ## 依赖影响链
+  改动的包 → 直接依赖方 → 间接依赖方
+
+  ## 需要运行的测试
+  按风险从高到低排序的测试包列表
+  """
+
+# ── 第二步：运行受影响的测试 ──
+let test_result = session: analyst
+  prompt: """
+  根据影响分析，运行所有受影响的测试：
+  {impact}
+
+  对每个受影响的包运行：
+  go test -v -count=1 -timeout 120s -race ./包/...
+
+  如果改动范围很大（超过5个包），也运行全量测试：
+  go test -count=1 -timeout 180s ./...
+
+  记录每个包的测试结果。
+
+  输出：
+  ## 测试执行结果
+  | 包 | 测试数 | PASS | FAIL | 耗时 |
+  |---|---|---|---|---|
+  | ... | N | N | 0 | Xs |
+
+  ## 失败详情
+  如有失败，列出每个失败的测试和错误信息
+  """
+
+# ── 第三步：交叉验证 ──
+let cross_check = session: analyst
+  prompt: """
+  测试运行完成：
+  {test_result}
+
+  做交叉验证：
+  1. 对改动的每个 public 函数，确认至少有一个测试覆盖它
+  2. 检查是否有新增的 public API 没有测试
+  3. 检查删除/重命名是否导致编译错误（go build ./...）
+  4. 检查改动是否改变了接口签名（可能影响外部使用者）
+
+  输出：
+  ## 回归测试报告
+
+  ### 结论：✅ 无回归 / ⚠️ 有风险 / ❌ 有回归
+
+  ### 详情
+  - 测试覆盖：N/M 个改动函数有测试覆盖
+  - 编译状态：✅/❌
+  - 接口兼容性：✅/⚠️
+
+  ### 风险项（如有）
+  列出每个风险项及建议
+
+  ### 未覆盖的改动
+  列出改了但没有测试验证的函数
+  """
+
+print cross_check

@@ -1,0 +1,97 @@
+# dev-verify.whip
+# 功能：验证一个需求/issue 是否真正完成（不只是编译通过，而是行为正确）
+# 输入：需求描述或 issue 内容
+# 输出：验证报告（通过/未通过 + 证据）
+
+ask requirement: "要验证的需求是什么？（描述功能、贴 issue 内容、或说明期望行为）"
+
+agent verifier:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的 QA 验证专家。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  验证方法论：
+  1. 理解需求 → 拆解为可验证的检查点
+  2. 每个检查点必须有明确的 PASS/FAIL 判定标准
+  3. 用代码搜索、测试运行、实际执行来验证
+  4. 不能只看"代码存在"，要验证"行为正确"
+  """
+
+agent test_writer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的测试开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  编写验收测试：
+  - 测试函数名用 TestAcceptance_XXX 前缀
+  - 测试应该验证实际行为，不要 mock 太多
+  - 每个检查点一个 sub-test（t.Run）
+  - 测试失败信息要清晰：期望什么、实际是什么
+  """
+
+# ── 第一步：拆解需求为验证检查点 ──
+let checklist = session: verifier
+  prompt: """
+  需求：{requirement}
+
+  请在 /Users/qing/projects/pi-go 代码库中：
+  1. 搜索相关的代码实现（grep 关键词、找相关文件）
+  2. 阅读实现代码，理解当前状态
+  3. 将需求拆解为具体的验证检查点
+
+  输出格式：
+  ## 需求理解
+  一句话总结这个需求要做什么
+
+  ## 验证检查点
+  - [ ] CP-1: (描述) — 验证方法：(怎么验证)
+  - [ ] CP-2: (描述) — 验证方法：(怎么验证)
+  ...
+
+  ## 相关文件
+  列出需要检查的文件
+  """
+
+# ── 第二步：逐项验证 ──
+let verification = session: verifier
+  prompt: """
+  按照以下检查点逐项验证：
+  {checklist}
+
+  对每个检查点：
+  1. 找到相关代码并阅读
+  2. 如果有现成测试，运行它：go test -v -run TestXxx ./包/...
+  3. 如果没有现成测试，通过代码分析判断
+  4. 如果需要运行程序验证，用 go run 或 go test 构造验证
+
+  输出：
+  ## 验证结果
+  - [✅/❌] CP-1: (结论) — 证据：(具体证据)
+  - [✅/❌] CP-2: (结论) — 证据：(具体证据)
+  ...
+
+  ## 总结
+  - 通过: N/M
+  - 未通过的项及原因
+  """
+
+# ── 第三步：为缺失的验证写测试 ──
+if [verification 中有检查点缺少自动化测试覆盖]:
+  let tests = session: test_writer
+    prompt: """
+    根据验证结果，为以下检查点编写自动化验收测试：
+    {verification}
+
+    只为还没有测试覆盖的检查点写测试。
+    写完后运行测试确认 PASS。
+
+    输出：新增了哪些测试文件/函数，测试运行结果。
+    """
+  print tests
+end
+
+print verification

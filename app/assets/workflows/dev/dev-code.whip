@@ -1,0 +1,79 @@
+# dev-code.whip
+# 功能：在 clawfirm 项目中实现新功能或修改代码
+# 输入：功能描述
+# 输出：生成的代码（已写入文件）
+
+ask task: "要实现什么功能？（描述需求，越具体越好）"
+
+agent planner:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的架构师。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+  Go 版本：1.25+，SQLite 用 modernc.org/sqlite
+
+  关键约定：
+  - 构造函数用 functional options 模式
+  - Tool schema 用 map[string]any
+  - 测试文件与源文件同目录
+  - store 层用 WAL 模式 SQLite + 嵌入式迁移
+  - provider 实现统一 Provider interface
+
+  你只做分析和规划，不写代码。
+  """
+
+agent coder:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的高级 Go 开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  写代码规则：
+  - 遵循项目现有风格（看相邻文件）
+  - 错误处理用 fmt.Errorf + %w
+  - 新文件要有 package 声明和必要的 import
+  - 不要过度设计，保持简洁
+  - 写完后确保能编译通过（go build）
+  """
+
+# ── 第一步：分析需求，确定方案 ──
+let plan = session: planner
+  prompt: """
+  需求：{task}
+
+  请分析：
+  1. 这个需求涉及哪些包/文件？
+  2. 需要新建文件还是修改现有文件？
+  3. 有哪些接口/类型需要改动？
+  4. 推荐的实现方案（简要）
+  5. 可能的风险点
+
+  输出具体的实施计划，列出要改动的每个文件和改什么。
+  """
+
+# ── 第二步：按计划写代码 ──
+let code = session: coder
+  prompt: """
+  按照以下计划实现代码：
+  {plan}
+
+  逐个文件修改/创建。每改完一个文件，用 go build 验证编译通过。
+  最后汇报：改了哪些文件、新增了什么、注意事项。
+  """
+
+# ── 第三步：编译验证 ──
+let verify = session: coder
+  prompt: """
+  代码已写入：
+  {code}
+
+  请执行：
+  1. cd /Users/qing/projects/pi-go && go build ./...
+  2. 如果编译失败，修复错误
+  3. go vet ./... 检查常见问题
+  4. 汇报最终状态
+  """
+
+print verify

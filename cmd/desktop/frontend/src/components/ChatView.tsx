@@ -114,7 +114,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
     });
 
     // Load skills for this agent.
-    GetAgentSkills(agentName).then(setAgentSkills).catch(() => {});
+    GetAgentSkills(agentName).then((s) => { if (s) setAgentSkills(s); }).catch(() => {});
 
     // Load saved messages and tool executions for this session.
     GetHistory("webchat/" + agentName, sessionID).then((history) => {
@@ -464,7 +464,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
   }
 
   async function handleSend() {
-    const text = input.trim();
+    const text = (input || inputRef.current?.value || "").trim();
     if (!text || isStreaming) return;
     if (text === "/new") {
       setInput("");

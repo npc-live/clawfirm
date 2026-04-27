@@ -1,9 +1,9 @@
 package builtin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -59,6 +59,17 @@ func (b *Bash) Execute(ctx context.Context, id string, params map[string]any, on
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSecs*float64(time.Second)))
 	defer cancel()
 
+	// Use a temp file instead of bytes.Buffer so no pipe is created.
+	// With a pipe, cmd.Wait() blocks until all processes with the write end
+	// close it — background processes launched with & would block forever.
+	// With a regular file, cmd.Wait() only waits for the shell to exit.
+	tmp, err := os.CreateTemp("", "clawfirm-bash-*")
+	if err != nil {
+		return tool.ToolResult{}, fmt.Errorf("bash: create temp file: %w", err)
+	}
+	defer os.Remove(tmp.Name())
+	defer tmp.Close()
+
 	cmd := exec.CommandContext(ctx, "/bin/bash", "-c", command)
 	cmd.Env = os.Environ()
 	if b.VaultEnv != nil {
@@ -66,13 +77,34 @@ func (b *Bash) Execute(ctx context.Context, id string, params map[string]any, on
 			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 		}
 	}
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	cmd.Stderr = &buf
+	cmd.Stdout = tmp
+	cmd.Stderr = tmp
 
-	err := cmd.Run()
+	if err := cmd.Start(); err != nil {
+		return tool.ToolResult{}, fmt.Errorf("bash: start: %w", err)
+	}
 
-	output := buf.String()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	var runErr error
+	select {
+	case runErr = <-done:
+	case <-ctx.Done():
+		cmd.Process.Kill()
+		select {
+		case <-done:
+		case <-time.After(200 * time.Millisecond):
+		}
+		runErr = ctx.Err()
+	}
+
+	// Read captured output.
+	if _, err := tmp.Seek(0, io.SeekStart); err != nil {
+		return tool.ToolResult{}, fmt.Errorf("bash: seek output: %w", err)
+	}
+	raw, _ := io.ReadAll(tmp)
+	output := string(raw)
 
 	// Truncate output to hard cap.
 	truncated := false
@@ -92,12 +124,11 @@ func (b *Bash) Execute(ctx context.Context, id string, params map[string]any, on
 		suffix = "\n[Output truncated to last 30 KB / 5000 lines.]"
 	}
 
-	// Append exit error if any.
-	if err != nil {
-		if ctx.Err() == context.DeadlineExceeded {
+	if runErr != nil {
+		if runErr == context.DeadlineExceeded || ctx.Err() == context.DeadlineExceeded {
 			suffix += fmt.Sprintf("\n[Command timed out after %.0f seconds.]", timeoutSecs)
 		} else {
-			suffix += fmt.Sprintf("\n[Exit error: %v]", err)
+			suffix += fmt.Sprintf("\n[Exit error: %v]", runErr)
 		}
 	}
 

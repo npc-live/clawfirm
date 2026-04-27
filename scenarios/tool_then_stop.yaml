@@ -1,0 +1,38 @@
+name: tool_then_stop
+description: |
+  精准复现今天的 bug：
+  发一条需要多轮工具调用的消息 → 等工具开始执行 → 断开重连 → 发新消息
+  验证 emit(EventToolExecutionStart) 不会因为 WriteMessage 无截止时间而永久阻塞
+
+steps:
+  # 发一条需要工具的消息
+  - send:
+      type: message
+      content: "用 bash 工具执行：ls /tmp 然后再执行 pwd，两个命令都要跑"
+
+  # 等工具开始（给 agent 3 秒开始调用工具）
+  - wait: 3000
+
+  # 断开连接 —— 这时 agent 正在执行工具，WriteMessage 会尝试写已关闭的 conn
+  - disconnect: true
+
+  - wait: 800
+
+  # 重连同一 session
+  - connect:
+      session_id: "s-tool-stop-test"
+
+  # 发新消息
+  - send:
+      type: message
+      content: "现在告诉我结果"
+
+  # 30s 内必须收到 done，否则是 bug
+  - expect:
+      event: done
+      timeout: 35000
+
+  - assert:
+      got_done: true
+      no_error: true
+      done_within: 33000

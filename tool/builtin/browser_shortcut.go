@@ -81,17 +81,25 @@ func (b *BrowserShortcut) Execute(ctx context.Context, id string, params map[str
 		}
 	}
 
-	// Resolve shortcut file path.
+	// Resolve shortcut file path — user dir first, bundled fallback.
 	home, _ := os.UserHomeDir()
-	fp := filepath.Join(home, ".clawfirm", "shortcuts", file)
+	userDir := filepath.Join(home, ".clawfirm", "shortcuts")
+	bDir := filepath.Join(home, ".clawfirm", "bundled", "shortcuts")
+	fp := filepath.Join(userDir, file)
 	if _, err := os.Stat(fp); err != nil {
-		// List available shortcuts for helpful error.
+		fp = filepath.Join(bDir, file)
+	}
+	if _, err := os.Stat(fp); err != nil {
+		// List available shortcuts from both dirs for helpful error.
+		seen := make(map[string]bool)
 		var available []string
-		dir := filepath.Join(home, ".clawfirm", "shortcuts")
-		if entries, err := os.ReadDir(dir); err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") {
-					available = append(available, e.Name())
+		for _, dir := range []string{userDir, bDir} {
+			if entries, err := os.ReadDir(dir); err == nil {
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".yaml") && !seen[e.Name()] {
+						seen[e.Name()] = true
+						available = append(available, e.Name())
+					}
 				}
 			}
 		}
@@ -150,7 +158,13 @@ func (b *BrowserShortcut) Execute(ctx context.Context, id string, params map[str
 		}
 	}
 
-	rows, err := browser.RunYAMLCommand(ctx, fp, command, args, port, healer, progressFn)
+	// Determine target: App WKWebView (HTTP :9310) or external Chrome (CDP :port).
+	targetType := "chrome"
+	if strings.HasPrefix(adapter.Platform, "clawfirm") || adapter.Platform == "clawfirm_test" {
+		targetType = "app"
+	}
+
+	rows, err := browser.RunYAMLCommand(ctx, fp, command, args, port, healer, progressFn, targetType)
 	if err != nil {
 		return tool.ToolResult{
 			Content: []types.ContentBlock{&types.TextContent{Text: fmt.Sprintf("Browser shortcut error: %v", err)}},

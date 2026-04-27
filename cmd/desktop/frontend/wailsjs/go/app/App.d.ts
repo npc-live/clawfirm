@@ -39,6 +39,10 @@ export function EnableNgrok(arg1:string):Promise<remote.RemoteStatus>;
 
 export function EnableRemote():Promise<remote.RemoteStatus>;
 
+export function EvalJS(arg1:string):Promise<string>;
+
+export function EvalResult(arg1:number,arg2:string):Promise<void>;
+
 export function GetAgentSkills(arg1:string):Promise<Array<app.SkillInfo>>;
 
 export function GetAllSkills():Promise<Array<app.SkillInfo>>;

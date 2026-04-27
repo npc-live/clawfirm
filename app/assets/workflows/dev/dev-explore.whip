@@ -1,0 +1,48 @@
+# dev-explore.whip
+# 功能：探索和理解 clawfirm 代码库的某个模块/功能
+# 输入：想了解的包名或功能描述
+# 输出：该模块的架构分析报告
+
+ask target: "想了解哪个模块或功能？（如：agent, provider, whipflow, store, 消息流转, tool系统）"
+
+agent explorer:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的代码分析专家。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+  技术栈：Go + React + Wails 桌面应用（AI Gateway）
+
+  分析代码时：
+  1. 先找到相关文件（glob/grep）
+  2. 阅读核心文件的关键部分
+  3. 理清类型定义、接口、依赖关系
+  4. 用清晰的中文总结
+  """
+
+# ── 第一步：定位相关文件 ──
+let files = session: explorer
+  prompt: """
+  用户想了解：{target}
+
+  请在 /Users/qing/projects/pi-go 中找到所有相关文件。
+  列出每个文件及其用途（一句话）。按重要性排序。
+  """
+
+# ── 第二步：深度分析 ──
+let analysis = session: explorer
+  prompt: """
+  基于以下文件列表：
+  {files}
+
+  请深入阅读这些文件，分析：
+  1. **核心类型和接口** — 关键 struct/interface 定义
+  2. **数据流** — 数据如何在各组件间流转
+  3. **设计模式** — 用了哪些 Go 设计模式（functional options、interface 组合等）
+  4. **外部依赖** — 依赖了哪些外部包，为什么
+  5. **扩展点** — 如果要增加新功能，从哪里切入
+
+  输出格式化的分析报告。
+  """
+
+print analysis

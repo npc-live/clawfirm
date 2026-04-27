@@ -1,0 +1,17 @@
+name: basic_chat
+description: "基础对话：发一条消息，验证收到回复和 done 事件"
+
+steps:
+  - send:
+      type: message
+      content: "说 hello"
+
+  - expect:
+      event: done
+      timeout: 30000
+
+  - assert:
+      got_done: true
+      got_response: true
+      no_error: true
+      done_within: 30000

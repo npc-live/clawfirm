@@ -117,7 +117,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeMu.Lock()
+		conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		conn.WriteMessage(websocket.TextMessage, b)
+		conn.SetWriteDeadline(time.Time{})
 		writeMu.Unlock()
 	}
 

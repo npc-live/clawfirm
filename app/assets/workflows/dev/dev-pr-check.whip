@@ -1,0 +1,106 @@
+# dev-pr-check.whip
+# 功能：模拟 PR 合并前的完整检查（类似 CI pipeline）
+# 输入：无（自动检测当前分支 vs main）
+# 输出：PR 就绪报告
+
+agent ci:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 CI 流水线机器人。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  你模拟一个严格的 CI 流水线。每一步都必须记录详细输出。
+  任何一步失败都要记录但继续执行后续步骤。
+  """
+
+# ── 并行执行独立检查 ──
+parallel:
+  let compile = session: ci
+    prompt: """
+    [阶段: 编译] 在 /Users/qing/projects/pi-go 中：
+
+    1. go build ./...
+    2. go vet ./...
+
+    输出：
+    ## 编译检查
+    - go build: ✅ PASS / ❌ FAIL (详情)
+    - go vet: ✅ PASS / ⚠️ WARN / ❌ FAIL (详情)
+    """
+
+  let unit_test = session: ci
+    prompt: """
+    [阶段: 单元测试] 在 /Users/qing/projects/pi-go 中：
+
+    go test -count=1 -timeout 180s -race -coverprofile=/tmp/pr-cover.out ./...
+
+    输出：
+    ## 单元测试
+    - 总包数 / 通过 / 失败 / 跳过
+    - 总测试数 / PASS / FAIL / SKIP
+    - 总覆盖率
+    - 失败列表（如有）
+    """
+
+  let diff_review = session: ci
+    prompt: """
+    [阶段: 代码审查] 在 /Users/qing/projects/pi-go 中：
+
+    1. git diff --stat HEAD~1（或 git diff --stat 如果有未提交改动）
+    2. 对每个改动的 .go 文件检查：
+       - 有无 TODO/FIXME/HACK 注释新增
+       - 有无 fmt.Println / log.Println 调试代码遗留
+       - 有无硬编码的密钥/密码/token
+       - 新增的 public 函数是否有对应测试
+       - error 是否被正确处理（不能 _ = err）
+
+    输出：
+    ## 代码审查
+    - 检查文件数：N
+    - 发现问题：
+      - 🔴 严重：(列表)
+      - 🟡 警告：(列表)
+      - ℹ️ 建议：(列表)
+    """
+end
+
+# ── 汇总 ──
+let summary = session: ci
+  prompt: """
+  汇总所有检查结果：
+
+  --- 编译 ---
+  {compile}
+
+  --- 测试 ---
+  {unit_test}
+
+  --- 代码审查 ---
+  {diff_review}
+
+  生成最终报告：
+
+  # PR 就绪检查报告
+
+  ## 总结：✅ Ready to Merge / ⚠️ 需要处理 / ❌ 不可合并
+
+  | 检查项 | 状态 | 详情 |
+  |--------|------|------|
+  | 编译 | ... | ... |
+  | go vet | ... | ... |
+  | 单元测试 | ... | ... |
+  | 覆盖率 | ... | ... |
+  | 代码审查 | ... | ... |
+
+  ## 阻断项（必须修复才能合并）
+  - (列表，如果没有就写"无")
+
+  ## 建议项（合并前最好修复）
+  - (列表)
+
+  ## Commit 摘要
+  列出将要合并的 commit 信息
+  """
+
+print summary

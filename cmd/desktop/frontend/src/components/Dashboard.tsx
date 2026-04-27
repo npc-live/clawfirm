@@ -3,6 +3,7 @@ import {
   GetChannels, GetChatSessions, GetHistory,
   GetConfig, SaveConfig,
   GetProviders,
+  SaveChannelConfig, DeleteChannelConfig,
   GetConfigRaw, SaveConfigRaw,
   GetAllSkills, GetSkillContent, SearchRemoteSkills, InstallRemoteSkill,
   GetFeishuConfig, SaveFeishuConfig,
@@ -15,7 +16,7 @@ import {
   BrowserListShortcuts, BrowserRunShortcut,
   DisableRemote, EnableNgrok, GetRemoteStatus,
 } from "../lib/wails-shim";
-import type { ChannelInfo, HistoryMessage, SkillInfo, RemoteSkillInfo, CronJob, CronJobHistory, Config, ProviderInfo, VaultEntry, BrowserStatus, ShortcutInfo, RemoteStatus } from "../lib/wails-shim";
+import type { ChannelInfo, HistoryMessage, SkillInfo, RemoteSkillInfo, CronJob, CronJobHistory, Config, AgentConfig, ProviderInfo, VaultEntry, BrowserStatus, ShortcutInfo, RemoteStatus } from "../lib/wails-shim";
 import { EventsOn } from "../wailsjs/runtime/runtime";
 import { MemoryPane } from "./MemoryPane";
 import { ProvidersPane } from "./ProvidersPane";
@@ -123,7 +124,7 @@ export function Dashboard({ onOpenChat }: Props) {
         {nav === "skills" && <SkillsPane key={skillsKey} />}
         {nav === "cron" && <CronJobsPane />}
         {nav === "memory" && <MemoryPane />}
-        {nav === "agents" && <AgentsPane />}
+        {nav === "agents" && <AgentsPane onAgentsChanged={loadChannels} />}
         {nav === "channels" && <ChannelsPane />}
         {nav === "providers" && <ProvidersPane />}
         {nav === "vault" && <VaultPane />}
@@ -976,14 +977,14 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
   );
 }
 
-function AgentsPane() {
+function AgentsPane({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
   return (
     <div className="p-8">
       <header className="mb-6">
         <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Agents</h2>
-        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Edit each agent's provider, model and system prompt</p>
+        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Manage agents — each agent runs as an independent AI assistant</p>
       </header>
-      <AgentsEditor />
+      <AgentsEditor onAgentsChanged={onAgentsChanged} />
     </div>
   );
 }
@@ -1000,7 +1001,7 @@ function ChannelsPane() {
   );
 }
 
-function AgentsEditor() {
+function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
   const [cfg, setCfg] = useState<Config | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
@@ -1008,31 +1009,41 @@ function AgentsEditor() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [newForm, setNewForm] = useState({ name: "", provider: "", model: "", system_prompt: "" });
+  const [newSaving, setNewSaving] = useState(false);
+  const [newError, setNewError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  async function reload() {
+    const c = await GetConfig().catch(() => null);
+    if (c) setCfg(c);
+    onAgentsChanged?.();
+  }
 
   useEffect(() => {
-    GetConfig().then(c => setCfg(c)).catch(() => {});
+    reload();
     GetProviders().then(p => setProviders(p ?? [])).catch(() => {});
   }, []);
 
-  function startEdit(agent: Config["agents"][0]) {
+  const providerIds = providers.map(p => p.id);
+
+  function startEdit(agent: AgentConfig) {
     setForm({ provider: agent.provider ?? "", model: agent.model ?? "", system_prompt: agent.system_prompt ?? "" });
     setEditing(agent.name);
     setError("");
     setSuccess(null);
+    setDeleteConfirm(null);
   }
 
   async function handleSave() {
     if (!cfg || editing === null) return;
-    setSaving(true); setError(""); setSuccess(null);
+    const agent = cfg.agents.find(a => a.name === editing);
+    if (!agent) return;
+    setSaving(true); setError("");
     try {
-      const updated: Config = {
-        ...cfg,
-        agents: cfg.agents.map(a =>
-          a.name === editing ? { ...a, provider: form.provider, model: form.model, system_prompt: form.system_prompt } : a
-        ),
-      };
-      await SaveConfig(updated);
-      setCfg(updated);
+      await SaveChannelConfig({ ...agent, provider: form.provider, model: form.model, system_prompt: form.system_prompt });
+      await reload();
       setEditing(null);
       setSuccess(editing);
       setTimeout(() => setSuccess(null), 2500);
@@ -1043,12 +1054,96 @@ function AgentsEditor() {
     }
   }
 
+  async function handleCreate() {
+    if (!newForm.name.trim()) { setNewError("Name is required"); return; }
+    if (!newForm.provider) { setNewError("Provider is required"); return; }
+    if (!newForm.model.trim()) { setNewError("Model is required"); return; }
+    setNewSaving(true); setNewError("");
+    try {
+      await SaveChannelConfig({
+        name: newForm.name.trim(),
+        provider: newForm.provider,
+        model: newForm.model.trim(),
+        system_prompt: newForm.system_prompt,
+        max_tokens: 0,
+      });
+      await reload();
+      setNewOpen(false);
+      setNewForm({ name: "", provider: "", model: "", system_prompt: "" });
+    } catch (e) {
+      setNewError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNewSaving(false);
+    }
+  }
+
+  async function handleDelete(name: string) {
+    try {
+      await DeleteChannelConfig(name);
+      await reload();
+      setDeleteConfirm(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   const agents = cfg?.agents ?? [];
-  const providerIds = providers.map(p => p.id);
 
   return (
     <div className="space-y-3 max-w-2xl">
-      {agents.length === 0 && <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No agents configured.</p>}
+      {/* New agent button */}
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => { setNewOpen(o => !o); setNewError(""); }}
+          className="px-3 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] transition-colors font-semibold"
+        >
+          {newOpen ? "Cancel" : "+ New Agent"}
+        </button>
+      </div>
+
+      {/* New agent form */}
+      {newOpen && (
+        <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.12)] rounded-2xl p-4 space-y-3">
+          {newError && <p className="text-[12px] text-red-400">{newError}</p>}
+          <div>
+            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Name <span className="text-red-400">*</span></label>
+            <input className={inputCls} placeholder="e.g. assistant"
+              value={newForm.name} onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Provider <span className="text-red-400">*</span></label>
+              <select className={selectCls} value={newForm.provider} onChange={e => setNewForm(f => ({ ...f, provider: e.target.value }))}>
+                <option value="">— select —</option>
+                {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Model <span className="text-red-400">*</span></label>
+              <input className={inputCls} placeholder="e.g. claude-sonnet-4-6"
+                value={newForm.model} onChange={e => setNewForm(f => ({ ...f, model: e.target.value }))} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">System Prompt</label>
+            <textarea className={`${inputCls} resize-none`} rows={3}
+              value={newForm.system_prompt} onChange={e => setNewForm(f => ({ ...f, system_prompt: e.target.value }))} />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleCreate} disabled={newSaving}
+              className="px-4 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
+              {newSaving ? "Creating…" : "Create Agent"}
+            </button>
+            <button onClick={() => { setNewOpen(false); setNewError(""); }}
+              className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {agents.length === 0 && !newOpen && <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No agents configured.</p>}
+
       {agents.map(agent => (
         <div key={agent.name} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl">
           {/* Header row */}
@@ -1064,10 +1159,29 @@ function AgentsEditor() {
               )}
             </div>
             {editing !== agent.name ? (
-              <button onClick={() => startEdit(agent)}
-                className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] transition-colors">
-                Edit
-              </button>
+              <div className="flex gap-1.5 items-center">
+                <button onClick={() => startEdit(agent)}
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] transition-colors">
+                  Edit
+                </button>
+                {deleteConfirm === agent.name ? (
+                  <>
+                    <button onClick={() => handleDelete(agent.name)}
+                      className="px-3 py-1.5 text-[12px] bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold">
+                      Confirm
+                    </button>
+                    <button onClick={() => setDeleteConfirm(null)}
+                      className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => setDeleteConfirm(agent.name)}
+                    className="px-3 py-1.5 text-[12px] text-red-400 hover:text-red-500 transition-colors">
+                    Delete
+                  </button>
+                )}
+              </div>
             ) : (
               <div className="flex gap-1.5">
                 <button onClick={handleSave} disabled={saving}

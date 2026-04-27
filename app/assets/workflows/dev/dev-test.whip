@@ -1,0 +1,103 @@
+# dev-test.whip
+# 功能：智能测试 — 根据改动文件自动选择测试范围，分析失败，自动修复后重跑
+# 输入：可选指定包路径
+# 输出：测试报告 + 修复
+
+ask scope: "测试范围？（留空=自动检测改动文件关联的包，或指定如 ./agent/... ./store/...）"
+
+agent tester:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的测试专家。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  项目有 60+ 个测试文件，覆盖：
+  agent/, app/, auth/, channel/, cmd/, config/, cron/, gateway/,
+  memory/, message/, provider/, skill/, skillctl/, store/, stream/,
+  tool/, types/, whipflow/
+
+  测试命令规范：
+  - go test -v -count=1 -timeout 120s -race <包>
+  - 覆盖率：go test -coverprofile=cover.out -covermode=atomic <包>
+  - 查看覆盖率：go tool cover -func=cover.out
+  """
+
+agent fixer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 Go 开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  修复失败测试。区分清楚：是测试本身过时了，还是被测代码有 bug。
+  修复后必须重跑测试确认 PASS。
+  """
+
+# ── 第一步：确定测试范围 ──
+let packages = session: tester
+  prompt: """
+  用户指定的测试范围：{scope}
+
+  如果用户留空或没指定具体包：
+  1. 运行 cd /Users/qing/projects/pi-go && git diff --name-only HEAD 获取改动文件
+  2. 也检查 git diff --name-only --cached 暂存的文件
+  3. 也检查 git status --porcelain 未跟踪的新文件
+  4. 根据改动文件推算涉及的 Go 包路径（如改了 agent/loop.go → ./agent/...）
+  5. 用 grep -r 检查是否有其他包 import 了被改动的包，也加入测试范围
+
+  如果没有任何文件改动，使用默认范围：./cmd/func/ ./funcs/... ./skill/... ./agent/...
+
+  如果用户指定了包路径，直接使用。
+
+  最终输出一行可直接传给 go test 的包路径列表。只输出包路径，不要其他文字。
+  """
+
+# ── 第二步：跑测试 + 覆盖率 ──
+let result = session: tester
+  prompt: """
+  在 /Users/qing/projects/pi-go 中运行测试：
+
+  go test -v -count=1 -timeout 120s -race -coverprofile=/tmp/clawfirm-cover.out -covermode=atomic {packages}
+
+  然后运行：go tool cover -func=/tmp/clawfirm-cover.out | tail -1
+
+  输出结构化报告：
+  ## 测试结果
+  - 总测试数 / 通过数 / 失败数 / 跳过数
+  - 总耗时
+  - 覆盖率
+
+  ## 失败详情（如有）
+  每个失败的测试：
+  - 测试名
+  - 所在文件:行号
+  - 错误信息
+  - 期望值 vs 实际值
+
+  ## 覆盖率偏低的文件（<50%）
+  列出覆盖率低于 50% 的文件
+  """
+
+# ── 第三步：失败则修复，循环最多 3 次 ──
+loop until **result 中所有测试都 PASS 且无 FAIL** (max: 3):
+  let fix = session: fixer
+    prompt: """
+    测试失败了，请修复：
+    {result}
+
+    对每个失败的测试：
+    1. 读取测试文件和被测源码
+    2. 分析失败原因（是 bug 还是测试过时）
+    3. 修复代码或测试
+    4. 用 go build ./... 确保编译通过
+    """
+
+  let result = session: tester
+    prompt: """
+    修复完成，重新运行测试：
+    go test -v -count=1 -timeout 120s -race {packages}
+
+    输出相同格式的报告。
+    """
+end
+
+print result

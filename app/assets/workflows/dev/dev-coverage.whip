@@ -1,0 +1,117 @@
+# dev-coverage.whip
+# 功能：分析测试覆盖率盲区，自动补充缺失的测试
+# 输入：可选指定包（默认分析全部）
+# 输出：覆盖率分析 + 新增测试
+
+ask pkg: "分析哪个包的覆盖率？（如 ./agent/...，留空=分析全部低覆盖包）"
+
+agent analyzer:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的测试覆盖率分析师。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  分析工具：
+  - go test -coverprofile=cover.out ./包/...
+  - go tool cover -func=cover.out（按函数看覆盖率）
+  - go tool cover -html=cover.out -o cover.html（可选，生成 HTML 报告）
+  """
+
+agent test_writer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的测试开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  补充测试原则：
+  - 优先覆盖 public 函数
+  - 优先覆盖核心逻辑路径（非 getter/setter）
+  - 不要写无意义的测试（只测试 Go 语法）
+  - 每个测试要有明确的断言
+  """
+
+# ── 第一步：收集覆盖率数据 ──
+let coverage = session: analyzer
+  prompt: """
+  在 /Users/qing/projects/pi-go 中收集覆盖率数据。
+
+  用户指定的包：{pkg}
+
+  如果用户留空：
+  对以下核心包逐个收集覆盖率：
+  agent, app, auth, channel/webchat, config, cron, gateway,
+  memory, message, provider, skill, skillctl, store, stream, tool, types, whipflow
+
+  对每个包运行：
+  go test -coverprofile=/tmp/cover_包名.out -covermode=atomic ./包/... 2>&1
+  go tool cover -func=/tmp/cover_包名.out 2>/dev/null
+
+  输出按覆盖率排序的结果：
+  ## 覆盖率概览（从低到高）
+  | 包 | 覆盖率 | 测试数 | 状态 |
+  |---|---|---|---|
+  | ... | XX% | N | 偏低/正常/良好 |
+
+  ## 零覆盖函数列表
+  列出覆盖率为 0% 的 public 函数（非 trivial 的）
+  """
+
+# ── 第二步：深度分析低覆盖的文件 ──
+let gaps = session: analyzer
+  prompt: """
+  根据覆盖率数据：
+  {coverage}
+
+  选择覆盖率最低的前 3 个包，深度分析：
+  1. 读取源文件，找出未被测试覆盖的函数
+  2. 对每个未覆盖的函数评估：
+     - 复杂度（分支数、依赖）
+     - 重要性（核心逻辑 vs 辅助函数）
+     - 可测试性（是否需要 mock、外部依赖）
+  3. 优先级排序：高价值 + 易测试的排前面
+
+  输出：
+  ## 建议补充测试的函数（按优先级）
+  对每个函数：
+  - 包/文件:行号 — 函数名
+  - 优先级：🔴高 / 🟡中 / 🟢低
+  - 建议测试策略（table-driven / 单测 / 集成测试）
+  - 预计覆盖率提升
+  """
+
+# ── 第三步：自动编写缺失的测试 ──
+let new_tests = session: test_writer
+  prompt: """
+  根据以下分析，为 🔴 和 🟡 优先级的函数补充测试：
+  {gaps}
+
+  对每个函数：
+  1. 先阅读源码理解行为
+  2. 阅读现有测试了解风格
+  3. 编写测试（table-driven，覆盖正常/边界/错误）
+  4. 运行测试确认 PASS
+
+  输出：新增了哪些测试，在哪些文件。
+  """
+
+# ── 第四步：验证覆盖率提升 ──
+let final = session: analyzer
+  prompt: """
+  新测试已写入：
+  {new_tests}
+
+  重新运行覆盖率收集，对比前后变化：
+
+  输出：
+  ## 覆盖率变化
+  | 包 | 之前 | 之后 | 提升 |
+  |---|---|---|---|
+  | ... | XX% | YY% | +Z% |
+
+  ## 仍然未覆盖的关键函数
+  列出仍然零覆盖的重要 public 函数
+  """
+
+print final

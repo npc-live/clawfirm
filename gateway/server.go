@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -62,16 +63,27 @@ func NewServer(registry *AgentRegistry, cfg ServerConfig) *Server {
 	if cfg.Frontend != nil {
 		fileServer := http.FileServerFS(cfg.Frontend)
 		s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-			// Try serving the exact file first.
-			f, err := cfg.Frontend.Open(r.URL.Path[1:]) // strip leading /
-			if err == nil {
-				f.Close()
-				fileServer.ServeHTTP(w, r)
+			p := r.URL.Path[1:] // strip leading /
+			// Serve exact file if it exists and is not a directory.
+			if p != "" {
+				if f, err := cfg.Frontend.Open(p); err == nil {
+					stat, _ := f.Stat()
+					f.Close()
+					if stat != nil && !stat.IsDir() {
+						fileServer.ServeHTTP(w, r)
+						return
+					}
+				}
+			}
+			// SPA fallback: serve index.html for root and unknown paths.
+			f, err := cfg.Frontend.Open("index.html")
+			if err != nil {
+				http.NotFound(w, r)
 				return
 			}
-			// SPA fallback: serve index.html for unknown paths.
-			r.URL.Path = "/"
-			fileServer.ServeHTTP(w, r)
+			defer f.Close()
+			stat, _ := f.Stat()
+			http.ServeContent(w, r, "index.html", stat.ModTime(), f.(io.ReadSeeker))
 		})
 	}
 

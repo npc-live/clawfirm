@@ -1,0 +1,40 @@
+name: send_then_stop
+description: |
+  复现 hang bug：发消息 → 断开连接（模拟用户点 Stop）→ 重连 → 发新消息
+  预期：新消息在 30s 内得到响应。
+  若超时说明 agent 卡住（WriteMessage blocked 或 WaitForIdle 未返回）。
+
+steps:
+  # 第一条消息，让 agent 开始工作
+  - send:
+      type: message
+      content: "列出当前目录下所有文件"
+
+  # 等 2 秒，agent 正在处理中
+  - wait: 2000
+
+  # 断开连接，模拟用户点 Stop（前端关闭 WebSocket）
+  - disconnect: true
+
+  # 稍等一下
+  - wait: 500
+
+  # 重新连接同一个 session（agent 仍在后台运行）
+  - connect:
+      session_id: "s-stop-test"
+
+  # 发新消息
+  - send:
+      type: message
+      content: "你先做方案"
+
+  # 等待响应（30s 超时 → bug 复现）
+  - expect:
+      event: done
+      timeout: 35000
+
+  - assert:
+      got_done: true
+      got_response: true
+      no_error: true
+      done_within: 32000

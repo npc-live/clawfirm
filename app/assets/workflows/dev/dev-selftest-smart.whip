@@ -1,0 +1,29 @@
+---
+name: dev-selftest-smart
+description: 自适应环境 + 失败自修复 + AI 分析报告
+---
+
+let result = session "执行智能自测：
+
+**Phase 1: 环境检查**
+1. 检查必要的工具是否安装（go, curl, lsof）
+2. 检查端口 19988 是否被占用
+3. 如果有问题，自动修复
+
+**Phase 2: 执行测试**
+运行 /Users/qing/projects/pi-go/scripts/selftest.sh
+
+**Phase 3: 结果分析**
+1. 解析测试输出
+2. 如果有失败的测试：
+   - 分析失败原因（查看日志 /tmp/gateway-test.log）
+   - 尝试自动修复
+   - 重新运行失败的测试
+3. 生成详细的测试报告
+
+**Phase 4: 健康建议**
+基于测试结果，给出系统健康建议和改进方向。
+
+请按照上述流程执行，并生成完整的测试报告。"
+
+print result

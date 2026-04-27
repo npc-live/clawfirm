@@ -113,3 +113,25 @@ clean:
 
 test:
 	$(GO) test ./cmd/func/ ./funcs/... ./skill/... ./agent/...
+
+# ── Bug Hunter ───────────────────────────────────────────────────────────────
+logcheck:
+	$(GO) run ./cmd/logcheck --since 30m ~/.clawfirm/app.log
+
+logcheck-json:
+	$(GO) run ./cmd/logcheck --format json --since 30m ~/.clawfirm/app.log
+
+scenario-runner:
+	$(GO) run ./cmd/scenario-runner -v scenarios/basic_chat.yaml
+
+bughunt:
+	$(GO) run ./cmd/run-whip app/assets/workflows/dev/bughunter.whip
+
+test-env:
+	./scripts/start-test-env.sh
+
+test-ui-basic:
+	$(GO) run ./cmd/browser-shortcut ~/.clawfirm/shortcuts/clawfirm_test.yaml basic_chat '你好'
+
+test-ui-stop:
+	$(GO) run ./cmd/browser-shortcut ~/.clawfirm/shortcuts/clawfirm_test.yaml send_then_stop

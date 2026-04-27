@@ -1,0 +1,14 @@
+---
+name: dev-selftest
+description: 启动 gateway + 运行 UI 自动化测试 + 日志分析
+---
+
+let result = session "运行智能自测脚本：
+1. 执行 /Users/qing/projects/pi-go/scripts/selftest.sh
+2. 等待脚本完成
+3. 解析测试结果
+4. 如果有失败的测试，分析原因并给出建议
+
+请直接运行脚本并报告结果。"
+
+print result

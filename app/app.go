@@ -92,6 +92,7 @@ type App struct {
 	authStor       *auth.AuthStorage
 	registry       *gateway.AgentRegistry
 	srvAddr        string // "127.0.0.1:PORT" once gateway is running
+	externalGW     string // external gateway URL for WebSocket connections (e.g. "http://localhost:9988")
 	whatsappCh     *whatsapp.Channel
 	whatsappCancel context.CancelFunc
 	feishuCh       *feishu.Channel
@@ -104,6 +105,10 @@ type App struct {
 	remoteCancel   context.CancelFunc
 	memoryMgr      *memory.Manager
 	startupErrors  []string
+
+	// EvalJS state
+	evalSeq      int
+	evalPending  map[int]chan string
 }
 
 // New creates the App. Call wails.Run with a.OnStartup / a.OnShutdown.
@@ -159,11 +164,7 @@ func applySystemProxy() {
 // and the new one does not. A symlink is left behind for backward compatibility.
 // registerClaudePlugin ensures pluginID is enabled in ~/.clawfirm/settings.json.
 func registerClaudePlugin(pluginID string) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	settingsPath := filepath.Join(home, ".clawfirm", "settings.json")
+	settingsPath := filepath.Join(clawfirmDataDir(), "settings.json")
 	data, err := os.ReadFile(settingsPath)
 	var settings map[string]any
 	if err != nil {
@@ -297,14 +298,17 @@ func migrateVault(db *store.DB) {
 	log.Printf("app: vault migrate: migrated %d entries to encrypted vault", len(entries))
 }
 
-// initAppLog redirects the default logger to ~/.clawfirm/app.log (append mode).
+// initAppLog redirects the default logger to <dataDir>/app.log (append mode).
 // Output is also mirrored to stderr so `wails dev` / terminal runs still show logs.
+// CLAWFIRM_LOG_PATH overrides the default path.
 func initAppLog() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
+	logPath := os.Getenv("CLAWFIRM_LOG_PATH")
+	if logPath == "" {
+		logPath = filepath.Join(clawfirmDataDir(), "app.log")
+	} else if strings.HasPrefix(logPath, "~/") {
+		home, _ := os.UserHomeDir()
+		logPath = filepath.Join(home, logPath[2:])
 	}
-	logPath := filepath.Join(home, ".clawfirm", "app.log")
 	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return
@@ -315,16 +319,13 @@ func initAppLog() {
 	log.Printf("app: log started → %s", logPath)
 }
 
-// initUserDirs creates ~/.clawfirm and its subdirectories on first run,
+// initUserDirs creates the data directory and its subdirectories on first run,
 // and writes a minimal default config.yml if one does not exist yet.
-// It also extracts bundled binaries (e.g. func) to ~/.clawfirm/bin/.
+// It also extracts bundled binaries (e.g. func) to <dataDir>/bin/.
 func initUserDirs() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
 	migrateFromPiGo()
-	base := filepath.Join(home, ".clawfirm")
+	base := clawfirmDataDir()
+	bundled := filepath.Join(base, "bundled")
 	dirs := []string{
 		base,
 		filepath.Join(base, "skills"),
@@ -333,6 +334,10 @@ func initUserDirs() {
 		filepath.Join(base, "canvas"),
 		filepath.Join(base, "bin"),
 		filepath.Join(base, "shortcuts"),
+		bundled,
+		filepath.Join(bundled, "skills"),
+		filepath.Join(bundled, "workflows"),
+		filepath.Join(bundled, "shortcuts"),
 	}
 	for _, d := range dirs {
 		if err := os.MkdirAll(d, 0o755); err != nil {
@@ -374,7 +379,7 @@ func initUserDirs() {
 		} else {
 			log.Printf("app: extracted browser-shortcut binary to %s", bsBin)
 			// Register as a claw-code plugin so claw agents can discover it.
-			pluginDir := filepath.Join(home, ".clawfirm", "plugins", "installed", "browser-shortcut", ".claude-plugin")
+			pluginDir := filepath.Join(base, "plugins", "installed", "browser-shortcut", ".claude-plugin")
 			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
 				pluginJSON := fmt.Sprintf(`{
   "name": "browser-shortcut",
@@ -407,9 +412,10 @@ func initUserDirs() {
 		}
 	}
 
-	extractBuiltinAssets(embeddedSkills, "assets/skills", filepath.Join(base, "skills"))
-	extractBuiltinAssets(embeddedWorkflows, "assets/workflows", filepath.Join(base, "workflows"))
-	extractBuiltinAssets(embeddedShortcuts, "assets/shortcuts", filepath.Join(base, "shortcuts"))
+	migrateBundledAssets(base)
+	extractBuiltinAssets(embeddedSkills, "assets/skills", filepath.Join(bundled, "skills"))
+	extractBuiltinAssets(embeddedWorkflows, "assets/workflows", filepath.Join(bundled, "workflows"))
+	extractBuiltinAssets(embeddedShortcuts, "assets/shortcuts", filepath.Join(bundled, "shortcuts"))
 
 	// Extract media-understand binary and register as claw-code plugin.
 	if len(embeddedMediaUnderstand) > 4096 {
@@ -417,7 +423,7 @@ func initUserDirs() {
 		if err := os.WriteFile(muBin, embeddedMediaUnderstand, 0o755); err != nil {
 			log.Printf("app: write media-understand binary: %v", err)
 		} else {
-			pluginDir := filepath.Join(home, ".clawfirm", "plugins", "installed", "media-understand", ".claude-plugin")
+			pluginDir := filepath.Join(base, "plugins", "installed", "media-understand", ".claude-plugin")
 			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
 				pluginJSON := fmt.Sprintf(`{
   "name": "media-understand",
@@ -455,7 +461,7 @@ func initUserDirs() {
 		if err := os.WriteFile(mgBin, embeddedMediaGen, 0o755); err != nil {
 			log.Printf("app: write media-gen binary: %v", err)
 		} else {
-			pluginDir := filepath.Join(home, ".clawfirm", "plugins", "installed", "media-gen", ".claude-plugin")
+			pluginDir := filepath.Join(base, "plugins", "installed", "media-gen", ".claude-plugin")
 			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
 				pluginJSON := fmt.Sprintf(`{
   "name": "media-gen",
@@ -538,7 +544,7 @@ cron_jobs: []
 }
 
 // extractBuiltinAssets walks an embedded FS and extracts files to destDir.
-// Existing files are never overwritten.
+// Files are always overwritten — destDir is app-managed (bundled/).
 func extractBuiltinAssets(src embed.FS, prefix, destDir string) {
 	fs.WalkDir(src, prefix, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -546,10 +552,6 @@ func extractBuiltinAssets(src embed.FS, prefix, destDir string) {
 		}
 		rel, _ := filepath.Rel(prefix, path)
 		target := filepath.Join(destDir, rel)
-
-		if _, statErr := os.Stat(target); statErr == nil {
-			return nil // already exists, skip
-		}
 
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			log.Printf("app: mkdir %s: %v", filepath.Dir(target), err)
@@ -568,10 +570,91 @@ func extractBuiltinAssets(src embed.FS, prefix, destDir string) {
 	})
 }
 
+// migrateBundledAssets removes unmodified bundled files from user directories
+// (one-time migration). Compares each embedded file with the user-dir copy;
+// if identical, deletes the user copy so only the bundled/ copy remains.
+func migrateBundledAssets(base string) {
+	sentinel := filepath.Join(base, "bundled", ".migrated-v1")
+	if _, err := os.Stat(sentinel); err == nil {
+		return
+	}
+
+	type spec struct {
+		src     embed.FS
+		prefix  string
+		userDir string
+	}
+	specs := []spec{
+		{embeddedSkills, "assets/skills", filepath.Join(base, "skills")},
+		{embeddedWorkflows, "assets/workflows", filepath.Join(base, "workflows")},
+		{embeddedShortcuts, "assets/shortcuts", filepath.Join(base, "shortcuts")},
+	}
+	for _, s := range specs {
+		fs.WalkDir(s.src, s.prefix, func(path string, d fs.DirEntry, walkErr error) error {
+			if walkErr != nil || d.IsDir() {
+				return nil
+			}
+			rel, _ := filepath.Rel(s.prefix, path)
+			userFile := filepath.Join(s.userDir, rel)
+
+			embeddedData, _ := s.src.ReadFile(path)
+			diskData, err := os.ReadFile(userFile)
+			if err != nil {
+				return nil // not on disk
+			}
+			if bytes.Equal(embeddedData, diskData) {
+				os.Remove(userFile)
+				removeEmptyParents(filepath.Dir(userFile), s.userDir)
+			}
+			return nil
+		})
+	}
+	_ = os.WriteFile(sentinel, []byte("migrated"), 0o644)
+}
+
+// removeEmptyParents removes empty directories from dir up to (but not including) stopAt.
+func removeEmptyParents(dir, stopAt string) {
+	for dir != stopAt && dir != filepath.Dir(dir) {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) > 0 {
+			return
+		}
+		os.Remove(dir)
+		dir = filepath.Dir(dir)
+	}
+}
+
+// clawfirmDataDir returns the data directory for this instance.
+// Reads CLAWFIRM_DATA_DIR env var; defaults to ~/.clawfirm.
+func clawfirmDataDir() string {
+	if dir := os.Getenv("CLAWFIRM_DATA_DIR"); dir != "" {
+		if strings.HasPrefix(dir, "~/") {
+			home, _ := os.UserHomeDir()
+			return filepath.Join(home, dir[2:])
+		}
+		return dir
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".clawfirm")
+}
+
+// bundledDir returns <dataDir>/bundled/<sub>.
+func bundledDir(sub string) string {
+	return filepath.Join(clawfirmDataDir(), "bundled", sub)
+}
+
+// appendBundledSkillsDir returns a copy of paths with the bundled skills dir appended.
+func appendBundledSkillsDir(paths []string) []string {
+	out := make([]string, len(paths), len(paths)+1)
+	copy(out, paths)
+	return append(out, bundledDir("skills"))
+}
+
 
 // OnStartup is called by Wails once the frontend webview is ready.
 func (a *App) OnStartup(ctx context.Context) {
 	initUserDirs()
+	_ = os.Chdir(clawfirmDataDir())
 	initAppLog()
 	applySystemProxy()
 	a.ctx, a.cancelFn = context.WithCancel(ctx)
@@ -592,7 +675,7 @@ func (a *App) OnStartup(ctx context.Context) {
 	}
 
 	// Open SQLite store.
-	db, err := store.Open("")
+	db, err := store.Open(filepath.Join(clawfirmDataDir(), "data.db"))
 	if err != nil {
 		log.Printf("app: store open: %v", err)
 		a.startupErrors = append(a.startupErrors, fmt.Sprintf("数据库打开失败: %v", err))
@@ -769,7 +852,9 @@ func (a *App) startGateway() error {
 		}
 
 		// Load skills and build the skills prompt with size limits.
-		skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+		// Bundled skills dir appended as fallback (user paths take priority).
+		allSkillPaths := appendBundledSkillsDir(ac.SkillPaths)
+		skillResult := skill.Load(skill.LoadOptions{SkillPaths: allSkillPaths})
 		for _, d := range skillResult.Diagnostics {
 			log.Printf("app: agent %s: skill warning: %s: %s", agentName, d.Path, d.Message)
 		}
@@ -1036,6 +1121,10 @@ func (a *App) startGateway() error {
 	}
 
 	log.Printf("app: gateway started on %s", srv.Addr())
+
+	// Start lightweight HTTP server for JS eval (enables browser-shortcut control of App UI).
+	a.startEvalServer()
+
 	return nil
 }
 
@@ -1152,34 +1241,20 @@ func installVaultEnvHook() {
 	log.Printf("app: vault hook installed in %s", rcPath)
 }
 
-// writeAppPID writes the current process PID to ~/.clawfirm/app.pid.
+// writeAppPID writes the current process PID to <dataDir>/app.pid.
 func writeAppPID() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	path := filepath.Join(home, ".clawfirm", "app.pid")
-	_ = os.WriteFile(path, []byte(strconv.Itoa(os.Getpid())), 0644)
+	_ = os.WriteFile(filepath.Join(clawfirmDataDir(), "app.pid"), []byte(strconv.Itoa(os.Getpid())), 0644)
 }
 
-// removeAppPID removes the ~/.clawfirm/app.pid file.
+// removeAppPID removes the <dataDir>/app.pid file.
 func removeAppPID() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	os.Remove(filepath.Join(home, ".clawfirm", "app.pid"))
+	os.Remove(filepath.Join(clawfirmDataDir(), "app.pid"))
 }
 
-// writeCleanExitMarker writes a ~/.clawfirm/clean_exit file to signal the
+// writeCleanExitMarker writes a <dataDir>/clean_exit file to signal the
 // watchdog daemon that the app shut down intentionally.
 func writeCleanExitMarker() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return
-	}
-	path := filepath.Join(home, ".clawfirm", "clean_exit")
-	_ = os.WriteFile(path, []byte("clean"), 0644)
+	_ = os.WriteFile(filepath.Join(clawfirmDataDir(), "clean_exit"), []byte("clean"), 0644)
 }
 
 // writeVaultEnvFile writes vault secrets to ~/.clawfirm/env as export statements
@@ -1259,17 +1334,13 @@ func (a *App) DeleteVaultEntry(key string) error {
 	return v.Delete(key)
 }
 
-// ReadCanvasFile reads ~/.clawfirm/canvas/{name}.html and returns its content.
+// ReadCanvasFile reads <dataDir>/canvas/{name}.html and returns its content.
 // Returns empty string if the file does not exist yet.
 func (a *App) ReadCanvasFile(name string) (string, error) {
 	if name == "" || strings.ContainsAny(name, "/\\..") {
 		return "", fmt.Errorf("invalid canvas name: %q", name)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(home, ".clawfirm", "canvas", name+".html")
+	path := filepath.Join(clawfirmDataDir(), "canvas", name+".html")
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", nil
@@ -1280,13 +1351,9 @@ func (a *App) ReadCanvasFile(name string) (string, error) {
 	return string(data), nil
 }
 
-// ListCanvasFiles returns all .html file names (without extension) in ~/.clawfirm/canvas/.
+// ListCanvasFiles returns all .html file names (without extension) in <dataDir>/canvas/.
 func (a *App) ListCanvasFiles() ([]string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	dir := filepath.Join(home, ".clawfirm", "canvas")
+	dir := filepath.Join(clawfirmDataDir(), "canvas")
 	entries, err := os.ReadDir(dir)
 	if os.IsNotExist(err) {
 		return []string{}, nil
@@ -1303,16 +1370,12 @@ func (a *App) ListCanvasFiles() ([]string, error) {
 	return names, nil
 }
 
-// WriteCanvasFile writes content to ~/.clawfirm/canvas/{name}.html.
+// WriteCanvasFile writes content to <dataDir>/canvas/{name}.html.
 func (a *App) WriteCanvasFile(name, content string) error {
 	if name == "" || strings.ContainsAny(name, "/\\..") {
 		return fmt.Errorf("invalid canvas name: %q", name)
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	dir := filepath.Join(home, ".clawfirm", "canvas")
+	dir := filepath.Join(clawfirmDataDir(), "canvas")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -1974,11 +2037,7 @@ func (a *App) ResetSession(agentName, sessionKey string) error {
 
 // GetConfigRaw returns the raw YAML content of config.yml and its file path.
 func (a *App) GetConfigRaw() (map[string]string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	p := filepath.Join(home, ".clawfirm", "config.yml")
+	p := filepath.Join(clawfirmDataDir(), "config.yml")
 	data, err := os.ReadFile(p)
 	if err != nil {
 		return nil, err
@@ -2004,14 +2063,57 @@ func (a *App) SaveConfigRaw(content string) error {
 // GetVersion returns the application version string.
 func (a *App) GetVersion() string { return Version }
 
-// OpenLogsFolder opens the ~/.clawfirm directory in the system file manager.
-func (a *App) OpenLogsFolder() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
+// EvalJS evaluates arbitrary JavaScript in the WKWebView and returns the result.
+// It is the bridge that enables browser-shortcut tools to control the App UI via JS eval.
+func (a *App) EvalJS(script string) string {
+	id, ch := a.addPendingEval()
+	wailsruntime.EventsEmit(a.ctx, "app:eval", map[string]any{
+		"id":     id,
+		"script": script,
+	})
+	select {
+	case result := <-ch:
+		return result
+	case <-time.After(30 * time.Second):
+		return fmt.Sprintf("eval timeout for id %d", id)
 	}
-	dir := filepath.Join(home, ".clawfirm")
-	return openBrowser(dir)
+}
+
+// EvalResult is called by the frontend with the result of a JS eval.
+func (a *App) EvalResult(id int, result string) {
+	a.mu.Lock()
+	ch, ok := a.evalPending[id]
+	delete(a.evalPending, id)
+	a.mu.Unlock()
+	if ok && !closed(ch) {
+		ch <- result
+	}
+}
+
+func (a *App) addPendingEval() (int, chan string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.evalSeq++
+	if a.evalPending == nil {
+		a.evalPending = make(map[int]chan string)
+	}
+	ch := make(chan string, 1)
+	a.evalPending[a.evalSeq] = ch
+	return a.evalSeq, ch
+}
+
+func closed(ch chan string) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}
+
+// OpenLogsFolder opens the data directory in the system file manager.
+func (a *App) OpenLogsFolder() error {
+	return openBrowser(clawfirmDataDir())
 }
 
 // GetWebhookBaseURL returns the HTTP base URL of the embedded gateway.
@@ -2092,10 +2194,9 @@ func (a *App) LogoutWhatsApp() error {
 
 // ─── Remote Control ───────────────────────────────────────────────────────────
 
-// remoteLog writes a line to ~/.clawfirm/remote.log for debugging.
+// remoteLog writes a line to <dataDir>/remote.log for debugging.
 func remoteLog(format string, args ...any) {
-	home, _ := os.UserHomeDir()
-	f, err := os.OpenFile(filepath.Join(home, ".clawfirm", "remote.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(clawfirmDataDir(), "remote.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
@@ -2124,8 +2225,7 @@ func (a *App) EnableRemote() (remote.RemoteStatus, error) {
 		return remote.RemoteStatus{}, fmt.Errorf("gateway not running — configure agents first")
 	}
 
-	home, _ := os.UserHomeDir()
-	canvasDir := filepath.Join(home, ".clawfirm", "canvas")
+	canvasDir := filepath.Join(clawfirmDataDir(), "canvas")
 
 	remoteLog("creating server...")
 	srv := remote.NewServer(remote.Config{
@@ -2306,12 +2406,15 @@ func (a *App) GetAllSkills() []SkillInfo {
 	}
 
 	// Always scan the default skill directory.
-	addFromPaths([]string{"~/.clawfirm/skills/"})
+	addFromPaths([]string{filepath.Join(clawfirmDataDir(), "skills")})
 
 	// Then scan each agent's configured skill_paths.
 	for _, ac := range cfg.Agents {
 		addFromPaths(ac.SkillPaths)
 	}
+
+	// Bundled skills as fallback (lowest priority).
+	addFromPaths([]string{bundledDir("skills")})
 
 	return out
 }
@@ -2326,12 +2429,13 @@ func (a *App) GetAgentSkills(agentName string) []SkillInfo {
 	if !ok {
 		return nil
 	}
-	result := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+	allPaths := appendBundledSkillsDir(ac.SkillPaths)
+	result := skill.Load(skill.LoadOptions{SkillPaths: allPaths})
 	out := make([]SkillInfo, 0, len(result.Skills))
 	for _, s := range result.Skills {
 		// Map each skill back to the skill_path entry it came from
 		src := ""
-		for _, p := range ac.SkillPaths {
+		for _, p := range allPaths {
 			resolved := skill.ResolvePath(p, "")
 			if strings.HasPrefix(s.FilePath, resolved) || s.FilePath == resolved {
 				src = p
@@ -2519,11 +2623,7 @@ func (a *App) DeleteMemoryFile(path string) error {
 
 // CreateMemoryFile creates a new Markdown file in the memory directory and indexes it.
 func (a *App) CreateMemoryFile(name string) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	dir := filepath.Join(home, ".clawfirm", "memory")
+	dir := filepath.Join(clawfirmDataDir(), "memory")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
@@ -2549,18 +2649,13 @@ func (a *App) SyncMemory() error {
 
 // GetMemoryDir returns the path to the memory directory.
 func (a *App) GetMemoryDir() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".clawfirm", "memory")
+	return filepath.Join(clawfirmDataDir(), "memory")
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func saveConfig(cfg *config.Config) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	dir := filepath.Join(home, ".clawfirm")
+	dir := clawfirmDataDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
@@ -2686,7 +2781,7 @@ func (a *App) buildAgentForCron(agentName string) (gateway.AgentRunner, error) {
 	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
-	skillResult := skill.Load(skill.LoadOptions{SkillPaths: ac.SkillPaths})
+	skillResult := skill.Load(skill.LoadOptions{SkillPaths: appendBundledSkillsDir(ac.SkillPaths)})
 	compacted := skill.CompactSkillPaths(skillResult.Skills)
 	skillsPrompt, _, _ := skill.ApplySkillsPromptLimits(compacted)
 
@@ -2864,36 +2959,45 @@ func scanAllWhipFiles(dir string) []string {
 	return out
 }
 
-// ListWhipFiles returns all .whip files in ~/.clawfirm/workflows/.
+// ListWhipFiles returns all .whip files from user dir and bundled dir.
+// User files take priority (same relative path shadows bundled).
 func (a *App) ListWhipFiles() ([]string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	dir := filepath.Join(home, ".clawfirm", "workflows")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []string{}, nil
-		}
-		return nil, err
-	}
+	userDir := filepath.Join(clawfirmDataDir(), "workflows")
+	bDir := bundledDir("workflows")
+
+	seen := make(map[string]bool) // relative path → already added
 	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && filepath.Ext(e.Name()) == ".whip" {
-			files = append(files, filepath.Join(dir, e.Name()))
-		}
+
+	addFrom := func(baseDir string) {
+		_ = filepath.WalkDir(baseDir, func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil || d.IsDir() {
+				return nil
+			}
+			if filepath.Ext(d.Name()) != ".whip" {
+				return nil
+			}
+			rel, _ := filepath.Rel(baseDir, path)
+			if !seen[rel] {
+				seen[rel] = true
+				files = append(files, path)
+			}
+			return nil
+		})
 	}
+
+	addFrom(userDir)  // user first
+	addFrom(bDir)     // bundled fallback
+
 	return files, nil
 }
 
 // GetWhipFileContent returns the content of a .whip file.
 func (a *App) GetWhipFileContent(path string) (string, error) {
-	home, _ := os.UserHomeDir()
-	whipDir := filepath.Join(home, ".clawfirm", "workflows")
-	// security: only allow files inside workflows dir
+	userDir := filepath.Join(clawfirmDataDir(), "workflows")
+	bDir := bundledDir("workflows")
+	// security: only allow files inside user or bundled workflows dir
 	abs, err := filepath.Abs(path)
-	if err != nil || !strings.HasPrefix(abs, whipDir) {
+	if err != nil || (!strings.HasPrefix(abs, userDir) && !strings.HasPrefix(abs, bDir)) {
 		return "", fmt.Errorf("access denied")
 	}
 	b, err := os.ReadFile(abs)
@@ -3043,43 +3147,65 @@ type ShortcutInfo struct {
 	Commands []string `json:"commands"`
 }
 
-// BrowserListShortcuts returns all YAML adapter shortcuts in ~/.clawfirm/shortcuts/.
+// BrowserListShortcuts returns all YAML adapter shortcuts.
+// User shortcuts take priority over bundled ones with the same filename.
 func (a *App) BrowserListShortcuts() []ShortcutInfo {
-	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".clawfirm", "shortcuts")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
+	userDir := filepath.Join(clawfirmDataDir(), "shortcuts")
+	bDir := bundledDir("shortcuts")
+
+	seen := make(map[string]bool)
 	var out []ShortcutInfo
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		fp := filepath.Join(dir, e.Name())
-		adapter, err := browser.LoadAdapterYAML(fp)
+
+	addFrom := func(dir string) {
+		entries, err := os.ReadDir(dir)
 		if err != nil {
-			continue
+			return
 		}
-		cmds := make([]string, 0, len(adapter.Commands))
-		for k := range adapter.Commands {
-			cmds = append(cmds, k)
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") || seen[e.Name()] {
+				continue
+			}
+			seen[e.Name()] = true
+			fp := filepath.Join(dir, e.Name())
+			adapter, err := browser.LoadAdapterYAML(fp)
+			if err != nil {
+				continue
+			}
+			cmds := make([]string, 0, len(adapter.Commands))
+			for k := range adapter.Commands {
+				cmds = append(cmds, k)
+			}
+			out = append(out, ShortcutInfo{
+				Platform: adapter.Platform,
+				File:     e.Name(),
+				Commands: cmds,
+			})
 		}
-		out = append(out, ShortcutInfo{
-			Platform: adapter.Platform,
-			File:     e.Name(),
-			Commands: cmds,
-		})
 	}
+
+	addFrom(userDir)
+	addFrom(bDir)
 	return out
 }
 
 // BrowserRunShortcut executes a YAML adapter command and returns the result rows.
 func (a *App) BrowserRunShortcut(file, command string, args []string) ([]map[string]any, error) {
-	home, _ := os.UserHomeDir()
-	fp := filepath.Join(home, ".clawfirm", "shortcuts", file)
+	fp := filepath.Join(clawfirmDataDir(), "shortcuts", file)
 	if _, err := os.Stat(fp); err != nil {
-		return nil, fmt.Errorf("shortcut file not found: %s", file)
+		// Fallback to bundled shortcuts.
+		fp = filepath.Join(bundledDir("shortcuts"), file)
+		if _, err := os.Stat(fp); err != nil {
+			return nil, fmt.Errorf("shortcut file not found: %s", file)
+		}
 	}
-	return browser.RunYAMLCommand(context.Background(), fp, command, args, 9222, nil, nil)
+	// Load adapter to detect platform and determine target type.
+	adapter, err := browser.LoadAdapterYAML(fp)
+	if err != nil {
+		return nil, err
+	}
+	targetType := "chrome"
+	if strings.HasPrefix(adapter.Platform, "clawfirm") || adapter.Platform == "clawfirm_test" {
+		targetType = "app"
+	}
+	return browser.RunYAMLCommand(context.Background(), fp, command, args, 9222, nil, nil, targetType)
 }

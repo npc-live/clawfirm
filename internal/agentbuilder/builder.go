@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ai-gateway/clawfirm/config"
@@ -343,11 +344,15 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 	}
 
 	// Build shared Skill loader with paths from all agents.
+	// Bundled skills dir is appended last as fallback (user paths take priority).
 	var skillPaths []string
 	if cfg != nil {
 		for _, ac := range cfg.Agents {
 			skillPaths = append(skillPaths, ac.SkillPaths...)
 		}
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		skillPaths = append(skillPaths, filepath.Join(home, ".clawfirm", "bundled", "skills"))
 	}
 	skillTool := &builtin.Skill{SkillPaths: skillPaths}
 

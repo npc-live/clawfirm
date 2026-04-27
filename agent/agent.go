@@ -108,11 +108,18 @@ func (a *Agent) Prompt(ctx context.Context, input string) error {
 }
 
 // PromptMessages starts the agent loop with the given messages as prompts.
+// If the agent is already running, the messages are injected via the steering
+// queue so the running loop picks them up on the next turn instead of silently
+// discarding them.
 func (a *Agent) PromptMessages(ctx context.Context, msgs []types.Message) error {
 	a.mu.Lock()
 	if a.state.IsRunning {
 		a.mu.Unlock()
-		return nil // or return an error; current choice is no-op
+		// Inject into the steering queue so the running loop picks them up.
+		for _, m := range msgs {
+			a.steeringQ.Enqueue(m)
+		}
+		return nil
 	}
 	a.state.IsRunning = true
 	a.state.Error = ""

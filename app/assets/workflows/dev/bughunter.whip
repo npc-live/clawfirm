@@ -1,0 +1,155 @@
+# workflows/dev/bughunter.whip
+#
+# 项目自我迭代 Bug Hunter
+#
+# 流程：
+#   1. 运行用户行为场景（scenario-runner）
+#   2. 检测 app.log 异常（logcheck）
+#   3. 静态分析（go vet）
+#   4. Fix agent loop：分析 findings → 生成 patch → 验证 → 最多 3 轮
+#
+# 用法：
+#   go run ./cmd/run-whip app/assets/workflows/dev/bughunter.whip
+#   go run ./cmd/run-whip app/assets/workflows/dev/bughunter.whip -- --skip-scenarios
+
+agent fix-agent:
+  provider: "claude-code"
+  model: sonnet
+  tools: ["bash", "read", "write", "edit"]
+  prompt: """
+  你是 clawfirm 项目的 bug 修复专家。
+  项目根目录：~/projects/pi-go
+  模块名：github.com/ai-gateway/clawfirm
+
+  工作原则：
+  1. 先读取 findings，找出 severity=critical 的问题
+  2. 定位到具体文件和行号
+  3. 生成最小化 patch，不要改无关代码
+  4. 修复后必须能通过：go build ./... && go vet ./...
+  5. 输出修复摘要（文件、改了什么、为什么）
+  """
+
+# ── 阶段 1：运行用户场景 ────────────────────────────────────────────────────
+let scenario_results = bash: """
+  cd ~/projects/pi-go
+  mkdir -p /tmp/bughunter
+
+  # 检查 gateway 是否在运行
+  if ! curl -sf http://localhost:9988/api/system/version > /dev/null 2>&1; then
+    echo '{"error": "gateway not running at :9988, skip scenarios"}' > /tmp/bughunter/scenarios.json
+    exit 0
+  fi
+
+  # 运行所有场景，结果写入 JSON
+  go run ./cmd/scenario-runner -v \
+    scenarios/basic_chat.yaml \
+    scenarios/send_then_stop.yaml \
+    scenarios/tool_then_stop.yaml \
+    2>/tmp/bughunter/scenarios.stderr \
+    > /tmp/bughunter/scenarios.json || true
+
+  echo "scenarios done"
+"""
+
+# ── 阶段 2：日志异常检测 ────────────────────────────────────────────────────
+let log_findings = bash: """
+  cd ~/projects/pi-go
+  go run ./cmd/logcheck \
+    --format json \
+    --since 30m \
+    ~/.clawfirm/app.log \
+    > /tmp/bughunter/log_findings.json 2>&1 || true
+  echo "logcheck done — $(cat /tmp/bughunter/log_findings.json | grep -c 'critical' || echo 0) critical findings"
+"""
+
+# ── 阶段 3：静态分析 ────────────────────────────────────────────────────────
+let static_findings = bash: """
+  cd ~/projects/pi-go
+  {
+    echo "=== go build ==="
+    go build ./... 2>&1
+
+    echo "=== go vet ==="
+    go vet ./... 2>&1
+
+    echo "=== go test (fast, no race) ==="
+    go test -count=1 -timeout 60s ./agent/... ./tool/... ./gateway/... 2>&1
+  } > /tmp/bughunter/static.txt 2>&1
+
+  # 汇总是否有错误
+  if grep -qE "^(FAIL|--- FAIL|\.go:\d+:)" /tmp/bughunter/static.txt; then
+    echo "static analysis: FAILURES found"
+    grep -E "^(FAIL|--- FAIL|\.go:\d+:)" /tmp/bughunter/static.txt | head -20
+  else
+    echo "static analysis: PASS"
+  fi
+"""
+
+# ── 阶段 4：Fix agent loop（最多 3 轮）────────────────────────────────────
+loop until **all findings resolved or no actionable items** (max: 3):
+  let fix_result = session: fix-agent
+    prompt: """
+    读取以下文件并修复所有 critical 问题：
+
+    1. /tmp/bughunter/log_findings.json — 运行时日志异常
+    2. /tmp/bughunter/static.txt — 编译/测试/vet 错误
+    3. /tmp/bughunter/scenarios.json — 用户场景失败
+
+    修复步骤：
+    a) 读取所有 findings 文件
+    b) 找出 severity=critical 或编译/测试失败的问题
+    c) 读取涉及的源码文件
+    d) 生成 patch 并应用（使用 edit 或 write 工具）
+    e) 运行 go build ./... 验证编译通过
+    f) 如果涉及 WebSocket，检查是否加了 SetWriteDeadline
+    g) 输出 JSON 格式摘要：{"fixed": [...], "remaining": [...]}
+    """
+
+  # 验证：重新跑静态分析
+  let verify = bash: """
+    cd ~/projects/pi-go
+    echo "=== 验证 go build ==="
+    go build ./... 2>&1 && echo "BUILD OK" || echo "BUILD FAILED"
+
+    echo "=== 验证 go vet ==="
+    go vet ./... 2>&1 && echo "VET OK" || echo "VET FAILED"
+
+    # 更新 static findings 供下一轮判断
+    {
+      go build ./... 2>&1
+      go vet ./... 2>&1
+      go test -count=1 -timeout 60s ./agent/... ./gateway/... 2>&1
+    } > /tmp/bughunter/static.txt 2>&1
+
+    # 重新跑日志检测（用最新日志）
+    go run ./cmd/logcheck \
+      --format json \
+      --since 5m \
+      ~/.clawfirm/app.log \
+      > /tmp/bughunter/log_findings.json 2>&1 || true
+  """
+
+# ── 阶段 5：最终报告 ─────────────────────────────────────────────────────────
+let report = session: fix-agent
+  prompt: """
+  生成本次 bug hunt 的最终报告。读取：
+  - /tmp/bughunter/scenarios.json
+  - /tmp/bughunter/log_findings.json
+  - /tmp/bughunter/static.txt
+
+  报告格式：
+  ## Bug Hunt 报告 — {{date}}
+
+  ### 修复的问题
+  逐条列出，包含：文件、问题描述、修复方案
+
+  ### 未解决的问题
+  逐条列出，包含：严重程度、描述、建议方向
+
+  ### 场景测试结果
+  PASS/FAIL 统计
+
+  报告写入 /tmp/bughunter/report.md
+  """
+
+bash: "cat /tmp/bughunter/report.md"

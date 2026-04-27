@@ -1,15 +1,21 @@
 ---
 name: agent-browser
 description: >-
-  Browser automation skill using the agent-browser CLI. Use this skill when the
-  user asks you to interact with websites, fill forms, scrape pages, take
-  screenshots, test web apps, or perform any browser-based task. Trigger on
-  phrases like "open this URL", "click the button", "fill the form",
-  "screenshot the page", "scrape the site", "test the login flow", or
-  "browse to".
+  Browser automation skill using the agent-browser CLI for EXTERNAL WEBSITES
+  via Chrome/CDP. Use this skill when the user asks you to interact with
+  websites, fill forms, scrape pages, take screenshots, or test web apps in
+  Chrome. Trigger on phrases like "open this URL", "click the button", "fill
+  the form", "screenshot the page", "scrape the site", "test the login flow",
+  or "browse to". ⚠️ NOT for Clawfirm app UI — use browser-agent (clawfirm-test
+  skill) for that. ⚠️ NOT the same as browser-agent — these are two completely
+  different tools.
 ---
 
 # agent-browser
+
+> ⚠️ **This skill is for external websites via Chrome/CDP.**
+> To automate the **Clawfirm app UI** (WKWebView), use `browser-agent` instead — see the **clawfirm-test** skill.
+> `agent-browser` ≠ `browser-agent`: different binaries, different protocols, different targets.
 
 A browser automation skill powered by the `agent-browser` CLI. It controls Chrome/Chromium via CDP and uses compact element refs for fast, token-efficient interactions.
 

@@ -1,0 +1,58 @@
+# dev-debug.whip
+# 功能：调试一个具体的 bug 或错误
+# 输入：错误描述或错误日志
+# 输出：定位根因 + 修复
+
+ask bug: "描述 bug 或粘贴错误日志"
+
+agent debugger:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 项目的调试专家。
+  项目根目录：/Users/qing/projects/pi-go
+  模块：github.com/ai-gateway/clawfirm
+
+  调试流程：
+  1. 从错误信息中提取关键信息（文件、行号、错误类型）
+  2. 读取相关代码，理解上下文
+  3. 追踪调用链，找到根因
+  4. 提出修复方案
+  """
+
+agent fixer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 Go 开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  负责修复 bug。修复后编译验证 + 跑相关测试。
+  """
+
+# ── 第一步：定位问题 ──
+let diagnosis = session: debugger
+  prompt: """
+  用户报告的问题：
+  {bug}
+
+  请在 /Users/qing/projects/pi-go 中：
+  1. 搜索相关代码（错误消息、函数名、类型名）
+  2. 读取相关文件，理解代码逻辑
+  3. 追踪调用链，找到 bug 的根因
+  4. 输出诊断报告：
+     - 问题出在哪个文件哪一行
+     - 为什么会出错
+     - 推荐的修复方案
+  """
+
+# ── 第二步：修复 ──
+let fix = session: fixer
+  prompt: """
+  根据诊断结果修复 bug：
+  {diagnosis}
+
+  修复后：
+  1. go build ./... 确认编译
+  2. 如果有相关测试，运行测试
+  3. 汇报修复内容
+  """
+
+print fix

@@ -1,0 +1,29 @@
+name: rapid_fire
+description: "快速连发：短时间内发 3 条消息，验证队列不丢失、最终都响应"
+
+steps:
+  - send:
+      type: message
+      content: "第一条：1+1等于几"
+
+  - wait: 300
+
+  - send:
+      type: message
+      content: "第二条：天空是什么颜色"
+
+  - wait: 300
+
+  - send:
+      type: message
+      content: "第三条：说 done"
+
+  # 等最后一条消息的 done
+  - expect:
+      event: done
+      timeout: 60000
+
+  - assert:
+      got_done: true
+      got_response: true
+      no_error: true

@@ -1,0 +1,71 @@
+# dev-review.whip
+# 功能：Review 当前未提交的代码改动
+# 输入：无（自动检测 git diff）
+# 输出：代码 review 报告 + 自动修复
+
+agent reviewer:
+  tools: ["bash", "read", "glob", "grep"]
+  prompt: """
+  你是一个严格的 Go 代码 reviewer，专注于 clawfirm 项目。
+  项目根目录：/Users/qing/projects/pi-go
+
+  Review 标准：
+  - 正确性：逻辑是否正确，边界条件是否处理
+  - 安全性：有无注入、泄露、未授权访问
+  - 性能：有无 goroutine 泄漏、不必要的内存分配
+  - 风格：是否符合项目约定
+  - 测试：改动是否有对应测试覆盖
+  """
+
+agent fixer:
+  tools: ["bash", "read", "write", "glob", "grep"]
+  prompt: """
+  你是 clawfirm 的 Go 开发者。
+  项目根目录：/Users/qing/projects/pi-go
+  负责根据 review 意见修复代码问题。
+  修复后确保编译通过。
+  """
+
+# ── 第一步：收集变更 ──
+let diff = session: reviewer
+  prompt: """
+  执行以下命令收集当前变更：
+  1. cd /Users/qing/projects/pi-go && git status
+  2. git diff（未暂存的改动）
+  3. git diff --cached（已暂存的改动）
+  4. git log --oneline -5（最近提交，了解上下文）
+
+  如果没有任何变更，说明"没有待 review 的代码改动"然后停止。
+  否则，列出所有变更的文件和改动摘要。
+  """
+
+# ── 第二步：逐文件 Review ──
+let review = session: reviewer
+  prompt: """
+  基于以下变更：
+  {diff}
+
+  对每个改动文件进行 review。对每个文件：
+  1. 读取完整文件（不只是 diff，要看上下文）
+  2. 检查改动是否正确、安全、符合风格
+  3. 标记问题等级：🔴 必须修复 / 🟡 建议改进 / 🟢 没问题
+
+  输出格式：
+  ## 文件名
+  - [等级] 问题描述 → 建议修复方式
+  """
+
+# ── 第三步：自动修复严重问题 ──
+if [review 中包含 🔴 必须修复的问题]:
+  let fix = session: fixer
+    prompt: """
+    以下是 review 发现的必须修复的问题：
+    {review}
+
+    请修复所有 🔴 问题。修复后运行 go build ./... 确认编译通过。
+    列出每个修复的内容。
+    """
+  print fix
+else:
+  print review
+end

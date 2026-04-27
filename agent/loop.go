@@ -326,6 +326,13 @@ func AgentLoop(
 			close(resultCh)
 			<-collectorDone
 			log.Printf("[agent-loop] ctx cancelled after stream, stopping")
+			assistantMsg.StopReason = types.StopReasonAborted
+			if assistantMsg.Timestamp == 0 {
+				assistantMsg.Timestamp = time.Now().UnixMilli()
+			}
+			emit(types.AgentEvent{Type: types.EventMessageEnd, AssistantMsg: assistantMsg})
+			agentCtx.Messages = append(agentCtx.Messages, stripToolCalls(assistantMsg))
+			emit(types.AgentEvent{Type: types.EventAgentEnd, Messages: agentCtx.Messages})
 			return agentCtx.Messages, ctx.Err()
 		}
 
@@ -344,6 +351,13 @@ func AgentLoop(
 		// Check again after tool execution.
 		if ctx.Err() != nil {
 			log.Printf("[agent-loop] ctx cancelled after tool execution, stopping")
+			assistantMsg.StopReason = types.StopReasonAborted
+			if assistantMsg.Timestamp == 0 {
+				assistantMsg.Timestamp = time.Now().UnixMilli()
+			}
+			emit(types.AgentEvent{Type: types.EventMessageEnd, AssistantMsg: assistantMsg})
+			agentCtx.Messages = append(agentCtx.Messages, stripToolCalls(assistantMsg))
+			emit(types.AgentEvent{Type: types.EventAgentEnd, Messages: agentCtx.Messages})
 			return agentCtx.Messages, ctx.Err()
 		}
 
@@ -539,4 +553,21 @@ func retryStream(
 		}
 	}
 	return lastErr
+}
+
+// stripToolCalls returns a copy of msg with tool_use blocks removed.
+// Used when aborting to keep history in a valid state for future LLM calls.
+func stripToolCalls(msg *types.AssistantMessage) *types.AssistantMessage {
+	filtered := make([]types.ContentBlock, 0, len(msg.Content))
+	for _, b := range msg.Content {
+		if _, ok := b.(*types.ToolCall); !ok {
+			filtered = append(filtered, b)
+		}
+	}
+	if len(filtered) == len(msg.Content) {
+		return msg
+	}
+	cp := *msg
+	cp.Content = filtered
+	return &cp
 }

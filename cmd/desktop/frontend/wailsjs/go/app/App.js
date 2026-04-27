@@ -70,6 +70,14 @@ export function EnableRemote() {
   return window['go']['app']['App']['EnableRemote']();
 }
 
+export function EvalJS(arg1) {
+  return window['go']['app']['App']['EvalJS'](arg1);
+}
+
+export function EvalResult(arg1, arg2) {
+  return window['go']['app']['App']['EvalResult'](arg1, arg2);
+}
+
 export function GetAgentSkills(arg1) {
   return window['go']['app']['App']['GetAgentSkills'](arg1);
 }

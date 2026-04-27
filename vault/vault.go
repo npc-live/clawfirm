@@ -17,8 +17,15 @@ const (
 	DirPerm     = 0700
 )
 
-// DefaultDir returns ~/.clawfirm.
+// DefaultDir returns the clawfirm data directory, honouring CLAWFIRM_DATA_DIR.
 func DefaultDir() string {
+	if dir := os.Getenv("CLAWFIRM_DATA_DIR"); dir != "" {
+		if len(dir) >= 2 && dir[:2] == "~/" {
+			home, _ := os.UserHomeDir()
+			return filepath.Join(home, dir[2:])
+		}
+		return dir
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return filepath.Join("/tmp", ServiceName)
