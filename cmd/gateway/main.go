@@ -27,7 +27,6 @@ import (
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/gateway"
 	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
-	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/skill"
 	"github.com/ai-gateway/clawfirm/store"
 	"github.com/ai-gateway/clawfirm/types"
@@ -64,12 +63,6 @@ func main() {
 		log.Fatalf("providers: %v", err)
 	}
 
-	// ── Media provider ──────────────────────────────────────────────────────
-	var mediaProvider provider.LLMProvider
-	if cfg.Media.Provider != "" {
-		mediaProvider = providerMap[cfg.Media.Provider]
-	}
-
 	// ── Agent registry ────────────────────────────────────────────────────────
 	msgStore := db.Messages()
 	registry := gateway.NewAgentRegistry()
@@ -87,7 +80,7 @@ func main() {
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 
 		// Build tools (same as app.go).
-		tools := agentbuilder.BuildTools(ac.Tools, nil, cfg, nil, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
+		tools := agentbuilder.BuildTools(ac.Tools, nil, cfg, nil, providerMap, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
 		// Load skills (bundled dir as fallback).
 		allSkillPaths := append(append([]string{}, ac.SkillPaths...), bundledSkillsDir())

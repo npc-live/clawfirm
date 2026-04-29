@@ -242,27 +242,62 @@ func TestApplyEnvDefaults_WhatsAppEnabled(t *testing.T) {
 	}
 }
 
-func TestApplyEnvDefaults_MediaAndImageGen(t *testing.T) {
-	t.Setenv("CLAWFIRM_MEDIA_PROVIDER", "gemini")
-	t.Setenv("CLAWFIRM_MEDIA_MODEL", "gemini-2.0")
-	t.Setenv("CLAWFIRM_IMAGE_GEN_PROVIDER", "openai")
-	t.Setenv("CLAWFIRM_IMAGE_GEN_MODEL", "dall-e-3")
+func TestToolConfigParsing(t *testing.T) {
+	t.Setenv("BRAVE_KEY", "brave-test-123")
 
-	cfg, err := config.Load("/nonexistent/path/config.yml")
+	yaml := `
+providers:
+  zenmux:
+    type: zenmux
+    api_key: sk-zen
+tools:
+  media_gen:
+    provider: zenmux
+    model: gemini-2.5-flash
+  media_understand:
+    provider: zenmux
+    model: gemini-2.0-flash
+  web_search:
+    api_key: ${BRAVE_KEY}
+`
+	cfg, err := config.ParseYAML([]byte(yaml))
+	if err != nil {
+		t.Fatalf("ParseYAML: %v", err)
+	}
+
+	if len(cfg.Tools) != 3 {
+		t.Fatalf("Tools: want 3, got %d", len(cfg.Tools))
+	}
+	if tc := cfg.Tools["media_gen"]; tc.Provider != "zenmux" || tc.Model != "gemini-2.5-flash" {
+		t.Errorf("media_gen: got %+v", tc)
+	}
+	if tc := cfg.Tools["media_understand"]; tc.Provider != "zenmux" || tc.Model != "gemini-2.0-flash" {
+		t.Errorf("media_understand: got %+v", tc)
+	}
+	if tc := cfg.Tools["web_search"]; tc.APIKey != "${BRAVE_KEY}" {
+		t.Errorf("web_search (pre-expansion): got api_key=%q", tc.APIKey)
+	}
+}
+
+func TestToolConfigEnvExpansion(t *testing.T) {
+	t.Setenv("BRAVE_KEY", "brave-expanded")
+
+	dir := t.TempDir()
+	cfgPath := dir + "/config.yml"
+	data := []byte(`
+tools:
+  web_search:
+    api_key: ${BRAVE_KEY}
+`)
+	if err := os.WriteFile(cfgPath, data, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Media.Provider != "gemini" {
-		t.Errorf("Media.Provider: got %q", cfg.Media.Provider)
-	}
-	if cfg.Media.Model != "gemini-2.0" {
-		t.Errorf("Media.Model: got %q", cfg.Media.Model)
-	}
-	if cfg.ImageGen.Provider != "openai" {
-		t.Errorf("ImageGen.Provider: got %q", cfg.ImageGen.Provider)
-	}
-	if cfg.ImageGen.Model != "dall-e-3" {
-		t.Errorf("ImageGen.Model: got %q", cfg.ImageGen.Model)
+	if tc := cfg.Tools["web_search"]; tc.APIKey != "brave-expanded" {
+		t.Errorf("web_search api_key after expansion: got %q, want %q", tc.APIKey, "brave-expanded")
 	}
 }
 

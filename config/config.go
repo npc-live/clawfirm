@@ -88,14 +88,6 @@ func applyEnvDefaults(cfg *Config) {
 	// WhatsApp
 	setBoolIfUnset(&cfg.WhatsApp.Enabled, "CLAWFIRM_WHATSAPP_ENABLED")
 
-	// Media
-	setIfEmpty(&cfg.Media.Provider, "CLAWFIRM_MEDIA_PROVIDER")
-	setIfEmpty(&cfg.Media.Model, "CLAWFIRM_MEDIA_MODEL")
-
-	// ImageGen
-	setIfEmpty(&cfg.ImageGen.Provider, "CLAWFIRM_IMAGE_GEN_PROVIDER")
-	setIfEmpty(&cfg.ImageGen.Model, "CLAWFIRM_IMAGE_GEN_MODEL")
-
 	// Dynamic provider discovery
 	discoverProvidersFromEnv(cfg)
 }
@@ -224,22 +216,17 @@ type CronJobConfig struct {
 	Enabled   bool     `yaml:"enabled" json:"enabled"`
 }
 
-// MediaConfig holds settings for the dedicated multimodal media analysis provider.
-type MediaConfig struct {
+// ToolConfig holds per-tool configuration (provider, model, or direct API key).
+type ToolConfig struct {
 	// Provider references a key in the top-level providers map.
 	Provider string `yaml:"provider" json:"provider"`
 
-	// Model is the model ID to use for media analysis.
+	// Model is the model ID to use for this tool.
 	Model string `yaml:"model" json:"model"`
-}
 
-// ImageGenConfig holds settings for the image generation tool (media_gen).
-type ImageGenConfig struct {
-	// Provider is the image generation backend: "openai" (default).
-	Provider string `yaml:"provider" json:"provider"`
-
-	// Model is the model ID, e.g. "dall-e-3".
-	Model string `yaml:"model" json:"model"`
+	// APIKey is a direct credential for tools that don't use an LLM provider
+	// (e.g. web_search with a Brave API key). Supports ${ENV_VAR} expansion.
+	APIKey string `yaml:"api_key" json:"api_key"`
 }
 
 // Config is the top-level clawfirm configuration structure.
@@ -273,11 +260,8 @@ type Config struct {
 	// CronJobs defines scheduled jobs that trigger agents on a timer.
 	CronJobs []CronJobConfig `yaml:"cron_jobs" json:"cron_jobs"`
 
-	// Media configures the dedicated multimodal provider for media analysis.
-	Media MediaConfig `yaml:"media" json:"media"`
-
-	// ImageGen configures the image generation tool (media_gen).
-	ImageGen ImageGenConfig `yaml:"image_gen" json:"image_gen"`
+	// Tools holds per-tool configuration (provider, model, API key).
+	Tools map[string]ToolConfig `yaml:"tools" json:"tools"`
 }
 
 var envVarRe = regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
@@ -333,6 +317,9 @@ func ParseYAML(data []byte) (*Config, error) {
 	if cfg.Providers == nil {
 		cfg.Providers = make(map[string]ProviderConfig)
 	}
+	if cfg.Tools == nil {
+		cfg.Tools = make(map[string]ToolConfig)
+	}
 	return &cfg, nil
 }
 
@@ -350,7 +337,10 @@ func Load(path string) (*Config, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		cfg := &Config{Providers: make(map[string]ProviderConfig)}
+		cfg := &Config{
+			Providers: make(map[string]ProviderConfig),
+			Tools:     make(map[string]ToolConfig),
+		}
 		applyEnvDefaults(cfg)
 		return cfg, nil
 	}
@@ -364,6 +354,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Providers == nil {
 		cfg.Providers = make(map[string]ProviderConfig)
+	}
+	if cfg.Tools == nil {
+		cfg.Tools = make(map[string]ToolConfig)
 	}
 
 	// Expand env vars in all provider and agent fields.
@@ -380,13 +373,14 @@ func Load(path string) (*Config, error) {
 	cfg.Feishu.AppSecret = expandEnv(cfg.Feishu.AppSecret)
 	cfg.Telegram.BotToken = expandEnv(cfg.Telegram.BotToken)
 
-	// Expand env vars in media config.
-	cfg.Media.Provider = expandEnv(cfg.Media.Provider)
-	cfg.Media.Model = expandEnv(cfg.Media.Model)
-
-	// Expand env vars in image gen config.
-	cfg.ImageGen.Provider = expandEnv(cfg.ImageGen.Provider)
-	cfg.ImageGen.Model = expandEnv(cfg.ImageGen.Model)
+	// Expand env vars in tool config.
+	for name, tc := range cfg.Tools {
+		cfg.Tools[name] = ToolConfig{
+			Provider: expandEnv(tc.Provider),
+			Model:    expandEnv(tc.Model),
+			APIKey:   expandEnv(tc.APIKey),
+		}
+	}
 
 	// Expand env vars in cron jobs.
 	for i, cj := range cfg.CronJobs {

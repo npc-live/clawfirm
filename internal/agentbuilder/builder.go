@@ -327,7 +327,7 @@ func DefaultModelForProvider(providerID string) string {
 // BuildTools resolves tool names to AgentTool instances.
 // memMgr may be nil — in that case memory_search/memory_get are unavailable.
 // vaultEnv may be nil — in that case the vault is not injected into exec/bash/process.
-// mediaProvider may be nil — in that case media_understand returns a "not configured" message.
+// providerMap may be nil — tools that need an LLM provider will be unavailable.
 //
 // The returned slice always includes a tool_search meta-tool as the last element
 // (unless names is empty). tool_search lets the LLM discover deferred tools.
@@ -338,7 +338,7 @@ type AgentRef struct {
 	Model    string
 }
 
-func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string, mediaProvider provider.LLMProvider, agentRef ...AgentRef) []tool.AgentTool {
+func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaultEnv func() map[string]string, providerMap map[string]provider.LLMProvider, agentRef ...AgentRef) []tool.AgentTool {
 	if len(names) == 0 {
 		return nil
 	}
@@ -371,7 +371,7 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		"process": &builtin.Process{VaultEnv: vaultEnv},
 		// Network
 		"fetch":      &builtin.Fetch{},
-		"web_search": &builtin.WebSearch{APIKey: os.Getenv("BRAVE_SEARCH_API_KEY")},
+		"web_search": &builtin.WebSearch{APIKey: toolAPIKey(cfg, "web_search")},
 		// Browser automation — auto-healing uses the agent's own provider.
 		"browser_shortcut": buildBrowserShortcut(agentRef),
 		// Workflows
@@ -388,14 +388,14 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		"sub_agent": &builtin.SubAgent{},
 		// Media analysis
 		"media_understand": &builtin.MediaUnderstand{
-			Provider: mediaProvider,
-			Model:    cfg.Media.Model,
+			Provider: toolLLMProvider(cfg, providerMap, "media_understand"),
+			Model:    toolModel(cfg, "media_understand"),
 		},
-		// Image generation — shares API key with media_understand.
+		// Image generation
 		"media_gen": &builtin.MediaGen{
-			Provider: resolveMediaProviderType(cfg),
-			Model:    cfg.ImageGen.Model,
-			APIKey:   resolveMediaAPIKey(cfg),
+			Provider: toolProviderType(cfg, "media_gen"),
+			Model:    toolModel(cfg, "media_gen"),
+			APIKey:   toolAPIKey(cfg, "media_gen"),
 		},
 	}
 
@@ -433,30 +433,65 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 	return out
 }
 
-// resolveMediaAPIKey returns the API key for the media provider (used by both
-// media_understand and media_gen so they share the same credential).
-func resolveMediaAPIKey(cfg *config.Config) string {
-	if cfg == nil || cfg.Media.Provider == "" {
+// toolAPIKey returns the API key for a named tool.
+// Priority: ToolConfig.APIKey > Providers[tc.Provider].APIKey > env fallback.
+func toolAPIKey(cfg *config.Config, toolName string) string {
+	if cfg == nil {
 		return ""
 	}
-	if pc, ok := cfg.Providers[cfg.Media.Provider]; ok {
-		if pc.APIKey != "" {
-			return pc.APIKey
-		}
+	tc, ok := cfg.Tools[toolName]
+	if !ok {
+		return ""
 	}
-	return os.Getenv(ProviderEnvVar(cfg.Media.Provider))
+	if tc.APIKey != "" {
+		return tc.APIKey
+	}
+	if tc.Provider == "" {
+		return ""
+	}
+	if pc, ok := cfg.Providers[tc.Provider]; ok && pc.APIKey != "" {
+		return pc.APIKey
+	}
+	return os.Getenv(ProviderEnvVar(tc.Provider))
 }
 
-// resolveMediaProviderType returns the provider type string (e.g. "gemini", "openai")
-// for the media provider, falling back to the provider ID if Type is unset.
-func resolveMediaProviderType(cfg *config.Config) string {
-	if cfg == nil || cfg.Media.Provider == "" {
+// toolProviderType returns the provider type string (e.g. "gemini", "openai")
+// for a named tool, falling back to the provider ID if Type is unset.
+func toolProviderType(cfg *config.Config, toolName string) string {
+	if cfg == nil {
 		return ""
 	}
-	if pc, ok := cfg.Providers[cfg.Media.Provider]; ok && pc.Type != "" {
+	tc, ok := cfg.Tools[toolName]
+	if !ok || tc.Provider == "" {
+		return ""
+	}
+	if pc, ok := cfg.Providers[tc.Provider]; ok && pc.Type != "" {
 		return pc.Type
 	}
-	return cfg.Media.Provider
+	return tc.Provider
+}
+
+// toolLLMProvider looks up a full LLMProvider for a named tool from the provider map.
+func toolLLMProvider(cfg *config.Config, providerMap map[string]provider.LLMProvider, toolName string) provider.LLMProvider {
+	if cfg == nil || providerMap == nil {
+		return nil
+	}
+	tc, ok := cfg.Tools[toolName]
+	if !ok || tc.Provider == "" {
+		return nil
+	}
+	return providerMap[tc.Provider]
+}
+
+// toolModel returns the configured model for a named tool.
+func toolModel(cfg *config.Config, toolName string) string {
+	if cfg == nil {
+		return ""
+	}
+	if tc, ok := cfg.Tools[toolName]; ok {
+		return tc.Model
+	}
+	return ""
 }
 
 // buildBrowserShortcut creates a BrowserShortcut tool, optionally wired

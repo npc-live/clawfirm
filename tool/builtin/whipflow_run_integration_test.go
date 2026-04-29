@@ -8,11 +8,9 @@ import (
 
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/internal/agentbuilder"
-	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/tool"
 	"github.com/ai-gateway/clawfirm/tool/builtin"
 	"github.com/ai-gateway/clawfirm/types"
-	"github.com/ai-gateway/clawfirm/whipflow/runtime"
 )
 
 // TestWhipflowRun_MediaWhip exercises the full whipflow_run path using the
@@ -33,24 +31,21 @@ func TestWhipflowRun_MediaWhip(t *testing.T) {
 		t.Fatalf("config.Load: %v", err)
 	}
 
-	// Build media provider from config (for media_understand tool).
-	var mediaLLM provider.LLMProvider
-	if cfg.Media.Provider != "" {
-		if pc, ok := cfg.Providers[cfg.Media.Provider]; ok {
-			mp, err := runtime.BuildLLMProvider(pc)
-			if err != nil {
-				t.Logf("media provider build failed: %v (media_understand will be unavailable)", err)
-			} else {
-				mediaLLM = mp
-				t.Logf("media provider: %s model=%s", cfg.Media.Provider, cfg.Media.Model)
-			}
-		}
+	// Build providers from config (tools resolve their own provider from the map).
+	providerMap, err := agentbuilder.BuildProviders(cfg)
+	if err != nil {
+		t.Fatalf("BuildProviders: %v", err)
+	}
+
+	// Log media_understand provider if configured.
+	if tc, ok := cfg.Tools["media_understand"]; ok && tc.Provider != "" {
+		t.Logf("media_understand provider: %s model=%s", tc.Provider, tc.Model)
 	}
 
 	// Build tools the same way the app does — include browser_shortcut and media_understand.
 	tools := agentbuilder.BuildTools(
 		[]string{"read", "write", "edit", "bash", "browser_shortcut", "media_understand", "whipflow_run"},
-		nil, cfg, nil, mediaLLM,
+		nil, cfg, nil, providerMap,
 	)
 
 	// Find the WhipflowRun tool and verify it got tools injected.

@@ -521,6 +521,16 @@ agents:
       skill_paths:
         - ~/.clawfirm/skills/
 
+# tools:
+#     media_gen:
+#         provider: anthropic
+#         model: gemini-2.5-flash
+#     media_understand:
+#         provider: anthropic
+#         model: gemini-2.0-flash
+#     web_search:
+#         api_key: ${BRAVE_SEARCH_API_KEY}
+
 default_agent: ""
 
 feishu:
@@ -800,12 +810,6 @@ func (a *App) startGateway() error {
 		return fmt.Errorf("startGateway: providers: %w", err)
 	}
 
-	// Resolve dedicated media provider if configured.
-	var mediaProvider provider.LLMProvider
-	if cfg.Media.Provider != "" {
-		mediaProvider = providerMap[cfg.Media.Provider]
-	}
-
 	registry := gateway.NewAgentRegistry()
 	var msgStore *store.MessageStore
 	if db != nil {
@@ -827,7 +831,7 @@ func (a *App) startGateway() error {
 		}
 		model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
 		agentName := ac.Name
-		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
+		tools := buildTools(ac.Tools, memMgr, cfg, a.vault, providerMap, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
 		// Inject MessageSaver into WhipflowRun so each session's conversation
 		// is persisted to DB as channelID="whipflow/<toolExecID>" userID="<idx>".
@@ -2705,7 +2709,7 @@ func defaultModelForProvider(providerID string) string {
 }
 
 // buildTools resolves a list of tool names to AgentTool instances.
-func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, mediaProvider provider.LLMProvider, agentRef ...agentbuilder.AgentRef) []tool.AgentTool {
+func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *vault.Vault, providerMap map[string]provider.LLMProvider, agentRef ...agentbuilder.AgentRef) []tool.AgentTool {
 	var vaultEnv func() map[string]string
 	if v != nil {
 		vaultEnv = func() map[string]string {
@@ -2713,7 +2717,7 @@ func buildTools(names []string, memMgr *memory.Manager, cfg *config.Config, v *v
 			return m
 		}
 	}
-	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, mediaProvider, agentRef...)
+	return agentbuilder.BuildTools(names, memMgr, cfg, vaultEnv, providerMap, agentRef...)
 }
 
 func streamSummarize(ctx context.Context, prov provider.LLMProvider, model types.Model, msgs []types.Message) (string, error) {
@@ -2769,17 +2773,12 @@ func (a *App) buildAgentForCron(agentName string) (gateway.AgentRunner, error) {
 		return nil, fmt.Errorf("cron: provider %q not found for agent %q", ac.Provider, agentName)
 	}
 
-	var mediaProvider provider.LLMProvider
-	if cfg.Media.Provider != "" {
-		mediaProvider = providerMap[cfg.Media.Provider]
-	}
-
 	maxTokens := ac.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = 4096
 	}
 	model := types.Model{ID: ac.Model, Provider: ac.Provider, MaxTokens: maxTokens}
-	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, mediaProvider, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
+	tools := buildTools(ac.Tools, memMgr, cfg, a.vault, providerMap, agentbuilder.AgentRef{Provider: prov, Model: ac.Model})
 
 	skillResult := skill.Load(skill.LoadOptions{SkillPaths: appendBundledSkillsDir(ac.SkillPaths)})
 	compacted := skill.CompactSkillPaths(skillResult.Skills)
