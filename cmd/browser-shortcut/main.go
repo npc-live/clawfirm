@@ -94,7 +94,13 @@ func main() {
 	if strings.HasPrefix(adapter.Platform, "clawfirm") || adapter.Platform == "clawfirm_test" {
 		targetType = "app"
 	}
-	rows, err := browser.RunYAMLCommand(context.Background(), fp, in.Command, in.Args, 9222, nil, nil, targetType)
+	cdpPort := 9222
+	if p := os.Getenv("CDP_PORT"); p != "" {
+		if v, err := fmt.Sscanf(p, "%d", &cdpPort); err != nil || v != 1 {
+			cdpPort = 9222
+		}
+	}
+	rows, err := browser.RunYAMLCommand(context.Background(), fp, in.Command, in.Args, cdpPort, nil, nil, targetType)
 	if err != nil {
 		fatal("browser shortcut error: %v", err)
 	}
