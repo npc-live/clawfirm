@@ -54,9 +54,14 @@ commands:
       - click:
           selector: "[data-testid='reply']"
       - wait: 1000
-      - type_rich:
-          selector: "[data-testid='tweetTextarea_0']"
-          value: "{{text}}"
+      - eval: >-
+          (function(){
+            var el = document.querySelector('[data-testid="tweetTextarea_0"]');
+            if(el) el.focus();
+            return !!el;
+          })()
+      - wait: 200
+      - insert_text: "{{text}}"
       - wait: 500
       - capture:
           name: input_text
@@ -77,17 +82,17 @@ commands:
     steps:
       - open: "https://x.com/home"
       - wait: 3000
-      # 清空已有文本（防止草稿残留或重试时追加重复）
+      # 清空并聚焦编辑器（selectAllChildren + CDP insertText 兼容 Draft.js）
       - eval: >-
           (function(){
             var el = document.querySelector('[data-testid="tweetTextarea_0"]');
-            if(el) { el.focus(); document.execCommand("selectAll",false,null); document.execCommand("delete",false,null); }
-            return !!el;
+            if(!el) return false;
+            el.focus();
+            window.getSelection().selectAllChildren(el);
+            return true;
           })()
       - wait: 300
-      - type_rich:
-          selector: "[data-testid='tweetTextarea_0']"
-          value: "{{text}}"
+      - insert_text: "{{text}}"
       - wait: 500
       - capture:
           name: input_text
@@ -129,18 +134,18 @@ commands:
     steps:
       - open: "https://x.com/compose/post"
       - wait: 3000
-      # 清空已有文本（防止草稿残留或重试时追加重复）
+      # 清空并聚焦编辑器（selectAllChildren + CDP insertText 兼容 Draft.js）
       - eval: >-
           (function(){
             var el = document.querySelector('[data-testid="tweetTextarea_0"]');
-            if(el) { el.focus(); document.execCommand("selectAll",false,null); document.execCommand("delete",false,null); }
-            return !!el;
+            if(!el) return false;
+            el.focus();
+            window.getSelection().selectAllChildren(el);
+            return true;
           })()
       - wait: 300
       # 填写推文文字
-      - type_rich:
-          selector: "[data-testid='tweetTextarea_0']"
-          value: "{{text}}"
+      - insert_text: "{{text}}"
       - wait: 500
       # 上传视频文件
       - upload:
@@ -186,17 +191,17 @@ commands:
     steps:
       - open: "https://x.com/compose/post"
       - wait: 3000
-      # 清空已有文本（防止草稿残留或重试时追加重复）
+      # 清空并聚焦编辑器（selectAllChildren + CDP insertText 兼容 Draft.js）
       - eval: >-
           (function(){
             var el = document.querySelector('[data-testid="tweetTextarea_0"]');
-            if(el) { el.focus(); document.execCommand("selectAll",false,null); document.execCommand("delete",false,null); }
-            return !!el;
+            if(!el) return false;
+            el.focus();
+            window.getSelection().selectAllChildren(el);
+            return true;
           })()
       - wait: 300
-      - type_rich:
-          selector: "[data-testid='tweetTextarea_0']"
-          value: "{{text}}"
+      - insert_text: "{{text}}"
       - wait: 500
       - upload:
           selector: "input[data-testid='fileInput']"

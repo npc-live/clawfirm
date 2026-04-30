@@ -53,17 +53,21 @@ commands:
           (function(){
             var body = document.body.innerText;
             if (body.includes('Upload complete') || body.includes('上传完成') ||
-                body.includes('Uploaded') || body.includes('Ready to post')) return true;
-            var progress = document.querySelector('[class*=progress], [class*=upload-progress]');
-            if (progress) {
-              var text = progress.textContent || '';
-              if (text.includes('100%')) return true;
+                body.includes('Uploaded') || body.includes('Ready to post') ||
+                body.includes('Processing') || body.includes('处理中')) return true;
+            var btns = document.querySelectorAll('button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (/^(Post|Schedule|发布|Publish)$/i.test(t) && btns[i].offsetParent !== null && !btns[i].disabled) return true;
             }
-            if (!progress && document.querySelector('[contenteditable="true"]')) return true;
-            var postBtn = [...document.querySelectorAll('button')].find(function(b){
-              return /^Post$/i.test(b.textContent.trim()) && !b.disabled;
-            });
-            return !!postBtn;
+            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
+                         document.querySelector('[data-e2e="caption-editor"] [contenteditable]');
+            if (editor && editor.offsetParent !== null) {
+              var uploading = document.querySelector('[class*=upload-progress], [class*=uploading-progress]');
+              if (!uploading) return true;
+              if ((uploading.textContent || '').includes('100%')) return true;
+            }
+            return false;
           })()
         timeout: 600000
         interval: 5000

@@ -11,30 +11,31 @@ commands:
       - wait: 3000
       - eval: >-
           (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
+            var app = document.querySelector("wujie-app");
+            var sr = app && app.shadowRoot;
+            var root = sr || document;
             ["我知道了","不保存","取消"].forEach(function(t){
-              var btn = [...sr.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === t; });
+              var btn = [...root.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === t; });
               if(btn) btn.click();
             });
           })()
       - wait: 1000
-      - eval: >-
-          (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var fi = sr.querySelector("input[type=file][accept*=video]");
-            if(!fi) return "no file input";
-            fi.id = "__upload_input";
-            document.body.appendChild(fi);
-            return "ok";
-          })()
-      - upload:
-          selector: "#__upload_input"
+      - cdp_upload:
+          eval: >-
+            (function(){
+              var app = document.querySelector("wujie-app");
+              var sr = app && app.shadowRoot;
+              var root = sr || document;
+              return root.querySelector("input[type=file][accept*=video]") || root.querySelector("input[type=file]");
+            })()
           file: "{{video}}"
       - wait_until:
           eval: >-
             (function(){
-              var sr = document.querySelector("wujie-app").shadowRoot;
-              var btn = [...sr.querySelectorAll("button")].find(function(b){
+              var app = document.querySelector("wujie-app");
+              var sr = app && app.shadowRoot;
+              var root = sr || document;
+              var btn = [...root.querySelectorAll("button")].find(function(b){
                 return b.textContent.trim() === "发表" && !b.disabled;
               });
               return !!btn;
@@ -44,8 +45,10 @@ commands:
       - wait: 1500
       - eval: >-
           (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var el = sr.querySelector(".input-editor");
+            var app = document.querySelector("wujie-app");
+            var sr = app && app.shadowRoot;
+            var root = sr || document;
+            var el = root.querySelector(".input-editor");
             if(!el) return "no desc editor";
             el.focus();
             document.execCommand("selectAll", false, null);
@@ -55,8 +58,10 @@ commands:
       - wait: 500
       - eval: >-
           (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var el = sr.querySelector("input[placeholder*=6-16]");
+            var app = document.querySelector("wujie-app");
+            var sr = app && app.shadowRoot;
+            var root = sr || document;
+            var el = root.querySelector("input[placeholder*=6-16]");
             if(!el) return "no title input";
             el.focus();
             var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
@@ -70,30 +75,31 @@ commands:
           (function(){
             var cover = "{{cover}}";
             if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var btn = [...sr.querySelectorAll('span,div,button')]
+            var app = document.querySelector("wujie-app");
+            var sr = app && app.shadowRoot;
+            var root = sr || document;
+            var btn = [...root.querySelectorAll('span,div,button')]
               .find(function(el){ var t = el.textContent.trim(); return t.includes('封面') || t.includes('更换'); });
             if (btn) btn.click();
             return btn ? "opened" : "no_btn";
           })()
       - wait: 2000
-      - eval: >-
-          (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var fi = sr.querySelector("input[type=file][accept*=image]");
-            if (!fi) return "no_cover_input";
-            fi.id = "__cover_upload_input";
-            document.body.appendChild(fi);
-            return "ok";
-          })()
-      - upload:
-          selector: "#__cover_upload_input"
+      - cdp_upload:
+          eval: >-
+            (function(){
+              var app = document.querySelector("wujie-app");
+              var sr = app && app.shadowRoot;
+              var root = sr || document;
+              return root.querySelector("input[type=file][accept*=image]");
+            })()
           file: "{{cover}}"
       - wait: 3000
       - eval: >-
           (function(){
-            var sr = document.querySelector("wujie-app").shadowRoot;
-            var btn = [...sr.querySelectorAll('button')]
+            var app = document.querySelector("wujie-app");
+            var sr = app && app.shadowRoot;
+            var root = sr || document;
+            var btn = [...root.querySelectorAll('button')]
               .find(function(b){ return b.textContent.trim() === '完成'; });
             if (btn) btn.click();
             return !!btn;

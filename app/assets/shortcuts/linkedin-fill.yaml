@@ -12,15 +12,26 @@ commands:
       # 点击 "Start a post" / "发起帖子"
       - eval: >-
           (function(){
-            var trigger = document.querySelector('.share-box-feed-entry__trigger') ||
-                          document.querySelector('[class*=share-box-feed-entry__trigger]') ||
-                          [...document.querySelectorAll('button,div[role=button],div[tabindex="0"]')]
-                            .find(function(el){
-                              var t = el.textContent.trim();
-                              return t.includes('Start a post') || t.includes('发起帖子') ||
-                                     t.includes('开始发帖') || t.includes('Create a post');
-                            });
-            if (trigger) { trigger.click(); return "opened"; }
+            var sels = ['.share-box-feed-entry__trigger','[class*=share-box-feed-entry] button',
+              '[class*=share-box-feed-entry] [role=button]','[class*=share-creation] [role=button]',
+              '.share-box-feed-entry__closed-share-box button'];
+            for (var i = 0; i < sels.length; i++) {
+              var el = document.querySelector(sels[i]);
+              if (el && el.offsetParent !== null) { el.click(); return "opened:" + sels[i]; }
+            }
+            var labels = ['Start a post','Create a post','发起帖子','开始发帖'];
+            for (var i = 0; i < labels.length; i++) {
+              var el = document.querySelector('[aria-label="'+labels[i]+'"]');
+              if (el) { el.click(); return "opened_aria:" + labels[i]; }
+            }
+            var texts = ['Start a post','Create a post','发起帖子','开始发帖','发布动态'];
+            var all = document.querySelectorAll('button,[role=button],[tabindex="0"]');
+            for (var i = 0; i < all.length; i++) {
+              var t = (all[i].textContent||'').trim();
+              for (var j = 0; j < texts.length; j++) {
+                if (t.includes(texts[j])) { all[i].click(); return "opened_text:" + texts[j]; }
+              }
+            }
             return "no_trigger";
           })()
       - wait: 2000
@@ -37,21 +48,27 @@ commands:
       # 点击媒体上传按钮
       - eval: >-
           (function(){
-            var mediaBtn =
-              document.querySelector('button[aria-label*="Add a photo"]') ||
-              document.querySelector('button[aria-label*="Add media"]') ||
-              document.querySelector('button[aria-label*="添加媒体"]') ||
-              document.querySelector('button[aria-label*="添加照片"]') ||
-              document.querySelector('button[aria-label*="Photo"]') ||
-              document.querySelector('button[aria-label*="Video"]') ||
-              document.querySelector('button[aria-label*="视频"]') ||
-              document.querySelector('.share-promoted-detour-button--media') ||
-              [...document.querySelectorAll('.share-box--modal button, [class*=share-creation] button')]
-                .find(function(b){
-                  var label = (b.getAttribute('aria-label') || '') + ' ' + b.textContent;
-                  return /photo|video|media|图片|视频|媒体/i.test(label);
-                });
-            if (mediaBtn) { mediaBtn.click(); return "opened_media"; }
+            var labels = ['Add a photo','Add a video','Add media','Media',
+              '添加照片','添加视频','添加媒体','媒体','Photo','Video','Image'];
+            for (var i = 0; i < labels.length; i++) {
+              var el = document.querySelector('button[aria-label*="'+labels[i]+'"]');
+              if (el) { el.click(); return "opened_media:" + labels[i]; }
+            }
+            var cls = ['.share-promoted-detour-button--media',
+              '[class*=share-box] [class*=media] button',
+              '[class*=share-creation] [class*=media]',
+              '[class*=image-sharing-detour]'];
+            for (var i = 0; i < cls.length; i++) {
+              var el = document.querySelector(cls[i]);
+              if (el) { el.click(); return "opened_cls:" + cls[i]; }
+            }
+            var btns = document.querySelectorAll('[class*=share-box--modal] button, [class*=share-creation] button, [class*=share-actions] button');
+            for (var i = 0; i < btns.length; i++) {
+              var label = (btns[i].getAttribute('aria-label') || '') + ' ' + btns[i].textContent;
+              if (/photo|video|media|image|图片|视频|媒体/i.test(label)) {
+                btns[i].click(); return "opened_scan";
+              }
+            }
             return "no_media_btn";
           })()
       - wait: 1500
