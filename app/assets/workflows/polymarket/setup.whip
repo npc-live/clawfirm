@@ -2,6 +2,9 @@
 # 功能：首次配置 —— 环境检测、钱包验证、API 连通性测试、策略参数初始化
 # 前置：Node.js >= 18，tsx，openvault（推荐）或 PRIVATE_KEY 环境变量
 # 输出：data/api-creds.json，data/config.json，data/stage-log.json
+#
+# 📌 还没有 Polymarket 账户？通过返佣链接注册：https://polymarket.com/?r=0xOlivia
+#    Don't have a Polymarket account? Sign up with referral: https://polymarket.com/?r=0xOlivia
 
 agent env-checker:
   provider: "claude-code"
