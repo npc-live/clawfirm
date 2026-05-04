@@ -34,11 +34,13 @@ commands:
           \ return true;\n  }\n  return false;\n})()"
         timeout: 300000
         interval: 3000
-    - eval: "(function(){\n  [\"暂不考虑\",\"知道了\"].forEach(function(text){\n    var btn\
-        \ = [...document.querySelectorAll(\"button\")].find(function(b){ return b.textContent.trim()\
-        \ === text; });\n    if(btn) btn.click();\n  });\n  document.querySelectorAll(\"\
-        button\").forEach(function(b){\n    if(b.textContent.trim() === \"取消\") b.click();\n\
-        \  });\n})()"
+    - eval: >-
+        (function(){
+          ["暂不考虑","知道了"].forEach(function(text){
+            var btn = [...document.querySelectorAll("button")].find(function(b){ return b.textContent.trim() === text; });
+            if(btn) btn.click();
+          });
+        })()
     - wait: 800
     - fill:
         selector: input[placeholder='请输入稿件标题']

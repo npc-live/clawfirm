@@ -97,7 +97,7 @@ commands:
           timeout: 600000
           interval: 5000
       - wait: 1000
-      # 填写标题
+      # 填写标题 (focus + clear via eval, then insert_text for safe char handling)
       - eval: >-
           (function(){
             var titleBox = document.querySelector('#title-textarea #textbox') ||
@@ -107,12 +107,12 @@ commands:
             titleBox.focus();
             document.execCommand("selectAll", false, null);
             document.execCommand("delete", false, null);
-            document.execCommand("insertText", false, "{{title}}");
-            titleBox.dispatchEvent(new Event('input', {bubbles: true}));
-            return "ok";
+            return "cleared";
           })()
+      - wait: 300
+      - insert_text: "{{title}}"
       - wait: 500
-      # 填写描述
+      # 填写描述 (focus + clear via eval, then insert_text for safe char handling)
       - eval: >-
           (function(){
             var descBox = document.querySelector('#description-textarea #textbox') ||
@@ -122,10 +122,10 @@ commands:
             descBox.focus();
             document.execCommand("selectAll", false, null);
             document.execCommand("delete", false, null);
-            document.execCommand("insertText", false, "{{desc}}");
-            descBox.dispatchEvent(new Event('input', {bubbles: true}));
-            return "ok";
+            return "cleared";
           })()
+      - wait: 300
+      - insert_text: "{{desc}}"
       - wait: 500
       # 停在 Details 页，不点 Next/Publish，由用户手动完成
       - capture:

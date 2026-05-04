@@ -53,20 +53,14 @@ commands:
           (function(){
             var body = document.body.innerText;
             if (body.includes('Upload complete') || body.includes('上传完成') ||
-                body.includes('Uploaded') || body.includes('Ready to post') ||
-                body.includes('Processing') || body.includes('处理中')) return true;
+                body.includes('Uploaded') || body.includes('Ready to post')) return true;
             var btns = document.querySelectorAll('button');
             for (var i = 0; i < btns.length; i++) {
               var t = btns[i].textContent.trim();
               if (/^(Post|Schedule|发布|Publish)$/i.test(t) && btns[i].offsetParent !== null && !btns[i].disabled) return true;
             }
-            var editor = document.querySelector('[contenteditable="true"][data-text]') ||
-                         document.querySelector('[data-e2e="caption-editor"] [contenteditable]');
-            if (editor && editor.offsetParent !== null) {
-              var uploading = document.querySelector('[class*=upload-progress], [class*=uploading-progress]');
-              if (!uploading) return true;
-              if ((uploading.textContent || '').includes('100%')) return true;
-            }
+            var uploading = document.querySelector('[class*=upload-progress], [class*=uploading-progress]');
+            if (uploading && (uploading.textContent || '').includes('100%')) return true;
             return false;
           })()
         timeout: 600000
@@ -103,21 +97,8 @@ commands:
           return "cleared";
         })()
     - wait: 300
-    # 填写描述
-    - eval: >-
-        (function(){
-          var editor = document.querySelector('[contenteditable="true"][data-text]') ||
-                       document.querySelector('[data-e2e="caption-editor"] [contenteditable="true"]') ||
-                       document.querySelector('.public-DraftEditor-content') ||
-                       document.querySelector('[class*=caption] [contenteditable="true"]') ||
-                       document.querySelector('[class*=editor] [contenteditable="true"]') ||
-                       document.querySelector('[contenteditable="true"]');
-          if (!editor) return "no_editor";
-          editor.focus();
-          document.execCommand("insertText", false, "{{desc}}");
-          editor.dispatchEvent(new Event('input', {bubbles: true}));
-          return "ok";
-        })()
+    # 填写描述 (use insert_text to safely handle emojis, newlines, special chars)
+    - insert_text: "{{desc}}"
     - wait: 800
     # Tags
     - capture:
@@ -339,12 +320,13 @@ commands:
           return "no_suggestion";
         })()
     - wait: 500
-    # Covers
+    # Covers — horizontal
     - eval: >-
         (function(){
           var cover = "{{cover_h}}";
-          if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-          return "has_cover";
+          if (!cover || cover.indexOf("{{") === 0) return "LOG[cover_h] no_cover, skipping";
+          var allBtns = [...document.querySelectorAll('button,div,span')].filter(function(el){ return el.offsetParent !== null; }).map(function(el){ return el.tagName + ':' + el.textContent.trim().slice(0,30); }).slice(0,20);
+          return "LOG[cover_h] has_cover, visible_btns=" + JSON.stringify(allBtns);
         })()
     - eval: >-
         (function(){
@@ -355,10 +337,18 @@ commands:
               var t = el.textContent.trim().toLowerCase();
               return t === 'edit cover' || t === '编辑封面' || t === 'select cover' || t === '选择封面' || t === 'change cover' || t === '更换封面';
             });
-          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
-          return "no_cover_btn";
+          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "LOG[cover_h] edit_cover clicked:" + btn.textContent.trim(); }
+          return "LOG[cover_h] no_cover_btn found";
         })()
     - wait: 2000
+    - eval: >-
+        (function(){
+          var cover = "{{cover_h}}";
+          if (!cover || cover.indexOf("{{") === 0) return "skip";
+          var fileInputs = [...document.querySelectorAll('input[type=file]')].map(function(el){ return 'accept=' + el.accept + ' visible=' + (el.offsetParent!==null); });
+          var btns = [...document.querySelectorAll('button,div,span')].filter(function(el){ var t=el.textContent.trim().toLowerCase(); return t.includes('upload') || t.includes('上传'); }).map(function(el){ return el.tagName+':'+el.textContent.trim().slice(0,30); });
+          return "LOG[cover_h] pre_upload: fileInputs=" + JSON.stringify(fileInputs) + " uploadBtns=" + JSON.stringify(btns);
+        })()
     - eval: >-
         (function(){
           var cover = "{{cover_h}}";
@@ -368,10 +358,17 @@ commands:
               var t = el.textContent.trim().toLowerCase();
               return t === 'upload cover' || t === '上传封面' || t === 'upload image' || t === 'upload';
             });
-          if (btn) { btn.click(); return "clicked"; }
-          return "already_in_upload";
+          if (btn) { btn.click(); return "LOG[cover_h] upload_btn clicked:" + btn.textContent.trim(); }
+          return "LOG[cover_h] no upload_btn, already_in_upload";
         })()
     - wait: 1000
+    - eval: >-
+        (function(){
+          var cover = "{{cover_h}}";
+          if (!cover || cover.indexOf("{{") === 0) return "skip";
+          var fileInputs = [...document.querySelectorAll('input[type=file]')].map(function(el){ return 'accept=' + el.accept + ' name=' + el.name + ' visible=' + (el.offsetParent!==null); });
+          return "LOG[cover_h] before_wait_until: fileInputs=" + JSON.stringify(fileInputs) + " url=" + location.href;
+        })()
     - wait_until:
         eval: >-
           (function(){
@@ -394,22 +391,22 @@ commands:
               var t = b.textContent.trim().toLowerCase();
               return t === 'done' || t === '完成' || t === 'confirm' || t === '确认' || t === 'save' || t === '保存';
             });
-          if (btn) { btn.click(); return "clicked"; }
-          return "no_done_btn";
+          if (btn) { btn.click(); return "LOG[cover_h] done_btn clicked"; }
+          return "LOG[cover_h] no_done_btn";
         })()
     - wait: 1500
-    # 竖版封面
+    # Covers — vertical
     - eval: >-
         (function(){
           var cover = "{{cover_v}}";
-          if (!cover || cover.indexOf("{{") === 0) return "skip";
+          if (!cover || cover.indexOf("{{") === 0) return "LOG[cover_v] no_cover, skipping";
           var btn = [...document.querySelectorAll('button,div,span')]
             .find(function(el){
               var t = el.textContent.trim().toLowerCase();
               return t === 'edit cover' || t === '编辑封面' || t === 'select cover' || t === '选择封面' || t === 'change cover' || t === '更换封面';
             });
-          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
-          return "no_cover_btn";
+          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "LOG[cover_v] edit_cover clicked:" + btn.textContent.trim(); }
+          return "LOG[cover_v] no_cover_btn found";
         })()
     - wait: 2000
     - eval: >-
@@ -421,10 +418,18 @@ commands:
               var t = el.textContent.trim().toLowerCase();
               return t === 'vertical' || t === '竖版' || t === '9:16' || t === 'portrait';
             });
-          if (tabs.length > 0) { tabs[0].click(); return "switched_vertical"; }
-          return "no_vertical_tab";
+          if (tabs.length > 0) { tabs[0].click(); return "LOG[cover_v] switched_vertical:" + tabs[0].textContent.trim(); }
+          return "LOG[cover_v] no_vertical_tab";
         })()
     - wait: 1000
+    - eval: >-
+        (function(){
+          var cover = "{{cover_v}}";
+          if (!cover || cover.indexOf("{{") === 0) return "skip";
+          var fileInputs = [...document.querySelectorAll('input[type=file]')].map(function(el){ return 'accept=' + el.accept + ' visible=' + (el.offsetParent!==null); });
+          var btns = [...document.querySelectorAll('button,div,span')].filter(function(el){ var t=el.textContent.trim().toLowerCase(); return t.includes('upload') || t.includes('上传'); }).map(function(el){ return el.tagName+':'+el.textContent.trim().slice(0,30); });
+          return "LOG[cover_v] pre_upload: fileInputs=" + JSON.stringify(fileInputs) + " uploadBtns=" + JSON.stringify(btns);
+        })()
     - eval: >-
         (function(){
           var cover = "{{cover_v}}";
@@ -434,10 +439,17 @@ commands:
               var t = el.textContent.trim().toLowerCase();
               return t === 'upload cover' || t === '上传封面' || t === 'upload image' || t === 'upload';
             });
-          if (btn) { btn.click(); return "clicked"; }
-          return "already_in_upload";
+          if (btn) { btn.click(); return "LOG[cover_v] upload_btn clicked:" + btn.textContent.trim(); }
+          return "LOG[cover_v] no upload_btn, already_in_upload";
         })()
     - wait: 1000
+    - eval: >-
+        (function(){
+          var cover = "{{cover_v}}";
+          if (!cover || cover.indexOf("{{") === 0) return "skip";
+          var fileInputs = [...document.querySelectorAll('input[type=file]')].map(function(el){ return 'accept=' + el.accept + ' name=' + el.name + ' visible=' + (el.offsetParent!==null); });
+          return "LOG[cover_v] before_wait_until: fileInputs=" + JSON.stringify(fileInputs);
+        })()
     - wait_until:
         eval: >-
           (function(){
@@ -460,8 +472,8 @@ commands:
               var t = b.textContent.trim().toLowerCase();
               return t === 'done' || t === '完成' || t === 'confirm' || t === '确认' || t === 'save' || t === '保存';
             });
-          if (btn) { btn.click(); return "clicked"; }
-          return "no_done_btn";
+          if (btn) { btn.click(); return "LOG[cover_v] done_btn clicked"; }
+          return "LOG[cover_v] no_done_btn";
         })()
     - wait: 1000
     # 不点击发布，由用户手动确认

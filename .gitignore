@@ -1,5 +1,6 @@
 bin/
 **/.DS_Store
+node_modules/
 
 # Temp / scratch files
 OPTIMIZATION_PLAN.md

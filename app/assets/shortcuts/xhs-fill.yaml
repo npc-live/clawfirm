@@ -32,7 +32,7 @@ commands:
           \ return true;\n  }\n  var btn = [...document.querySelectorAll('button')].filter(function(b){\
           \ return b.textContent.trim() === '发布'; }).pop();\n  return !!(btn && !btn.disabled);\n\
           })()"
-        timeout: 300000
+        timeout: 600000
         interval: 3000
     - wait: 1000
     - eval: "(function(){\n  var el = document.querySelector('input.d-text');\n  if\
