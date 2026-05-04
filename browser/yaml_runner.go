@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
+	osExec "os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -182,6 +182,12 @@ func RunYAMLCommand(ctx context.Context, adapterPath, commandName string, argVal
 			return nil, fmt.Errorf("open new tab: %w", err)
 		}
 		defer cdpClient.Close()
+
+		// Bring the new tab and Chrome window to the foreground.
+		cdpClient.Send("Page.bringToFront", nil)
+		if runtime.GOOS == "darwin" {
+			osExec.Command("osascript", "-e", `tell application "Google Chrome" to activate`).Run()
+		}
 
 		// Verify login state before running any steps.
 		if adapter.LoginCheck.Cookie != "" {
@@ -1048,7 +1054,7 @@ func ensureChromeRunning(cdpPort int) error {
 	}
 
 	log.Printf("browser: launching Chrome with profile %s", profileDir)
-	cmd := exec.Command(chromePath,
+	cmd := osExec.Command(chromePath,
 		fmt.Sprintf("--remote-debugging-port=%d", cdpPort),
 		"--user-data-dir="+profileDir,
 		"--no-first-run",
@@ -1073,10 +1079,10 @@ func ensureChromeRunning(cdpPort int) error {
 func isChromeProcessRunning() bool {
 	switch runtime.GOOS {
 	case "darwin":
-		out, err := exec.Command("pgrep", "-x", "Google Chrome").Output()
+		out, err := osExec.Command("pgrep", "-x", "Google Chrome").Output()
 		return err == nil && len(strings.TrimSpace(string(out))) > 0
 	case "linux":
-		out, err := exec.Command("pgrep", "-f", "chrome|chromium").Output()
+		out, err := osExec.Command("pgrep", "-f", "chrome|chromium").Output()
 		return err == nil && len(strings.TrimSpace(string(out))) > 0
 	default:
 		return false
@@ -1106,7 +1112,7 @@ func findChromePath() string {
 		}
 	}
 	for _, name := range []string{"google-chrome", "google-chrome-stable", "chromium", "chromium-browser"} {
-		if p, err := exec.LookPath(name); err == nil {
+		if p, err := osExec.LookPath(name); err == nil {
 			return p
 		}
 	}

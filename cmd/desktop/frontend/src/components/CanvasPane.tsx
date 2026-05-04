@@ -210,14 +210,15 @@ export function CanvasPane() {
 
       {/* Toolbar */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2
-        bg-[rgb(32,32,30)] border border-[rgba(61,57,41,0.12)] rounded-xl px-3 py-1.5 shadow-xl">
+        bg-[rgb(28,28,26)] border border-dashed border-[rgba(200,190,150,0.12)] px-3 py-1.5">
         <button
           onClick={handleAddFromToolbar}
           disabled={!ready}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[12px] font-medium
-            bg-[rgba(200,90,42,0.15)] text-[#c85a2a] border border-[rgba(200,90,42,0.25)]
-            hover:bg-[rgba(200,90,42,0.25)] disabled:opacity-40 transition-colors">
-          + Chat Cell
+          className="text-[10px] px-2.5 py-1 font-mono uppercase tracking-wider border border-dashed
+            border-[rgba(200,190,150,0.25)] text-[rgba(200,190,150,0.6)]
+            hover:text-[rgba(200,190,150,0.9)] hover:border-[rgba(200,190,150,0.45)]
+            disabled:opacity-40 transition-colors">
+          [+ chat]
         </button>
         <button
           onClick={() => {
@@ -225,50 +226,49 @@ export function CanvasPane() {
             setFileNameInput("");
             ListCanvasFiles().then(files => setCanvasFiles(files ?? [])).catch(() => setCanvasFiles([]));
           }}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-[12px] font-medium
-            bg-[rgba(168,85,247,0.12)] text-purple-400 border border-[rgba(168,85,247,0.25)]
-            hover:bg-[rgba(168,85,247,0.22)] transition-colors"
-          title="Bind a cell to ~/.clawfirm/canvas/<name>.html — auto-refreshes when file changes">
-          + File Cell
+          className="text-[10px] px-2.5 py-1 font-mono uppercase tracking-wider border border-dashed
+            border-[rgba(168,85,247,0.35)] text-[rgba(168,85,247,0.65)]
+            hover:text-purple-400 hover:border-[rgba(168,85,247,0.55)] transition-colors"
+          title="Bind a cell to ~/.clawfirm/canvas/<name>.html">
+          [+ file]
         </button>
-        <span className="text-[rgba(61,57,41,0.25)] text-[11px]">or double-click</span>
-        <div className="w-px h-4 bg-[rgba(61,57,41,0.08)]" />
-        <span className="text-[11px] text-[rgba(61,57,41,0.3)] tabular-nums">{Math.round(zoom * 100)}%</span>
+        <span className="text-[rgba(200,190,150,0.2)] text-[10px] font-mono">// dbl-click</span>
+        <div className="w-px h-3 bg-[rgba(200,190,150,0.08)]" />
+        <span className="text-[10px] text-[rgba(200,190,150,0.3)] font-mono tabular-nums">{Math.round(zoom * 100)}%</span>
         <button
           onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1); }}
-          className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[#3d3929] px-1.5 py-0.5 rounded transition-colors">
-          Reset
+          className="text-[10px] font-mono text-[rgba(200,190,150,0.3)] hover:text-[rgba(200,190,150,0.6)] transition-colors">
+          [reset]
         </button>
-        <span className="text-[10px] text-[rgba(61,57,41,0.3)]">{nodes.length} cell{nodes.length !== 1 ? "s" : ""}</span>
+        <span className="text-[10px] text-[rgba(200,190,150,0.25)] font-mono">{nodes.length}c</span>
       </div>
 
       {/* File cell name dialog */}
       {newFilePrompt && (
-        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/40"
+        <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/50"
           onClick={() => setNewFilePrompt(false)}>
-          <div className="bg-[rgb(34,34,32)] border border-[rgba(61,57,41,0.1)] rounded-2xl p-5 w-80 shadow-2xl"
+          <div className="bg-[rgb(28,28,26)] border border-dashed border-[rgba(168,85,247,0.3)] p-5 w-80"
             onClick={e => e.stopPropagation()}>
-            <h3 className="text-[14px] font-semibold text-[#3d3929] mb-1">Bind File Cell</h3>
-            <p className="text-[11px] text-[rgba(61,57,41,0.4)] mb-3">
-              Watches <code className="text-purple-400">~/.clawfirm/canvas/<em>name</em>.html</code><br />
-              Any workflow that writes to this file will auto-update the Preview tab.
+            <p className="text-[10px] font-mono text-[rgba(168,85,247,0.7)] uppercase tracking-widest mb-1">// bind file cell</p>
+            <p className="text-[10px] text-[rgba(200,190,150,0.35)] font-mono mb-3">
+              watches ~/.clawfirm/canvas/<em className="text-purple-400">name</em>.html
             </p>
             {canvasFiles.length > 0 && (
               <div className="mb-3">
-                <div className="text-[11px] text-[rgba(61,57,41,0.35)] mb-1.5">Existing files</div>
+                <div className="text-[10px] text-[rgba(200,190,150,0.3)] font-mono uppercase tracking-wider mb-1.5">// existing</div>
                 <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
                   {canvasFiles.map(f => (
                     <button
                       key={f}
                       onClick={() => { addFileCell(f); setNewFilePrompt(false); }}
-                      className="text-left px-3 py-1.5 rounded-lg text-[12px] text-purple-300
-                        bg-[rgba(168,85,247,0.08)] border border-[rgba(168,85,247,0.15)]
-                        hover:bg-[rgba(168,85,247,0.18)] transition-colors truncate">
-                      {f}
+                      className="text-left px-2 py-1 text-[11px] font-mono text-purple-400
+                        border border-dashed border-[rgba(168,85,247,0.2)]
+                        hover:border-[rgba(168,85,247,0.5)] transition-colors truncate">
+                      &gt; {f}
                     </button>
                   ))}
                 </div>
-                <div className="my-3 border-t border-[rgba(61,57,41,0.08)]" />
+                <div className="my-3 border-t border-dashed border-[rgba(200,190,150,0.08)]" />
               </div>
             )}
             <input
@@ -279,22 +279,22 @@ export function CanvasPane() {
                 if (e.key === "Enter") { addFileCell(fileNameInput); setNewFilePrompt(false); }
                 if (e.key === "Escape") setNewFilePrompt(false);
               }}
-              placeholder="or type a new name…"
-              className="w-full bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.12)] rounded-lg
-                px-3 py-2 text-[13px] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)]
+              placeholder="// new name..."
+              className="w-full bg-[rgba(200,190,150,0.05)] border border-dashed border-[rgba(168,85,247,0.25)]
+                px-2 py-1.5 text-[11px] font-mono text-[rgba(200,190,150,0.8)] placeholder-[rgba(200,190,150,0.2)]
                 focus:outline-none focus:border-[rgba(168,85,247,0.5)] mb-3"
             />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setNewFilePrompt(false)}
-                className="px-3 py-1.5 rounded-lg text-[12px] text-[rgba(61,57,41,0.5)] hover:text-[rgba(61,57,41,0.65)] transition-colors">
-                Cancel
+                className="text-[10px] px-2.5 py-1 font-mono border border-dashed border-[rgba(200,190,150,0.15)] text-[rgba(200,190,150,0.35)] hover:text-[rgba(200,190,150,0.6)] transition-colors uppercase tracking-wider">
+                [cancel]
               </button>
               <button
                 onClick={() => { addFileCell(fileNameInput); setNewFilePrompt(false); }}
                 disabled={!fileNameInput.trim()}
-                className="px-4 py-1.5 rounded-lg text-[12px] font-medium bg-[rgba(168,85,247,0.2)] text-purple-400
-                  border border-[rgba(168,85,247,0.3)] hover:bg-[rgba(168,85,247,0.3)] disabled:opacity-40 transition-colors">
-                Create
+                className="text-[10px] px-2.5 py-1 font-mono border border-dashed border-[rgba(168,85,247,0.4)] text-purple-400
+                  hover:border-[rgba(168,85,247,0.6)] disabled:opacity-40 transition-colors uppercase tracking-wider">
+                [create]
               </button>
             </div>
           </div>
@@ -330,12 +330,11 @@ export function CanvasPane() {
 
       {nodes.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 2 }}>
-          <div className="text-center space-y-2">
-            <p className="text-[32px]">🎨</p>
-            <p className="text-[14px] text-[rgba(61,57,41,0.3)]">
-              {ready ? "Double-click to create a cell" : "Loading agents…"}
+          <div className="text-center">
+            <pre className="text-[10px] font-mono leading-tight text-[rgba(200,190,150,0.15)]">{`+--[CANVAS]--+\n|            |\n|   EMPTY    |\n|            |\n+------------+`}</pre>
+            <p className="text-[10px] font-mono text-[rgba(200,190,150,0.25)] mt-3 tracking-widest uppercase">
+              {ready ? "// dbl-click to create · scroll zoom · drag pan" : "// loading agents..."}
             </p>
-            <p className="text-[12px] text-[rgba(61,57,41,0.25)]">Scroll to zoom · Drag to pan</p>
           </div>
         </div>
       )}
@@ -555,18 +554,21 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   const left = node.x * zoom + pan.x;
   const top = node.y * zoom + pan.y;
 
-  const statusDot =
-    wsStatus === "open" ? "bg-emerald-400" :
-    wsStatus === "connecting" ? "bg-amber-400" : "bg-red-400";
+  const statusText =
+    wsStatus === "open" ? "[ws:ok]" :
+    wsStatus === "connecting" ? "[ws:...]" : "[ws:off]";
+  const statusCls =
+    wsStatus === "open" ? "text-[rgba(30,150,60,0.7)]" :
+    wsStatus === "connecting" ? "text-[rgba(180,130,20,0.7)]" : "text-[rgba(200,50,30,0.7)]";
 
   const tabBtn = (t: typeof tab, label: string, badge?: number) => (
     <button key={t} onClick={() => setTab(t)}
-      className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${
+      className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest transition-colors ${
         tab === t
-          ? "bg-[rgba(200,90,42,0.2)] text-[#c85a2a]"
-          : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.65)]"
+          ? "text-[rgba(200,190,150,0.9)] border-b border-[rgba(200,190,150,0.5)]"
+          : "text-[rgba(200,190,150,0.3)] hover:text-[rgba(200,190,150,0.6)]"
       }`}>
-      {label}{badge != null && badge > 0 ? ` (${badge})` : ""}
+      // {label}{badge != null && badge > 0 ? `(${badge})` : ""}
     </button>
   );
 
@@ -586,84 +588,84 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
     >
       {/* Inner div scaled by zoom */}
       <div
-        className="flex flex-col rounded-xl overflow-hidden shadow-2xl"
+        className="flex flex-col overflow-hidden"
         style={{
           width: nodeW,
           height: nodeH,
           transform: `scale(${zoom})`,
           transformOrigin: "top left",
           border: focused
-            ? "1.5px solid rgba(200,90,42,0.45)"
-            : "1.5px solid rgba(61,57,41,0.1)",
-          background: "rgb(28,28,26)",
+            ? "1px dashed rgba(200,190,150,0.4)"
+            : "1px dashed rgba(200,190,150,0.12)",
+          background: "rgb(24,24,22)",
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center gap-2 px-3 h-10 bg-[rgb(34,34,32)] border-b border-[rgba(61,57,41,0.1)]
+          className="flex items-center gap-2 px-3 h-9 bg-[rgb(30,30,28)] border-b border-dashed border-[rgba(200,190,150,0.1)]
             cursor-grab active:cursor-grabbing flex-shrink-0"
           onPointerDown={onHeaderPointerDown}
           onPointerMove={onHeaderPointerMove}
           onPointerUp={onHeaderPointerUp}
         >
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${node.htmlFile ? "bg-purple-400" : statusDot}`} />
+          <span className={`text-[9px] font-mono flex-shrink-0 ${node.htmlFile ? "text-purple-400" : statusCls}`}>
+            {node.htmlFile ? "[file]" : statusText}
+          </span>
           {node.htmlFile ? (
-            <span className="flex-1 text-[12px] font-medium text-purple-300 truncate">
-              📄 {node.htmlFile}.html
+            <span className="flex-1 text-[11px] font-mono text-purple-300 truncate">
+              {node.htmlFile}.html
             </span>
           ) : (
             <select
               value={node.agentName}
               onChange={e => onUpdate({ agentName: e.target.value })}
               onClick={e => e.stopPropagation()}
-              className="flex-1 bg-transparent text-[12px] font-medium text-[#3d3929] outline-none cursor-pointer min-w-0"
+              className="flex-1 bg-transparent text-[11px] font-mono text-[rgba(200,190,150,0.7)] outline-none cursor-pointer min-w-0"
             >
               {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
               {agentNames.length === 0 && <option value={node.agentName}>{node.agentName}</option>}
             </select>
           )}
-          <span className="text-[10px] text-[rgba(61,57,41,0.2)] font-mono flex-shrink-0">
-            {node.htmlFile ? "file" : `#${node.sessionId.slice(1, 7)}`}
+          <span className="text-[9px] text-[rgba(200,190,150,0.2)] font-mono flex-shrink-0">
+            #{node.sessionId.slice(1, 7)}
           </span>
           <button
             onClick={e => { e.stopPropagation(); onUpdate({ minimized: !node.minimized }); }}
-            title={node.minimized ? "Expand" : "Minimize"}
-            className="text-[rgba(61,57,41,0.3)] hover:text-[rgba(61,57,41,0.6)] transition-colors w-5 h-5 flex items-center justify-center text-[11px]">
-            {node.minimized ? "⬜" : "—"}
+            className="text-[rgba(200,190,150,0.3)] hover:text-[rgba(200,190,150,0.7)] transition-colors text-[10px] font-mono px-1">
+            {node.minimized ? "[+]" : "[-]"}
           </button>
           <button
             onClick={e => { e.stopPropagation(); onRemove(); }}
-            title="Close"
-            className="text-[rgba(61,57,41,0.3)] hover:text-red-400 transition-colors w-5 h-5 flex items-center justify-center text-[12px]">
-            ✕
+            className="text-[rgba(200,190,150,0.3)] hover:text-red-400 transition-colors text-[10px] font-mono px-1">
+            [x]
           </button>
         </div>
 
         {!node.minimized && (
           <>
             {/* Tab bar */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-[#f5f0e8] border-b border-[rgba(61,57,41,0.05)] flex-shrink-0">
-              {tabBtn("chat", "Chat")}
-              {tabBtn("tools", "Tools", toolExecutions.length)}
-              {tabBtn("preview", "Preview")}
+            <div className="flex items-center gap-0 px-2 py-0.5 bg-[rgb(26,26,24)] border-b border-dashed border-[rgba(200,190,150,0.08)] flex-shrink-0">
+              {tabBtn("chat", "chat")}
+              {tabBtn("tools", "tools", toolExecutions.length)}
+              {tabBtn("preview", "preview")}
             </div>
 
             {/* Body */}
             <div className="flex-1 min-h-0 overflow-hidden relative">
               {/* Chat */}
               <div className={`flex flex-col absolute inset-0 ${tab === "chat" ? "" : "hidden"}`}>
-                <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+                <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
                   {messages.length === 0 && (
-                    <p className="text-center text-[11px] text-[rgba(61,57,41,0.3)] mt-10">
-                      {wsStatus === "connecting" ? "Connecting…" : wsStatus === "closed" ? "Disconnected" : "Start a conversation"}
+                    <p className="text-center text-[10px] font-mono text-[rgba(200,190,150,0.25)] mt-10 uppercase tracking-widest">
+                      {wsStatus === "connecting" ? "// connecting..." : wsStatus === "closed" ? "// disconnected" : "// awaiting input"}
                     </p>
                   )}
                   {messages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[82%] rounded-xl px-3 py-2 text-[12px] leading-relaxed ${
+                      <div className={`max-w-[85%] px-2.5 py-2 text-[11px] font-mono leading-relaxed ${
                         msg.role === "user"
-                          ? "bg-[#c85a2a] text-white"
-                          : "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.85)] border border-[rgba(61,57,41,0.1)]"
+                          ? "border border-dashed border-[rgba(200,190,150,0.35)] text-[rgba(200,190,150,0.85)] bg-[rgba(200,190,150,0.05)]"
+                          : "border border-dashed border-[rgba(200,190,150,0.15)] text-[rgba(200,190,150,0.7)]"
                       }`}>
                         {msg.role === "assistant"
                           ? <div className="[&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal">
@@ -671,51 +673,49 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                             </div>
                           : msg.content
                         }
-                        {msg.streaming && <span className="inline-block w-1 h-3.5 ml-1 bg-current opacity-70 animate-pulse" />}
+                        {msg.streaming && <span className="inline-block w-1 h-3 ml-1 bg-current opacity-70 animate-pulse" />}
                       </div>
                     </div>
                   ))}
                   {isThinking && !messages.some(m => m.role === "assistant" && m.streaming) && (
                     <div className="flex justify-start">
-                      <div className="flex items-center gap-1.5 rounded-xl px-3 py-2 bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.1)]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_infinite]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.2s_infinite]" />
-                        <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.4s_infinite]" />
-                      </div>
+                      <span className="text-[10px] font-mono text-[rgba(200,190,150,0.4)] animate-pulse">// PROCESSING...</span>
                     </div>
                   )}
                   <div ref={bottomRef} />
                 </div>
-                <div className="border-t border-[rgba(61,57,41,0.08)] px-3 py-2 flex gap-2 items-end flex-shrink-0">
-                  <textarea
-                    ref={inputRef}
-                    rows={1}
-                    value={input}
-                    placeholder="Message… (⌘↵ send)"
-                    onChange={e => {
-                      setInput(e.target.value);
-                      e.target.style.height = "auto";
-                      e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
-                    }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
-                    }}
-                    className="flex-1 bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.1)] rounded-lg
-                      px-3 py-1.5 text-[12px] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]
-                      focus:outline-none focus:border-[rgba(200,90,42,0.4)] resize-none overflow-y-auto"
-                    style={{ minHeight: "32px", maxHeight: "100px" }}
-                  />
+                <div className="border-t border-dashed border-[rgba(200,190,150,0.08)] px-3 py-2 flex gap-2 items-end flex-shrink-0">
+                  <div className="flex-1 flex items-start border border-dashed border-[rgba(200,190,150,0.2)] bg-[rgba(200,190,150,0.03)]">
+                    <span className="pt-1.5 pl-2 text-[10px] font-mono text-[rgba(200,190,150,0.3)] flex-shrink-0">&gt;</span>
+                    <textarea
+                      ref={inputRef}
+                      rows={1}
+                      value={input}
+                      placeholder="// message... (⌘↵)"
+                      onChange={e => {
+                        setInput(e.target.value);
+                        e.target.style.height = "auto";
+                        e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px";
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
+                      }}
+                      className="flex-1 bg-transparent px-2 py-1.5 text-[11px] font-mono text-[rgba(200,190,150,0.8)] placeholder-[rgba(200,190,150,0.2)]
+                        focus:outline-none resize-none overflow-y-auto"
+                      style={{ minHeight: "32px", maxHeight: "100px" }}
+                    />
+                  </div>
                   {isStreaming ? (
                     <button onClick={handleStop}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[rgba(255,60,60,0.12)] text-red-400
-                        border border-[rgba(255,60,60,0.2)] hover:bg-[rgba(255,60,60,0.22)] transition-colors flex-shrink-0">
-                      Stop
+                      className="px-2.5 py-1.5 text-[10px] font-mono border border-dashed border-[rgba(200,50,30,0.4)] text-red-400
+                        hover:border-red-400 transition-colors flex-shrink-0 uppercase tracking-wider">
+                      [stop]
                     </button>
                   ) : (
                     <button onClick={handleSend} disabled={!input.trim() || wsStatus !== "open"}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[rgba(200,90,42,0.12)] text-[#c85a2a]
-                        border border-[rgba(200,90,42,0.2)] hover:bg-[rgba(200,90,42,0.22)] disabled:opacity-35 transition-colors flex-shrink-0">
-                      Send
+                      className="px-2.5 py-1.5 text-[10px] font-mono border border-dashed border-[rgba(200,190,150,0.25)] text-[rgba(200,190,150,0.5)]
+                        hover:text-[rgba(200,190,150,0.85)] hover:border-[rgba(200,190,150,0.45)] disabled:opacity-35 transition-colors flex-shrink-0 uppercase tracking-wider">
+                      [send]
                     </button>
                   )}
                 </div>
@@ -724,7 +724,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
               {/* Tools */}
               <div className={`absolute inset-0 overflow-y-auto ${tab === "tools" ? "" : "hidden"}`}>
                 {toolExecutions.length === 0
-                  ? <p className="text-center text-[11px] text-[rgba(61,57,41,0.3)] mt-10">No tool activity yet</p>
+                  ? <p className="text-center text-[10px] font-mono text-[rgba(200,190,150,0.25)] mt-10 uppercase tracking-widest">// no tool activity</p>
                   : <ToolPanel executions={toolExecutions} onCommand={() => {}} />
                 }
               </div>
@@ -737,14 +737,14 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                     <div className="flex flex-col items-center justify-center h-full gap-2">
                       {node.htmlFile ? (
                         <>
-                          <span className="text-[24px]">📄</span>
-                          <p className="text-[12px] text-[rgba(61,57,41,0.35)]">
-                            Waiting for <code className="text-purple-400">~/.clawfirm/canvas/{node.htmlFile}.html</code>
+                          <p className="text-[10px] font-mono text-[rgba(168,85,247,0.5)] uppercase tracking-widest">// waiting for file</p>
+                          <p className="text-[10px] font-mono text-purple-400/60 truncate px-4 text-center">
+                            ~/.clawfirm/canvas/{node.htmlFile}.html
                           </p>
-                          <p className="text-[11px] text-[rgba(61,57,41,0.3)]">Polling every 5s…</p>
+                          <p className="text-[10px] font-mono text-[rgba(200,190,150,0.2)]">// polling 5s</p>
                         </>
                       ) : (
-                        <p className="text-[11px] text-[rgba(61,57,41,0.3)]">No HTML preview yet</p>
+                        <p className="text-[10px] font-mono text-[rgba(200,190,150,0.25)] uppercase tracking-widest">// no preview</p>
                       )}
                     </div>
                   )
@@ -755,7 +755,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
             {/* Resize handle */}
             <div
               className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-10"
-              style={{ background: "linear-gradient(135deg, transparent 50%, rgba(61,57,41,0.1) 50%)", borderRadius: "0 0 10px 0" }}
+              style={{ background: "linear-gradient(135deg, transparent 50%, rgba(200,190,150,0.1) 50%)" }}
               onPointerDown={onResizePointerDown}
               onPointerMove={onResizePointerMove}
               onPointerUp={onResizePointerUp}

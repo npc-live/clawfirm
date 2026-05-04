@@ -27,7 +27,7 @@ interface Props {
   onOpenChat: (agentName: string, sessionID: string) => void;
 }
 interface SessionPreview { id: string; preview: string; lastMs: number; }
-type NavTab = "chats" | "canvas" | "skills" | "cron" | "memory" | "agents" | "channels" | "providers" | "whipflow" | "vault" | "browser" | "settings";
+type NavTab = "chats" | "canvas" | "skills" | "cron" | "memory" | "agents" | "channels" | "whipflow" | "vault" | "browser" | "settings";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Root
@@ -91,34 +91,33 @@ export function Dashboard({ onOpenChat }: Props) {
   }, []);
 
   return (
-    <div className="flex h-full bg-[#f5f0e8]">
+    <div className="flex h-full bg-[#f0ece3]">
       {/* Sidebar */}
-      <aside className="w-52 flex-shrink-0 bg-[#ece5d8] border-r border-[rgba(61,57,41,0.12)] flex flex-col h-full">
-        <div className="px-5 pt-6 pb-4">
-          <h1 className="text-[15px] font-semibold text-[#3d3929] tracking-tight">Clawfirm</h1>
-          <p className="text-[11px] text-[rgba(61,57,41,0.45)] mt-0.5">AI Gateway</p>
+      <aside className="w-52 flex-shrink-0 bg-[#e8e4db] border-r border-dashed border-[rgba(30,28,23,0.15)] flex flex-col h-full">
+        <div className="px-5 pt-6 pb-4 border-b border-dashed border-[rgba(30,28,23,0.1)]">
+          <h1 className="text-[12px] font-bold text-[#1e1c17] tracking-widest uppercase">// Clawfirm</h1>
+          <p className="text-[11px] text-[rgba(30,28,23,0.4)] mt-1 tracking-wider uppercase">AI Gateway</p>
         </div>
-        <nav className="flex-1 px-3 space-y-0.5">
-          <SidebarItem icon="💬" label="Chats" active={nav === "chats"} onClick={() => setNav("chats")} />
-          <SidebarItem icon="🎨" label="Canvas" active={nav === "canvas"} onClick={() => setNav("canvas")} />
-          <SidebarItem icon="🧩" label="Skills" active={nav === "skills"} onClick={() => { setNav("skills"); setSkillsKey(k => k + 1); }} />
-          <SidebarItem icon="🕐" label="Cron" active={nav === "cron"} onClick={() => setNav("cron")} />
-          <SidebarItem icon="🧠" label="Memory" active={nav === "memory"} onClick={() => setNav("memory")} />
-          <SidebarItem icon="🤖" label="Agents" active={nav === "agents"} onClick={() => setNav("agents")} />
-          <SidebarItem icon="📡" label="Channels" active={nav === "channels"} onClick={() => setNav("channels")} />
-          <SidebarItem icon="🔑" label="Providers" active={nav === "providers"} onClick={() => setNav("providers")} />
-          <SidebarItem icon="🔐" label="Vault" active={nav === "vault"} onClick={() => setNav("vault")} />
-          <SidebarItem icon="⚡" label="WhipFlow" active={nav === "whipflow"} onClick={() => setNav("whipflow")} />
-          <SidebarItem icon="🌐" label="Browser" active={nav === "browser"} onClick={() => setNav("browser")} />
-          <SidebarItem icon="⚙️" label="Settings" active={nav === "settings"} onClick={() => setNav("settings")} />
+        <nav className="flex-1 px-3 py-3 space-y-0.5">
+          <SidebarItem icon=">" label="chats" active={nav === "chats"} onClick={() => setNav("chats")} />
+          <SidebarItem icon=">" label="canvas" active={nav === "canvas"} onClick={() => setNav("canvas")} />
+          <SidebarItem icon=">" label="skills" active={nav === "skills"} onClick={() => { setNav("skills"); setSkillsKey(k => k + 1); }} />
+          <SidebarItem icon=">" label="cron" active={nav === "cron"} onClick={() => setNav("cron")} />
+          <SidebarItem icon=">" label="memory" active={nav === "memory"} onClick={() => setNav("memory")} />
+          <SidebarItem icon=">" label="agents" active={nav === "agents"} onClick={() => setNav("agents")} />
+          <SidebarItem icon=">" label="channels" active={nav === "channels"} onClick={() => setNav("channels")} />
+          <SidebarItem icon=">" label="vault" active={nav === "vault"} onClick={() => setNav("vault")} />
+          <SidebarItem icon=">" label="whipflow" active={nav === "whipflow"} onClick={() => setNav("whipflow")} />
+          <SidebarItem icon=">" label="browser" active={nav === "browser"} onClick={() => setNav("browser")} />
+          <SidebarItem icon=">" label="settings" active={nav === "settings"} onClick={() => setNav("settings")} />
         </nav>
-        <div className="px-4 py-4 border-t border-[rgba(61,57,41,0.1)]">
-          <p className="text-[11px] text-[rgba(61,57,41,0.4)]">{channels.length} agent{channels.length !== 1 ? "s" : ""}</p>
+        <div className="px-5 py-4 border-t border-dashed border-[rgba(30,28,23,0.1)]">
+          <p className="text-[11px] text-[rgba(30,28,23,0.4)] font-mono uppercase tracking-wider">// {channels.length} agent{channels.length !== 1 ? "s" : ""} online</p>
         </div>
       </aside>
 
       {/* Content */}
-      <main className={`flex-1 min-h-0 ${nav === "canvas" || nav === "whipflow" ? "overflow-hidden" : "overflow-y-auto"}`}>
+      <main className={`flex-1 min-h-0 bg-[#f0ece3] ${nav === "canvas" || nav === "whipflow" ? "overflow-hidden" : "overflow-y-auto"}`}>
         {nav === "chats" && <ChatsPane sessionMap={sessionMap} channels={channels} onOpenChat={onOpenChat} />}
         {nav === "canvas" && <div className="w-full h-full"><CanvasPane /></div>}
         {nav === "skills" && <SkillsPane key={skillsKey} />}
@@ -126,7 +125,6 @@ export function Dashboard({ onOpenChat }: Props) {
         {nav === "memory" && <MemoryPane />}
         {nav === "agents" && <AgentsPane onAgentsChanged={loadChannels} />}
         {nav === "channels" && <ChannelsPane />}
-        {nav === "providers" && <ProvidersPane />}
         {nav === "vault" && <VaultPane />}
         {nav === "whipflow" && <WhipflowPane />}
         {nav === "browser" && <BrowserPane />}
@@ -136,15 +134,16 @@ export function Dashboard({ onOpenChat }: Props) {
   );
 }
 
-function SidebarItem({ icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) {
+function SidebarItem({ icon: _icon, label, active, onClick }: { icon: string; label: string; active: boolean; onClick: () => void }) {
   return (
     <button onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors text-left ${
+      className={`w-full flex items-center gap-3 px-4 py-2 text-[12px] transition-colors text-left tracking-wider uppercase font-mono ${
         active
-          ? "bg-[rgba(61,57,41,0.1)] text-[#3d3929] font-medium"
-          : "text-[rgba(61,57,41,0.6)] hover:bg-[rgba(61,57,41,0.06)] hover:text-[#3d3929]"
+          ? "bg-[rgba(30,28,23,0.08)] text-[#1e1c17] border-l-2 border-[#1e1c17]"
+          : "text-[rgba(30,28,23,0.4)] hover:bg-[rgba(30,28,23,0.05)] hover:text-[#1e1c17]"
       }`}>
-      <span className="text-base leading-none">{icon}</span>{label}
+      <span className={`text-[14px] leading-none font-bold ${active ? "text-[#1e1c17]" : "text-[rgba(30,28,23,0.35)]"}`}>&gt;</span>
+      {label}
     </button>
   );
 }
@@ -228,11 +227,11 @@ function SkillsPane() {
 
   return (
     <div className="p-8">
-      <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">
-          Skills
-          <span className="ml-2 text-[11px] font-normal text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.08)] px-2 py-0.5 rounded-full">
-            {loading ? "…" : `${skills.length} loaded`}
+      <header className="mb-5 border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">
+          // skills
+          <span className="ml-2 text-[10px] font-normal text-[rgba(30,28,23,0.4)] font-mono">
+            {loading ? "[loading]" : `[${skills.length} loaded]`}
           </span>
         </h2>
       </header>
@@ -246,15 +245,15 @@ function SkillsPane() {
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doSearch()}
             placeholder="Search remote skills (e.g. code-review, commit)…"
-            className="flex-1 px-3 py-2 rounded-lg bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.12)]
-              text-[13px] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)]
-              focus:outline-none focus:border-[rgba(61,57,41,0.2)] transition-colors"
+            className="flex-1 px-3 py-2 rounded-sm bg-[rgba(30,28,23,0.08)] border border-[rgba(30,28,23,0.12)]
+              text-[13px] text-[#1e1c17] placeholder-[rgba(30,28,23,0.2)]
+              focus:outline-none focus:border-[rgba(30,28,23,0.2)] transition-colors"
           />
           <button
             onClick={doSearch}
             disabled={searching || !searchQuery.trim()}
-            className="px-4 py-2 rounded-lg bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.12)]
-              text-[13px] text-[#3d3929] hover:bg-[rgba(61,57,41,0.1)] transition-colors
+            className="px-4 py-2 rounded-sm bg-[rgba(30,28,23,0.08)] border border-[rgba(30,28,23,0.12)]
+              text-[13px] text-[#1e1c17] hover:bg-[rgba(30,28,23,0.1)] transition-colors
               disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {searching ? "Searching…" : "Search"}
@@ -266,20 +265,20 @@ function SkillsPane() {
         )}
 
         {searchDone && searchResults.length === 0 && (
-          <p className="mt-3 text-[13px] text-[rgba(61,57,41,0.5)] italic">No remote skills found.</p>
+          <p className="mt-3 text-[13px] text-[rgba(30,28,23,0.5)] italic">No remote skills found.</p>
         )}
         {searchResults.length > 0 && (
           <div className="mt-3 space-y-2">
             {searchResults.map((r) => (
-              <div key={r.name} className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)]">
+              <div key={r.name} className="flex items-center gap-3 px-4 py-3 rounded-sm bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.1)]">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-medium text-[#3d3929]">{r.name}</p>
-                    <span className="text-[11px] text-[rgba(61,57,41,0.35)] font-mono">v{r.version}</span>
-                    {r.author && <span className="text-[11px] text-[rgba(61,57,41,0.2)]">by {r.author}</span>}
+                    <p className="text-[13px] font-medium text-[#1e1c17]">{r.name}</p>
+                    <span className="text-[11px] text-[rgba(30,28,23,0.35)] font-mono">v{r.version}</span>
+                    {r.author && <span className="text-[11px] text-[rgba(30,28,23,0.2)]">by {r.author}</span>}
                   </div>
                   {r.description && (
-                    <p className="text-[12px] text-[rgba(61,57,41,0.5)] mt-0.5 line-clamp-2">{r.description}</p>
+                    <p className="text-[12px] text-[rgba(30,28,23,0.5)] mt-0.5 line-clamp-2">{r.description}</p>
                   )}
                 </div>
                 <button
@@ -299,7 +298,7 @@ function SkillsPane() {
 
       {/* ── Local skills ── */}
       {!loading && skills.length === 0 && !searchDone && (
-        <p className="text-[13px] text-[rgba(61,57,41,0.5)] italic">No skills found.</p>
+        <p className="text-[13px] text-[rgba(30,28,23,0.5)] italic">No skills found.</p>
       )}
       <div className="space-y-2 max-w-2xl">
         {skills.map((s) => {
@@ -307,27 +306,27 @@ function SkillsPane() {
           const content = contentMap[s.filePath] ?? "";
           const urls = isOpen ? extractUrls(content) : [];
           return (
-            <div key={s.filePath} className="rounded-lg bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)] overflow-hidden">
-              <button className="w-full text-left px-4 py-3 hover:bg-[rgba(61,57,41,0.03)] transition-colors"
+            <div key={s.filePath} className="rounded-sm bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.1)] overflow-hidden">
+              <button className="w-full text-left px-4 py-3 hover:bg-[rgba(30,28,23,0.03)] transition-colors"
                 onClick={() => toggle(s.filePath)}>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[13px] font-medium text-[#3d3929]">{s.name}</p>
-                  <span className="text-[rgba(61,57,41,0.4)] text-[11px] flex-shrink-0">{isOpen ? "▲" : "▼"}</span>
+                  <p className="text-[13px] font-medium text-[#1e1c17]">{s.name}</p>
+                  <span className="text-[rgba(30,28,23,0.4)] text-[11px] flex-shrink-0">{isOpen ? "▲" : "▼"}</span>
                 </div>
                 {s.description && (
-                  <p className="text-[12px] text-[rgba(61,57,41,0.5)] mt-0.5 line-clamp-2">{s.description}</p>
+                  <p className="text-[12px] text-[rgba(30,28,23,0.5)] mt-0.5 line-clamp-2">{s.description}</p>
                 )}
-                <p className="text-[11px] text-[rgba(61,57,41,0.3)] font-mono mt-1">{s.filePath}</p>
+                <p className="text-[11px] text-[rgba(30,28,23,0.3)] font-mono mt-1">{s.filePath}</p>
               </button>
 
               {isOpen && (
-                <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3 space-y-3">
+                <div className="border-t border-[rgba(30,28,23,0.08)] px-4 py-3 space-y-3">
                   {/* URLs */}
                   {content === "" ? (
-                    <p className="text-[12px] text-[rgba(61,57,41,0.4)]">Loading…</p>
+                    <p className="text-[12px] text-[rgba(30,28,23,0.4)]">Loading…</p>
                   ) : urls.length > 0 ? (
                     <div>
-                      <p className="text-[11px] font-semibold text-[rgba(61,57,41,0.5)] uppercase tracking-wider mb-2">URLs</p>
+                      <p className="text-[11px] font-semibold text-[rgba(30,28,23,0.5)] uppercase tracking-wider mb-2">URLs</p>
                       <div className="space-y-1">
                         {urls.map((u) => (
                           <p key={u} className="text-[12px] font-mono text-[rgba(200,90,42,0.8)] break-all">{u}</p>
@@ -337,8 +336,8 @@ function SkillsPane() {
                   ) : null}
                   {/* Raw content */}
                   <div>
-                    <p className="text-[11px] font-semibold text-[rgba(61,57,41,0.5)] uppercase tracking-wider mb-2">Content</p>
-                    <pre className="text-[11px] text-[rgba(61,57,41,0.5)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
+                    <p className="text-[11px] font-semibold text-[rgba(30,28,23,0.5)] uppercase tracking-wider mb-2">Content</p>
+                    <pre className="text-[11px] text-[rgba(30,28,23,0.5)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto font-mono leading-relaxed">
                       {content}
                     </pre>
                   </div>
@@ -549,24 +548,24 @@ function CronJobsPane() {
     setHistoryJobId(id => id === jobId ? null : jobId);
   }
 
-  const inputCls = "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]";
+  const inputCls = "w-full px-3 py-2 text-[13px] border border-[rgba(30,28,23,0.12)] rounded focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(30,28,23,0.05)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.3)]";
 
   return (
     <div className="p-8 h-full flex flex-col">
-      <header className="mb-6 flex-shrink-0 flex items-center justify-between">
+      <header className="mb-5 flex-shrink-0 flex items-center justify-between border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
         <div>
-          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">
-            Cron Jobs
-            <span className="ml-2 text-[11px] font-normal text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.08)] px-2 py-0.5 rounded-full">
-              {loading ? "…" : `${jobs.length}`}
+          <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">
+            // cron jobs
+            <span className="ml-2 text-[10px] font-normal text-[rgba(30,28,23,0.4)] font-mono">
+              {loading ? "[loading]" : `[${jobs.length}]`}
             </span>
           </h2>
-          <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Schedule agents to run on a timer</p>
+          <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 tracking-wider uppercase">schedule agents on a timer</p>
         </div>
         {editing === null && (
           <button onClick={startNew}
-            className="text-[13px] bg-[#c85a2a] text-white px-4 py-2 rounded-xl hover:bg-[#a84a22] transition-colors font-semibold">
-            + New Job
+            className="text-[10px] text-[#1e1c17] px-3 py-1.5 border border-dashed border-[rgba(30,28,23,0.3)] hover:bg-[rgba(30,28,23,0.06)] transition-colors font-mono uppercase tracking-wider">
+            [+ new job]
           </button>
         )}
       </header>
@@ -574,16 +573,16 @@ function CronJobsPane() {
       {/* Edit / Create form */}
       {editing !== null && (
         <GlassCard className="mb-5 flex-shrink-0 max-w-2xl">
-          <h3 className="text-[13px] font-semibold text-[#3d3929] mb-4">
+          <h3 className="text-[13px] font-semibold text-[#1e1c17] mb-4">
             {editing === "new" ? "New Cron Job" : "Edit Cron Job"}
           </h3>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Name</label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Name</label>
               <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="daily-report" className={inputCls} />
             </div>
             <div>
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Agent</label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Agent</label>
               <select value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} className={selectCls}>
                 <option value="">— select agent —</option>
                 {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
@@ -591,14 +590,14 @@ function CronJobsPane() {
             </div>
           </div>
           <div className="mt-3">
-            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Schedule Kind</label>
+            <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Schedule Kind</label>
             <div className="flex gap-2">
               {(["cron", "every", "at"] as const).map((k) => (
                 <button key={k} onClick={() => setForm({ ...form, scheduleKind: k })}
-                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
+                  className={`px-3 py-1.5 rounded-sm text-[12px] font-medium transition-colors ${
                     form.scheduleKind === k
                       ? "bg-[rgba(200,90,42,0.2)] text-[#c85a2a] border border-[rgba(200,90,42,0.3)]"
-                      : "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.5)] border border-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.08)]"
+                      : "bg-[rgba(30,28,23,0.05)] text-[rgba(30,28,23,0.5)] border border-[rgba(30,28,23,0.08)] hover:bg-[rgba(30,28,23,0.08)]"
                   }`}>
                   {k}
                 </button>
@@ -608,11 +607,11 @@ function CronJobsPane() {
           {form.scheduleKind === "cron" && (
             <div className="grid grid-cols-2 gap-3 mt-3">
               <div>
-                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Cron Expression</label>
+                <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Cron Expression</label>
                 <input value={form.expr} onChange={(e) => setForm({ ...form, expr: e.target.value })} placeholder="0 9 * * MON-FRI" className={inputCls} />
               </div>
               <div>
-                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Timezone (optional)</label>
+                <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Timezone (optional)</label>
                 <input value={form.tz} onChange={(e) => setForm({ ...form, tz: e.target.value })} placeholder="Asia/Shanghai" className={inputCls} />
               </div>
             </div>
@@ -620,11 +619,11 @@ function CronJobsPane() {
           {form.scheduleKind === "every" && (
             <div className="grid grid-cols-[1fr_auto] gap-2 mt-3">
               <div>
-                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Interval</label>
+                <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Interval</label>
                 <input type="number" min="1" value={form.everyVal} onChange={(e) => setForm({ ...form, everyVal: e.target.value })} placeholder="30" className={inputCls} />
               </div>
               <div>
-                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Unit</label>
+                <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Unit</label>
                 <select value={form.everyUnit} onChange={(e) => setForm({ ...form, everyUnit: e.target.value as EveryUnit })}
                   className={`${inputCls} appearance-none cursor-pointer pr-8`}>
                   <option value="seconds">Seconds</option>
@@ -637,31 +636,31 @@ function CronJobsPane() {
           )}
           {form.scheduleKind === "at" && (
             <div className="mt-3">
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Run At</label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Run At</label>
               <input type="datetime-local" value={form.at} onChange={(e) => setForm({ ...form, at: e.target.value })}
                 className={`${inputCls} [color-scheme:dark]`} />
             </div>
           )}
           <div className="mt-3">
-            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Prompt</label>
+            <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Prompt</label>
             <textarea value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} rows={3} placeholder="Generate a daily report..."
               className={`${inputCls} resize-none leading-relaxed`} />
           </div>
           <div className="mt-3 flex items-center gap-2">
             <button onClick={() => setForm({ ...form, enabled: !form.enabled })}
-              className={`w-9 h-5 rounded-full transition-colors relative ${form.enabled ? "bg-[#c85a2a]" : "bg-[rgba(61,57,41,0.15)]"}`}>
+              className={`w-9 h-5 rounded-full transition-colors relative ${form.enabled ? "bg-[#c85a2a]" : "bg-[rgba(30,28,23,0.15)]"}`}>
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${form.enabled ? "left-[18px]" : "left-0.5"}`} />
             </button>
-            <span className="text-[12px] text-[rgba(61,57,41,0.5)]">{form.enabled ? "Enabled" : "Disabled"}</span>
+            <span className="text-[12px] text-[rgba(30,28,23,0.5)]">{form.enabled ? "Enabled" : "Disabled"}</span>
           </div>
           {error && <p className="text-[11px] text-red-400 mt-2">{error}</p>}
           <div className="flex gap-2 mt-4">
             <button onClick={handleSave} disabled={saving}
-              className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
+              className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] rounded hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
               {saving ? "Saving…" : "Save"}
             </button>
             <button onClick={cancelEdit}
-              className="px-4 py-2 rounded-xl border border-[rgba(61,57,41,0.12)] text-[13px] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.05)]">
+              className="px-4 py-2 rounded border border-[rgba(30,28,23,0.12)] text-[13px] text-[rgba(30,28,23,0.5)] hover:bg-[rgba(30,28,23,0.05)]">
               Cancel
             </button>
           </div>
@@ -670,18 +669,18 @@ function CronJobsPane() {
 
       {/* Job list */}
       {!loading && jobs.length === 0 && editing === null && (
-        <div className="text-center py-24 text-[rgba(61,57,41,0.4)]">
+        <div className="text-center py-24 text-[rgba(30,28,23,0.4)]">
           <div className="text-4xl mb-3">🕐</div>
           <p className="text-[13px]">No cron jobs yet. Click "+ New Job" to create one.</p>
         </div>
       )}
       <div className="space-y-2 max-w-2xl flex-1 min-h-0 overflow-y-auto">
         {jobs.map((j) => (
-          <div key={j.id} className="rounded-lg bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.1)] overflow-hidden">
+          <div key={j.id} className="rounded-sm bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.1)] overflow-hidden">
             <div className="px-4 py-3 flex items-center justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="text-[13px] font-medium text-[#3d3929] truncate">{j.name}</p>
+                  <p className="text-[13px] font-medium text-[#1e1c17] truncate">{j.name}</p>
                   <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
                     j.scheduleKind === "cron" ? "bg-[rgba(200,90,42,0.15)] text-[#c85a2a]"
                     : j.scheduleKind === "every" ? "bg-[rgba(52,199,89,0.15)] text-emerald-400"
@@ -690,22 +689,22 @@ function CronJobsPane() {
                     {j.scheduleKind}
                   </span>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                    j.enabled ? "bg-[rgba(52,199,89,0.15)] text-emerald-400" : "bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.35)]"
+                    j.enabled ? "bg-[rgba(52,199,89,0.15)] text-emerald-400" : "bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.35)]"
                   }`}>
                     {j.enabled ? "ON" : "OFF"}
                   </span>
                 </div>
-                <p className="text-[11px] text-[rgba(61,57,41,0.35)] mt-0.5 truncate">
+                <p className="text-[11px] text-[rgba(30,28,23,0.35)] mt-0.5 truncate">
                   {j.scheduleKind === "cron" && `${j.schedule.expr}${j.schedule.tz ? ` (${j.schedule.tz})` : ""}`}
                   {j.scheduleKind === "every" && j.schedule.everyMs && (() => { const h = msToHuman(j.schedule.everyMs!); return `every ${h.val} ${h.unit}`; })()}
                   {j.scheduleKind === "at" && (j.schedule.at ? new Date(j.schedule.at).toLocaleString() : "")}
                   {" · agent: "}{j.agentName}
                 </p>
-                <p className="text-[11px] text-[rgba(61,57,41,0.2)] mt-0.5 truncate">{j.prompt}</p>
+                <p className="text-[11px] text-[rgba(30,28,23,0.2)] mt-0.5 truncate">{j.prompt}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={() => handleToggle(j.id, !j.enabled)}
-                  className={`w-8 h-[18px] rounded-full transition-colors relative ${j.enabled ? "bg-[#c85a2a]" : "bg-[rgba(61,57,41,0.15)]"}`}>
+                  className={`w-8 h-[18px] rounded-full transition-colors relative ${j.enabled ? "bg-[#c85a2a]" : "bg-[rgba(30,28,23,0.15)]"}`}>
                   <span className={`absolute top-[2px] w-[14px] h-[14px] rounded-full bg-white transition-transform ${j.enabled ? "left-[15px]" : "left-[2px]"}`} />
                 </button>
                 <button onClick={() => handleTrigger(j.id)}
@@ -714,7 +713,7 @@ function CronJobsPane() {
                   {triggering === j.id ? "Running…" : "▶ Run"}
                 </button>
                 <button onClick={() => showHistory(j.id)}
-                  className="text-[11px] text-[rgba(61,57,41,0.5)] hover:text-[#3d3929] transition-colors">
+                  className="text-[11px] text-[rgba(30,28,23,0.5)] hover:text-[#1e1c17] transition-colors">
                   History
                 </button>
                 <button onClick={() => startEdit(j)}
@@ -780,20 +779,20 @@ function HistoryPanel({ jobId }: { jobId: string }) {
   }
 
   return (
-    <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3">
+    <div className="border-t border-[rgba(30,28,23,0.08)] px-4 py-3">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] font-semibold text-[rgba(61,57,41,0.5)] uppercase tracking-wider">
+        <p className="text-[11px] font-semibold text-[rgba(30,28,23,0.5)] uppercase tracking-wider">
           Execution History
         </p>
-        <button onClick={load} className="text-[10px] text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.7)] transition-colors">
+        <button onClick={load} className="text-[10px] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.7)] transition-colors">
           ↻ refresh
         </button>
       </div>
 
       {loading ? (
-        <p className="text-[11px] text-[rgba(61,57,41,0.4)]">Loading…</p>
+        <p className="text-[11px] text-[rgba(30,28,23,0.4)]">Loading…</p>
       ) : entries.length === 0 ? (
-        <p className="text-[11px] text-[rgba(61,57,41,0.4)] italic">No executions yet.</p>
+        <p className="text-[11px] text-[rgba(30,28,23,0.4)] italic">No executions yet.</p>
       ) : (
         <div className="space-y-1.5 max-h-[500px] overflow-y-auto pr-1">
           {entries.map((h) => {
@@ -801,17 +800,17 @@ function HistoryPanel({ jobId }: { jobId: string }) {
             const log = h.resultText || h.errorText || "";
             return (
               <div key={h.id}
-                className="rounded-lg border border-[rgba(61,57,41,0.1)] overflow-hidden bg-[rgba(61,57,41,0.02)]">
+                className="rounded-sm border border-[rgba(30,28,23,0.1)] overflow-hidden bg-[rgba(30,28,23,0.02)]">
                 {/* Header row */}
                 <button
                   onClick={() => setExpanded(isExpanded ? null : h.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[rgba(61,57,41,0.03)] transition-colors">
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-[rgba(30,28,23,0.03)] transition-colors">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                     h.status === "success" ? "bg-emerald-400" :
                     h.status === "error"   ? "bg-red-400" :
                     "bg-[#c85a2a] animate-pulse"
                   }`} />
-                  <span className="text-[11px] font-mono text-[rgba(61,57,41,0.5)] flex-1 truncate">
+                  <span className="text-[11px] font-mono text-[rgba(30,28,23,0.5)] flex-1 truncate">
                     {fmtTime(h.startedAt)}
                   </span>
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
@@ -819,23 +818,23 @@ function HistoryPanel({ jobId }: { jobId: string }) {
                     h.status === "error"   ? "text-red-400 bg-[rgba(255,59,48,0.1)]" :
                     "text-[#c85a2a] bg-[rgba(200,90,42,0.1)]"
                   }`}>{h.status}</span>
-                  <span className="text-[10px] text-[rgba(61,57,41,0.2)] tabular-nums w-12 text-right">
+                  <span className="text-[10px] text-[rgba(30,28,23,0.2)] tabular-nums w-12 text-right">
                     {duration(h)}
                   </span>
-                  <span className="text-[10px] text-[rgba(61,57,41,0.3)]">{isExpanded ? "▲" : "▼"}</span>
+                  <span className="text-[10px] text-[rgba(30,28,23,0.3)]">{isExpanded ? "▲" : "▼"}</span>
                 </button>
 
                 {/* Expanded log */}
                 {isExpanded && (
-                  <div className="border-t border-[rgba(61,57,41,0.05)]">
+                  <div className="border-t border-[rgba(30,28,23,0.05)]">
                     {log ? (
                       <pre className="px-3 py-2.5 text-[11px] font-mono leading-relaxed
-                        text-[rgba(61,57,41,0.65)] whitespace-pre-wrap break-words
+                        text-[rgba(30,28,23,0.65)] whitespace-pre-wrap break-words
                         max-h-64 overflow-y-auto">
                         {log}
                       </pre>
                     ) : (
-                      <p className="px-3 py-2 text-[11px] text-[rgba(61,57,41,0.2)] italic">No output.</p>
+                      <p className="px-3 py-2 text-[11px] text-[rgba(30,28,23,0.2)] italic">No output.</p>
                     )}
                   </div>
                 )}
@@ -875,9 +874,9 @@ function NewChatButton({ channels, onOpenChat }: {
           const name = channels[0]?.name;
           if (name) onOpenChat(name, "s" + Date.now());
         }}
-        className="px-4 py-2 text-[13px] bg-[#c85a2a] text-white rounded-xl hover:bg-[#a84a22] transition-colors font-medium"
+        className="px-3 py-1.5 text-[10px] text-[#1e1c17] border border-dashed border-[rgba(30,28,23,0.3)] hover:bg-[rgba(30,28,23,0.06)] transition-colors font-mono uppercase tracking-wider"
       >
-        + New Chat
+        [+ new chat]
       </button>
     );
   }
@@ -886,15 +885,13 @@ function NewChatButton({ channels, onOpenChat }: {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="px-4 py-2 text-[13px] bg-[#c85a2a] text-white rounded-xl hover:bg-[#a84a22] transition-colors font-medium flex items-center gap-1.5"
+        className="px-3 py-1.5 text-[10px] text-[#1e1c17] border border-dashed border-[rgba(30,28,23,0.3)] hover:bg-[rgba(30,28,23,0.06)] transition-colors font-mono uppercase tracking-wider flex items-center gap-1.5"
       >
-        + New Chat
-        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className={`transition-transform ${open ? "rotate-180" : ""}`}>
-          <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        [+ new chat]
+        <span className={`transition-transform inline-block ${open ? "rotate-180" : ""}`}>v</span>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1.5 min-w-[180px] bg-white rounded-xl border border-[rgba(61,57,41,0.12)] shadow-lg overflow-hidden z-50">
+        <div className="absolute right-0 top-full mt-1 min-w-[180px] bg-[#e8e4db] border border-dashed border-[rgba(30,28,23,0.2)] overflow-hidden z-50">
           {channels.map((c) => (
             <button
               key={c.name}
@@ -902,11 +899,11 @@ function NewChatButton({ channels, onOpenChat }: {
                 setOpen(false);
                 onOpenChat(c.name, "s" + Date.now());
               }}
-              className="w-full text-left px-4 py-2.5 text-[13px] text-[#3d3929] hover:bg-[rgba(200,90,42,0.08)] transition-colors flex items-center gap-2.5"
+              className="w-full text-left px-3 py-2 text-[11px] text-[#1e1c17] hover:bg-[rgba(30,28,23,0.06)] transition-colors flex items-center gap-2 font-mono border-b border-dashed border-[rgba(30,28,23,0.08)] last:border-0"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
-              <span className="font-medium">{c.name}</span>
-              <span className="text-[11px] text-[rgba(61,57,41,0.35)] ml-auto">{c.model}</span>
+              <span className="text-[rgba(30,28,23,0.3)]">&gt;</span>
+              <span className="flex-1 uppercase tracking-wider text-[10px]">{c.name}</span>
+              <span className="text-[9px] text-[rgba(30,28,23,0.3)]">{c.model}</span>
             </button>
           ))}
         </div>
@@ -943,30 +940,30 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
   }
 
   return (
-    <div className="p-8">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="p-6">
+      <header className="mb-5 flex items-center justify-between border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
         <div>
-          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Chats</h2>
-          <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Your conversation history</p>
+          <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// chats</h2>
+          <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 tracking-wider uppercase">session history</p>
         </div>
         <NewChatButton channels={channels} onOpenChat={onOpenChat} />
       </header>
 
       {allSessions.length === 0 ? (
-        <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No conversations yet.</p>
+        <p className="text-[11px] text-[rgba(30,28,23,0.4)] font-mono">// no sessions found</p>
       ) : (
-        <div className="space-y-2 max-w-2xl">
+        <div className="space-y-1.5 max-w-2xl">
           {allSessions.map(({ agentName, session }) => (
             <button
               key={`${agentName}/${session.id}`}
               onClick={() => onOpenChat(agentName, session.id)}
-              className="w-full text-left bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl px-4 py-3 hover:bg-[rgba(61,57,41,0.1)] hover:border-[rgba(61,57,41,0.15)] transition-all group"
+              className="w-full text-left bg-[rgba(30,28,23,0.03)] border border-dashed border-[rgba(30,28,23,0.1)] px-3 py-2.5 hover:bg-[rgba(30,28,23,0.07)] hover:border-[rgba(30,28,23,0.2)] transition-all group"
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[11px] font-medium text-[rgba(200,90,42,0.8)] uppercase tracking-wider">{agentName}</span>
-                <span className="text-[11px] text-[rgba(61,57,41,0.2)]">{formatTime(session.lastMs)}</span>
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[10px] font-mono text-[rgba(30,28,23,0.5)] uppercase tracking-wider">&gt; {agentName}</span>
+                <span className="text-[10px] text-[rgba(30,28,23,0.25)] font-mono">{formatTime(session.lastMs)}</span>
               </div>
-              <p className="text-[13px] text-[rgba(61,57,41,0.7)] truncate leading-snug group-hover:text-[rgba(61,57,41,0.95)]">
+              <p className="text-[11px] text-[rgba(30,28,23,0.65)] truncate leading-snug group-hover:text-[rgba(30,28,23,0.9)] font-mono">
                 {session.preview}
               </p>
             </button>
@@ -977,24 +974,210 @@ function ChatsPane({ sessionMap, channels, onOpenChat }: {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Media Tools Pane
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ToolFormEntry { provider: string; protocol: string; model: string; }
+
+const MEDIA_TOOLS: { name: string; label: string; desc: string }[] = [
+  { name: "media_gen",        label: "Media Gen",        desc: "Generate images via AI image models (Gemini, DALL-E, etc.)" },
+  { name: "media_understand", label: "Media Understand",  desc: "Analyze images / video frames using a vision LLM" },
+];
+
+const TOOL_PROTOCOLS = ["google", "openai", "openai-chat", "anthropic", "gemini", "ollama"];
+
+function DashedSelect({ value, onChange, options, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] hover:border-[rgba(30,28,23,0.4)] bg-[rgba(30,28,23,0.03)] text-[#1e1c17] transition-colors text-left"
+      >
+        <span className={selected ? "" : "text-[rgba(30,28,23,0.25)]"}>
+          {selected ? selected.label : (placeholder ?? "-- select --")}
+        </span>
+        <span className="text-[rgba(30,28,23,0.3)] text-[9px] ml-2">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="absolute z-50 left-0 right-0 mt-0.5 border border-dashed border-[rgba(30,28,23,0.3)] bg-[#ece8df] max-h-40 overflow-y-auto">
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-2 py-1.5 text-[11px] font-mono hover:bg-[rgba(30,28,23,0.08)] transition-colors ${
+                o.value === value ? "text-[#1e1c17] bg-[rgba(30,28,23,0.06)]" : "text-[rgba(30,28,23,0.6)]"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MediaToolsPane() {
+  const [cfg, setCfg] = useState<Config | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [form, setForm] = useState<ToolFormEntry>({ provider: "", protocol: "", model: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => { GetConfig().then(c => setCfg(c)).catch(() => {}); }, []);
+
+  const providerIds = Object.keys(cfg?.providers ?? {});
+
+  function startEdit(name: string) {
+    const existing = cfg?.tools?.[name];
+    setForm({ provider: existing?.provider ?? "", protocol: existing?.protocol ?? "", model: existing?.model ?? "" });
+    setEditing(name);
+    setError("");
+  }
+
+  async function handleSave() {
+    if (!cfg) return;
+    setSaving(true);
+    setError("");
+    try {
+      const prev = cfg.tools?.[editing!];
+      const tools = { ...(cfg.tools ?? {}), [editing!]: { provider: form.provider, protocol: form.protocol, model: form.model, api_key: prev?.api_key ?? "" } };
+      const newCfg: Config = { ...cfg, tools };
+      await SaveConfig(newCfg);
+      setCfg(newCfg);
+      setEditing(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = "w-full px-2 py-1.5 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] focus:outline-none focus:border-[rgba(30,28,23,0.5)] bg-[rgba(30,28,23,0.03)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.25)]";
+
+  const providerOptions = [{ value: "", label: "-- select provider --" }, ...providerIds.map(id => ({ value: id, label: id }))];
+  const protocolOptions = [{ value: "", label: "auto (infer from provider)" }, ...TOOL_PROTOCOLS.map(p => ({ value: p, label: p }))];
+
+  return (
+    <div className="max-w-2xl">
+      <header className="mb-4 border-b border-dashed border-[rgba(30,28,23,0.3)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// tools</h2>
+        <p className="text-[10px] text-[rgba(30,28,23,0.3)] mt-0.5 font-mono">// media generation &amp; understanding</p>
+      </header>
+
+      {error && (
+        <div className="mb-3 px-3 py-2 border border-dashed border-[rgba(200,50,30,0.4)] text-[10px] font-mono text-red-400">
+          // err: {error}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {MEDIA_TOOLS.map(({ name, label, desc }) => {
+          const tool = cfg?.tools?.[name];
+          const isEditing = editing === name;
+          return (
+            <div key={name} className="border border-dashed border-[rgba(30,28,23,0.2)] bg-[rgba(30,28,23,0.02)]">
+              <div className="flex items-start justify-between px-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <span className="text-[12px] font-bold text-[#1e1c17] font-mono">{label}</span>
+                  <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 font-mono">{desc}</p>
+                  {!isEditing && tool && (
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                      {tool.provider && <span className="text-[10px] font-mono text-[rgba(30,28,23,0.4)]">provider: {tool.provider}</span>}
+                      {tool.protocol && <span className="text-[10px] font-mono text-[rgba(30,28,23,0.4)]">protocol: {tool.protocol}</span>}
+                      {tool.model    && <span className="text-[10px] font-mono text-[rgba(30,28,23,0.4)]">model: {tool.model}</span>}
+                    </div>
+                  )}
+                </div>
+                {!isEditing && (
+                  <button
+                    onClick={() => startEdit(name)}
+                    className="ml-3 flex-shrink-0 text-[10px] px-2 py-1 border border-dashed border-[rgba(30,28,23,0.2)] text-[rgba(30,28,23,0.5)] hover:text-[#1e1c17] hover:border-[rgba(30,28,23,0.4)] transition-colors font-mono uppercase tracking-wider"
+                  >
+                    [edit]
+                  </button>
+                )}
+              </div>
+
+              {isEditing && (
+                <div className="px-3 pb-3 border-t border-dashed border-[rgba(30,28,23,0.12)] pt-2.5 space-y-2">
+                  <p className="text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider">// edit: {name}</p>
+                  <div>
+                    <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">Provider</label>
+                    <DashedSelect value={form.provider} onChange={v => setForm(f => ({ ...f, provider: v }))} options={providerOptions} placeholder="-- select provider --" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">Protocol</label>
+                    <DashedSelect value={form.protocol} onChange={v => setForm(f => ({ ...f, protocol: v }))} options={protocolOptions} placeholder="auto (infer from provider)" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">Model</label>
+                    <input className={inputCls} placeholder="leave empty to use default" value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={handleSave} disabled={saving} className="text-[10px] px-3 py-1 border border-dashed border-[rgba(30,28,23,0.4)] text-[#1e1c17] hover:bg-[rgba(30,28,23,0.06)] transition-colors font-mono uppercase tracking-wider disabled:opacity-50">
+                      {saving ? "saving…" : "[save]"}
+                    </button>
+                    <button onClick={() => setEditing(null)} className="text-[10px] px-3 py-1 border border-dashed border-[rgba(30,28,23,0.2)] text-[rgba(30,28,23,0.45)] hover:text-[#1e1c17] transition-colors font-mono uppercase tracking-wider">
+                      [cancel]
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AgentsPane({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
   return (
-    <div className="p-8">
-      <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Agents</h2>
-        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Manage agents — each agent runs as an independent AI assistant</p>
+    <div className="p-6">
+      <header className="mb-5 border-b border-dashed border-[rgba(30,28,23,0.2)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// agents</h2>
+        <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 tracking-wider uppercase">independent AI assistants</p>
       </header>
       <AgentsEditor onAgentsChanged={onAgentsChanged} />
+
+      <div className="mt-10 pt-6 border-t border-dashed border-[rgba(30,28,23,0.2)]">
+        <ProvidersPane />
+      </div>
+
+      <div className="mt-10 pt-6 border-t border-dashed border-[rgba(30,28,23,0.2)]">
+        <MediaToolsPane />
+      </div>
     </div>
   );
 }
 
 function ChannelsPane() {
   return (
-    <div className="p-8">
-      <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Channels</h2>
-        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">Messaging integrations</p>
+    <div className="p-6">
+      <header className="mb-5 border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// channels</h2>
+        <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 tracking-wider uppercase">messaging integrations</p>
       </header>
       <ChannelsSettings />
     </div>
@@ -1095,7 +1278,7 @@ function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
       <div className="flex justify-end mb-2">
         <button
           onClick={() => { setNewOpen(o => !o); setNewError(""); }}
-          className="px-3 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] transition-colors font-semibold"
+          className="px-3 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-sm hover:bg-[#a84a22] transition-colors font-semibold"
         >
           {newOpen ? "Cancel" : "+ New Agent"}
         </button>
@@ -1103,75 +1286,75 @@ function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
 
       {/* New agent form */}
       {newOpen && (
-        <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.12)] rounded-2xl p-4 space-y-3">
+        <div className="bg-[rgba(30,28,23,0.04)] border border-dashed border-[rgba(30,28,23,0.3)] rounded-sm p-4 space-y-3">
           {newError && <p className="text-[12px] text-red-400">{newError}</p>}
           <div>
-            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Name <span className="text-red-400">*</span></label>
+            <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Name <span className="text-red-400">*</span></label>
             <input className={inputCls} placeholder="e.g. assistant"
               value={newForm.name} onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Provider <span className="text-red-400">*</span></label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Provider <span className="text-red-400">*</span></label>
               <select className={selectCls} value={newForm.provider} onChange={e => setNewForm(f => ({ ...f, provider: e.target.value }))}>
                 <option value="">— select —</option>
                 {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Model <span className="text-red-400">*</span></label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Model <span className="text-red-400">*</span></label>
               <input className={inputCls} placeholder="e.g. claude-sonnet-4-6"
                 value={newForm.model} onChange={e => setNewForm(f => ({ ...f, model: e.target.value }))} />
             </div>
           </div>
           <div>
-            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">System Prompt</label>
+            <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">System Prompt</label>
             <textarea className={`${inputCls} resize-none`} rows={3}
               value={newForm.system_prompt} onChange={e => setNewForm(f => ({ ...f, system_prompt: e.target.value }))} />
           </div>
           <div className="flex gap-2 pt-1">
             <button onClick={handleCreate} disabled={newSaving}
-              className="px-4 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
+              className="px-4 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-sm hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
               {newSaving ? "Creating…" : "Create Agent"}
             </button>
             <button onClick={() => { setNewOpen(false); setNewError(""); }}
-              className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
+              className="px-3 py-1.5 text-[12px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)] transition-colors">
               Cancel
             </button>
           </div>
         </div>
       )}
 
-      {agents.length === 0 && !newOpen && <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No agents configured.</p>}
+      {agents.length === 0 && !newOpen && <p className="text-[13px] text-[rgba(30,28,23,0.4)]">No agents configured.</p>}
 
       {agents.map(agent => (
-        <div key={agent.name} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl">
+        <div key={agent.name} className="bg-[rgba(30,28,23,0.04)] border border-dashed border-[rgba(30,28,23,0.25)] rounded-sm">
           {/* Header row */}
           <div className="flex items-center justify-between px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="text-[14px] font-semibold text-[#3d3929]">{agent.name}</span>
+              <span className="text-[14px] font-semibold text-[#1e1c17]">{agent.name}</span>
               {success === agent.name && <span className="text-[11px] text-emerald-400">✓ saved</span>}
               {editing !== agent.name && (
                 <>
                   <span className="px-2 py-0.5 text-[11px] bg-[rgba(200,90,42,0.15)] text-[#c85a2a] rounded-full">{agent.provider || "—"}</span>
-                  {agent.model && <span className="text-[11px] text-[rgba(61,57,41,0.35)]">{agent.model}</span>}
+                  {agent.model && <span className="text-[11px] text-[rgba(30,28,23,0.35)]">{agent.model}</span>}
                 </>
               )}
             </div>
             {editing !== agent.name ? (
               <div className="flex gap-1.5 items-center">
                 <button onClick={() => startEdit(agent)}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)] hover:text-[rgba(30,28,23,0.8)] transition-colors">
                   Edit
                 </button>
                 {deleteConfirm === agent.name ? (
                   <>
                     <button onClick={() => handleDelete(agent.name)}
-                      className="px-3 py-1.5 text-[12px] bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-semibold">
+                      className="px-3 py-1.5 text-[12px] bg-red-500 text-white rounded-sm hover:bg-red-600 transition-colors font-semibold">
                       Confirm
                     </button>
                     <button onClick={() => setDeleteConfirm(null)}
-                      className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
+                      className="px-3 py-1.5 text-[12px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)] transition-colors">
                       Cancel
                     </button>
                   </>
@@ -1185,11 +1368,11 @@ function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
             ) : (
               <div className="flex gap-1.5">
                 <button onClick={handleSave} disabled={saving}
-                  className="px-3 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
+                  className="px-3 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-sm hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
                   {saving ? "…" : "Save"}
                 </button>
                 <button onClick={() => { setEditing(null); setError(""); }}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
+                  className="px-3 py-1.5 text-[12px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)] transition-colors">
                   Cancel
                 </button>
               </div>
@@ -1198,24 +1381,24 @@ function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
 
           {/* Edit form */}
           {editing === agent.name && (
-            <div className="px-4 pb-4 space-y-3 border-t border-[rgba(61,57,41,0.08)] pt-3">
+            <div className="px-4 pb-4 space-y-3 border-t border-dashed border-[rgba(30,28,23,0.2)] pt-3">
               {error && <p className="text-[12px] text-red-400">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Provider</label>
+                  <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Provider</label>
                   <select className={selectCls} value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
                     <option value="">— none —</option>
                     {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Model</label>
+                  <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Model</label>
                   <input className={inputCls} placeholder="e.g. claude-sonnet-4-6"
                     value={form.model} onChange={e => setForm(f => ({ ...f, model: e.target.value }))} />
                 </div>
               </div>
               <div>
-                <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">System Prompt</label>
+                <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">System Prompt</label>
                 <textarea className={`${inputCls} resize-none`} rows={3}
                   value={form.system_prompt} onChange={e => setForm(f => ({ ...f, system_prompt: e.target.value }))} />
               </div>
@@ -1246,7 +1429,7 @@ function WhipHighlight({ code }: { code: string }) {
 function WhipLine({ line }: { line: string }) {
   // Comment
   if (/^\s*#/.test(line)) {
-    return <div><span className="text-[rgba(61,57,41,0.4)] italic">{line}</span>{"\n"}</div>;
+    return <div><span className="text-[rgba(30,28,23,0.4)] italic">{line}</span>{"\n"}</div>;
   }
   // Keywords: agent, let, const, session, for, in, if, else, parallel, run
   const tokenized = tokenizeWhip(line);
@@ -1299,20 +1482,20 @@ function tokenizeWhip(line: string): React.ReactNode[] {
       t.type === "str"    ? "text-[#16a34a]" :
       t.type === "interp" ? "text-[#c85a2a]" :
       t.type === "num"    ? "text-[#0284c7]" :
-                            "text-[#3d3929]";
+                            "text-[#1e1c17]";
     return <span key={i} className={cls}>{t.value}</span>;
   });
 }
 
 const inputCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
-  "bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]";
+  "w-full px-3 py-2 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.15)] " +
+  "focus:outline-none focus:border-[rgba(30,28,23,0.35)] " +
+  "bg-[rgba(30,28,23,0.03)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.25)]";
 
 const selectCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
-  "bg-[#ece5d8] text-[#3d3929]";
+  "w-full px-3 py-2 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.15)] " +
+  "focus:outline-none focus:border-[rgba(30,28,23,0.35)] " +
+  "bg-[#e8e4db] text-[#1e1c17]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vault
@@ -1375,12 +1558,10 @@ function VaultPane() {
   }
 
   return (
-    <div className="p-8 max-w-2xl">
-      <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Vault</h2>
-        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">
-          Key-value secrets injected as environment variables when running bash, exec, process and CLI workflows.
-        </p>
+    <div className="p-6 max-w-2xl">
+      <header className="mb-5 border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// vault</h2>
+        <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 tracking-wider uppercase">env secrets for workflows</p>
       </header>
 
       {error && <p className="mb-4 text-[12px] text-red-400">{error}</p>}
@@ -1388,12 +1569,12 @@ function VaultPane() {
       {/* Entry list */}
       <div className="space-y-2 mb-4">
         {entries.length === 0 && !adding && (
-          <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No secrets stored yet.</p>
+          <p className="text-[13px] text-[rgba(30,28,23,0.4)]">No secrets stored yet.</p>
         )}
         {entries.map(e => (
-          <div key={e.key} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl overflow-hidden">
+          <div key={e.key} className="bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.08)] rounded-sm overflow-hidden">
             <div className="flex items-center gap-3 px-4 py-3">
-              <span className="font-mono text-[13px] text-[#3d3929] flex-shrink-0 w-44 truncate">{e.key}</span>
+              <span className="font-mono text-[13px] text-[#1e1c17] flex-shrink-0 w-44 truncate">{e.key}</span>
               {editKey === e.key ? (
                 <input
                   autoFocus
@@ -1404,7 +1585,7 @@ function VaultPane() {
                   onKeyDown={ev => { if (ev.key === "Enter") handleSave(e.key); if (ev.key === "Escape") setEditKey(null); }}
                 />
               ) : (
-                <span className="flex-1 font-mono text-[12px] text-[rgba(61,57,41,0.5)] truncate">
+                <span className="flex-1 font-mono text-[12px] text-[rgba(30,28,23,0.5)] truncate">
                   {revealed.has(e.key) ? e.value : "••••••••••••"}
                 </span>
               )}
@@ -1412,20 +1593,20 @@ function VaultPane() {
                 {editKey === e.key ? (
                   <>
                     <button onClick={() => handleSave(e.key)} disabled={saving}
-                      className="px-2.5 py-1 text-[11px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-50 font-semibold">Save</button>
+                      className="px-2.5 py-1 text-[11px] bg-[#c85a2a] text-white rounded-sm hover:bg-[#a84a22] disabled:opacity-50 font-semibold">Save</button>
                     <button onClick={() => setEditKey(null)}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)]">Cancel</button>
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)]">Cancel</button>
                   </>
                 ) : (
                   <>
                     <button onClick={() => toggleReveal(e.key)}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] font-mono">
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)] font-mono">
                       {revealed.has(e.key) ? "hide" : "show"}
                     </button>
                     <button onClick={() => { setEditKey(e.key); setEditVal(e.value); }}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)]">Edit</button>
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)]">Edit</button>
                     <button onClick={() => handleDelete(e.key)} disabled={saving}
-                      className="px-2.5 py-1 text-[11px] bg-[rgba(239,68,68,0.12)] text-red-400 rounded-lg hover:bg-[rgba(239,68,68,0.2)] disabled:opacity-50">Del</button>
+                      className="px-2.5 py-1 text-[11px] bg-[rgba(239,68,68,0.12)] text-red-400 rounded-sm hover:bg-[rgba(239,68,68,0.2)] disabled:opacity-50">Del</button>
                   </>
                 )}
               </div>
@@ -1436,15 +1617,15 @@ function VaultPane() {
 
       {/* Add new */}
       {adding ? (
-        <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(200,90,42,0.3)] rounded-2xl p-4 space-y-3">
+        <div className="bg-[rgba(30,28,23,0.04)] border border-[rgba(200,90,42,0.3)] rounded-sm p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Key</label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Key</label>
               <input autoFocus value={newKey} onChange={e => setNewKey(e.target.value)}
                 placeholder="e.g. GITHUB_TOKEN" className={inputCls + " font-mono"} />
             </div>
             <div>
-              <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">Value</label>
+              <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Value</label>
               <input type="password" value={newVal} onChange={e => setNewVal(e.target.value)}
                 placeholder="secret value" className={inputCls + " font-mono"}
                 onKeyDown={e => { if (e.key === "Enter") handleAdd(); if (e.key === "Escape") setAdding(false); }} />
@@ -1452,18 +1633,18 @@ function VaultPane() {
           </div>
           <div className="flex gap-2">
             <button onClick={handleAdd} disabled={saving || !newKey.trim() || !newVal.trim()}
-              className="px-4 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-lg hover:bg-[#a84a22] disabled:opacity-40 font-semibold">
+              className="px-4 py-1.5 text-[12px] bg-[#c85a2a] text-white rounded-sm hover:bg-[#a84a22] disabled:opacity-40 font-semibold">
               {saving ? "Saving…" : "Add Secret"}
             </button>
             <button onClick={() => { setAdding(false); setNewKey(""); setNewVal(""); }}
-              className="px-4 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)]">
+              className="px-4 py-1.5 text-[12px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)] rounded-sm hover:bg-[rgba(30,28,23,0.12)]">
               Cancel
             </button>
           </div>
         </div>
       ) : (
         <button onClick={() => setAdding(true)}
-          className="px-4 py-2 text-[13px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.7)] rounded-xl hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.9)] transition-colors border border-[rgba(61,57,41,0.08)]">
+          className="px-4 py-2 text-[13px] bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.7)] rounded hover:bg-[rgba(30,28,23,0.12)] hover:text-[rgba(30,28,23,0.9)] transition-colors border border-[rgba(30,28,23,0.08)]">
           + Add Secret
         </button>
       )}
@@ -1532,19 +1713,17 @@ function BrowserPane() {
   useEffect(() => { testCDP(); loadShortcuts(); }, []);
 
   return (
-    <div className="p-8 max-w-3xl">
-      <header className="mb-6">
-        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Browser</h2>
-        <p className="text-[13px] text-[rgba(61,57,41,0.5)] mt-1">
-          Chrome DevTools Protocol (CDP) connection and browser automation shortcuts.
-        </p>
+    <div className="p-6 max-w-3xl">
+      <header className="mb-5 border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// browser</h2>
+        <p className="text-[10px] text-[rgba(30,28,23,0.4)] mt-0.5 tracking-wider uppercase">Chrome CDP automation</p>
       </header>
 
       {/* Status card */}
-      <div className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl p-5 mb-6">
+      <div className="bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.08)] rounded-sm p-5 mb-6">
         <div className="flex items-center gap-3 mb-3">
           <span className={`w-2.5 h-2.5 rounded-full ${status?.connected ? "bg-green-400" : "bg-red-400"}`} />
-          <span className="text-[14px] font-medium text-[#3d3929]">
+          <span className="text-[14px] font-medium text-[#1e1c17]">
             {status === null ? "Checking..." : status.connected ? "Connected" : "Disconnected"}
           </span>
         </div>
@@ -1552,32 +1731,32 @@ function BrowserPane() {
         {status?.connected && (
           <div className="space-y-1.5 mb-4">
             {status.browser && (
-              <p className="text-[12px] text-[rgba(61,57,41,0.5)]">
-                <span className="text-[rgba(61,57,41,0.4)]">Browser:</span> {status.browser}
+              <p className="text-[12px] text-[rgba(30,28,23,0.5)]">
+                <span className="text-[rgba(30,28,23,0.4)]">Browser:</span> {status.browser}
               </p>
             )}
-            <p className="text-[12px] text-[rgba(61,57,41,0.5)] font-mono break-all">
-              <span className="text-[rgba(61,57,41,0.4)]">CDP URL:</span> {status.cdpURL}
+            <p className="text-[12px] text-[rgba(30,28,23,0.5)] font-mono break-all">
+              <span className="text-[rgba(30,28,23,0.4)]">CDP URL:</span> {status.cdpURL}
             </p>
           </div>
         )}
 
         {status && !status.connected && status.error && (
-          <p className="text-[12px] text-[rgba(61,57,41,0.35)] mb-4">{status.error}</p>
+          <p className="text-[12px] text-[rgba(30,28,23,0.35)] mb-4">{status.error}</p>
         )}
 
         <div className="flex gap-2">
           <button
             onClick={testCDP}
             disabled={testing}
-            className="px-4 py-2 text-[13px] rounded-lg bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.1)] text-[#3d3929] disabled:opacity-40 transition-colors"
+            className="px-4 py-2 text-[13px] rounded-sm bg-[rgba(30,28,23,0.08)] hover:bg-[rgba(30,28,23,0.1)] text-[#1e1c17] disabled:opacity-40 transition-colors"
           >
             {testing ? "Testing..." : "Test CDP"}
           </button>
           <button
             onClick={launchChrome}
             disabled={launching}
-            className="px-4 py-2 text-[13px] rounded-lg bg-[rgba(200,90,42,0.2)] hover:bg-[rgba(200,90,42,0.3)] text-[#c85a2a] disabled:opacity-40 transition-colors"
+            className="px-4 py-2 text-[13px] rounded-sm bg-[rgba(200,90,42,0.2)] hover:bg-[rgba(200,90,42,0.3)] text-[#c85a2a] disabled:opacity-40 transition-colors"
           >
             {launching ? "Launching..." : "Launch Chrome with CDP"}
           </button>
@@ -1585,9 +1764,9 @@ function BrowserPane() {
       </div>
 
       {/* Shortcuts */}
-      <h3 className="text-[15px] font-medium text-[#3d3929] mb-3">Shortcuts</h3>
-      <p className="text-[12px] text-[rgba(61,57,41,0.4)] mb-4">
-        YAML browser automation adapters in <code className="text-[rgba(61,57,41,0.5)]">~/.clawfirm/shortcuts/</code>.
+      <h3 className="text-[15px] font-medium text-[#1e1c17] mb-3">Shortcuts</h3>
+      <p className="text-[12px] text-[rgba(30,28,23,0.4)] mb-4">
+        YAML browser automation adapters in <code className="text-[rgba(30,28,23,0.5)]">~/.clawfirm/shortcuts/</code>.
         Requires Chrome connected via CDP.
       </p>
 
@@ -1598,19 +1777,19 @@ function BrowserPane() {
           value={cmdArgs}
           onChange={e => setCmdArgs(e.target.value)}
           placeholder="Command arguments (space-separated)..."
-          className="w-full px-3 py-2 text-[13px] rounded-lg bg-[rgba(61,57,41,0.08)] border border-[rgba(61,57,41,0.08)] text-[#3d3929] placeholder:text-[rgba(61,57,41,0.2)] outline-none focus:border-[rgba(200,90,42,0.4)]"
+          className="w-full px-3 py-2 text-[13px] rounded-sm bg-[rgba(30,28,23,0.08)] border border-[rgba(30,28,23,0.08)] text-[#1e1c17] placeholder:text-[rgba(30,28,23,0.2)] outline-none focus:border-[rgba(200,90,42,0.4)]"
         />
       </div>
 
       {shortcuts.length === 0 ? (
-        <p className="text-[13px] text-[rgba(61,57,41,0.4)]">No shortcuts found.</p>
+        <p className="text-[13px] text-[rgba(30,28,23,0.4)]">No shortcuts found.</p>
       ) : (
         <div className="space-y-3">
           {shortcuts.map(sc => (
-            <div key={sc.file} className="bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl p-4">
+            <div key={sc.file} className="bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.08)] rounded-sm p-4">
               <div className="flex items-center gap-2 mb-2">
-                <span className="text-[14px] font-medium text-[#3d3929]">{sc.platform}</span>
-                <span className="text-[11px] text-[rgba(61,57,41,0.2)] font-mono">{sc.file}</span>
+                <span className="text-[14px] font-medium text-[#1e1c17]">{sc.platform}</span>
+                <span className="text-[11px] text-[rgba(30,28,23,0.2)] font-mono">{sc.file}</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {sc.commands.map(cmd => {
@@ -1621,7 +1800,7 @@ function BrowserPane() {
                       key={cmd}
                       onClick={() => runCmd(sc.file, cmd)}
                       disabled={!!runningCmd || !status?.connected}
-                      className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.65)] disabled:opacity-30 transition-colors font-mono"
+                      className="px-3 py-1.5 text-[12px] rounded-md bg-[rgba(30,28,23,0.08)] hover:bg-[rgba(30,28,23,0.12)] text-[rgba(30,28,23,0.65)] disabled:opacity-30 transition-colors font-mono"
                     >
                       {isRunning ? `${cmd}...` : cmd}
                     </button>
@@ -1635,23 +1814,23 @@ function BrowserPane() {
 
       {/* Command result */}
       {cmdError && (
-        <div className="mt-4 p-3 rounded-lg bg-[rgba(255,80,80,0.1)] border border-[rgba(255,80,80,0.2)]">
+        <div className="mt-4 p-3 rounded-sm bg-[rgba(255,80,80,0.1)] border border-[rgba(255,80,80,0.2)]">
           <p className="text-[12px] text-red-400 font-mono whitespace-pre-wrap">{cmdError}</p>
         </div>
       )}
       {cmdResult && cmdResult.length > 0 && (
         <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-[12px] text-[rgba(61,57,41,0.65)]">
+          <table className="w-full text-[12px] text-[rgba(30,28,23,0.65)]">
             <thead>
-              <tr className="border-b border-[rgba(61,57,41,0.08)]">
+              <tr className="border-b border-[rgba(30,28,23,0.08)]">
                 {Object.keys(cmdResult[0]).map(k => (
-                  <th key={k} className="text-left py-2 px-2 font-medium text-[rgba(61,57,41,0.5)]">{k}</th>
+                  <th key={k} className="text-left py-2 px-2 font-medium text-[rgba(30,28,23,0.5)]">{k}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {cmdResult.map((row, i) => (
-                <tr key={i} className="border-b border-[rgba(61,57,41,0.04)]">
+                <tr key={i} className="border-b border-[rgba(30,28,23,0.04)]">
                   {Object.values(row).map((v, j) => (
                     <td key={j} className="py-1.5 px-2 font-mono truncate max-w-[200px]">{String(v ?? "")}</td>
                   ))}
@@ -1740,34 +1919,34 @@ function WhipflowPane() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: file list ── */}
-      <div className="w-52 flex-shrink-0 border-r border-[rgba(61,57,41,0.1)] flex flex-col">
-        <div className="px-4 py-3 border-b border-[rgba(61,57,41,0.1)]">
-          <span className="text-[11px] font-semibold text-[rgba(61,57,41,0.35)] uppercase tracking-wider">Workflows</span>
-          <p className="text-[10px] text-[rgba(61,57,41,0.25)] font-mono mt-0.5 break-all">~/.clawfirm/workflows/</p>
+      <div className="w-52 flex-shrink-0 border-r border-[rgba(30,28,23,0.1)] flex flex-col">
+        <div className="px-4 py-3 border-b border-[rgba(30,28,23,0.1)]">
+          <span className="text-[11px] font-semibold text-[rgba(30,28,23,0.35)] uppercase tracking-wider">Workflows</span>
+          <p className="text-[10px] text-[rgba(30,28,23,0.25)] font-mono mt-0.5 break-all">~/.clawfirm/workflows/</p>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {whipFiles.length === 0 ? (
-            <p className="px-4 py-3 text-[12px] text-[rgba(61,57,41,0.2)]">No .whip files found</p>
+            <p className="px-4 py-3 text-[12px] text-[rgba(30,28,23,0.2)]">No .whip files found</p>
           ) : whipFiles.map(f => (
             <button
               key={f}
               onClick={() => selectFile(f)}
               className={`w-full text-left px-4 py-2 text-[12.5px] truncate transition-colors ${
                 selectedFile === f
-                  ? "bg-[rgba(61,57,41,0.08)] text-[#3d3929]"
-                  : "text-[rgba(61,57,41,0.55)] hover:bg-[rgba(61,57,41,0.04)] hover:text-[#3d3929]"
+                  ? "bg-[rgba(30,28,23,0.08)] text-[#1e1c17]"
+                  : "text-[rgba(30,28,23,0.55)] hover:bg-[rgba(30,28,23,0.04)] hover:text-[#1e1c17]"
               }`}
             >
-              <span className="text-[rgba(61,57,41,0.2)] mr-1">⚡</span>{basename(f)}
+              <span className="text-[rgba(30,28,23,0.2)] mr-1">⚡</span>{basename(f)}
             </button>
           ))}
         </div>
 
         {/* ── Config section (collapsed by default) ── */}
-        <div className="border-t border-[rgba(61,57,41,0.1)]">
+        <div className="border-t border-[rgba(30,28,23,0.1)]">
           <button
             onClick={() => setCfgOpen(o => !o)}
-            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.7)] transition-colors"
+            className="w-full flex items-center justify-between px-4 py-2.5 text-[11px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.7)] transition-colors"
           >
             <span className="font-semibold uppercase tracking-wider">Config</span>
             <span>{cfgOpen ? "▲" : "▼"}</span>
@@ -1776,7 +1955,7 @@ function WhipflowPane() {
             <div className="px-3 pb-3 space-y-2">
               {error && <p className="text-[11px] text-red-400">{error}</p>}
               <select
-                className="w-full bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-lg px-2 py-1.5 text-[11.5px] text-[#3d3929] outline-none"
+                className="w-full bg-[rgba(30,28,23,0.05)] border border-[rgba(30,28,23,0.12)] rounded-sm px-2 py-1.5 text-[11.5px] text-[#1e1c17] outline-none"
                 value={defaultProvider}
                 onChange={e => setDefaultProvider(e.target.value)}
               >
@@ -1793,7 +1972,7 @@ function WhipflowPane() {
               </select>
               {defaultProvider === "__custom__" && (
                 <input
-                  className="w-full bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-lg px-2 py-1.5 text-[11.5px] text-[#3d3929] outline-none"
+                  className="w-full bg-[rgba(30,28,23,0.05)] border border-[rgba(30,28,23,0.12)] rounded-sm px-2 py-1.5 text-[11.5px] text-[#1e1c17] outline-none"
                   placeholder="provider name"
                   value={customProvider}
                   onChange={e => setCustomProvider(e.target.value)}
@@ -1801,7 +1980,7 @@ function WhipflowPane() {
               )}
               <div className="flex items-center gap-2">
                 <button onClick={handleSave} disabled={saving || !cfg}
-                  className="px-3 py-1 bg-[#c85a2a] text-white text-[11px] rounded-lg hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
+                  className="px-3 py-1 bg-[#c85a2a] text-white text-[11px] rounded-sm hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
                   {saving ? "…" : "Save"}
                 </button>
                 {success && <span className="text-[11px] text-emerald-400">{success}</span>}
@@ -1815,23 +1994,23 @@ function WhipflowPane() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {selectedFile ? (
           <>
-            <div className="px-5 py-3 border-b border-[rgba(61,57,41,0.1)] flex items-center gap-2">
-              <span className="text-[rgba(61,57,41,0.5)] text-[12px]">⚡</span>
-              <span className="text-[13px] font-medium text-[#3d3929]">{basename(selectedFile)}</span>
-              <span className="text-[11px] text-[rgba(61,57,41,0.2)] ml-1 truncate">{selectedFile}</span>
+            <div className="px-5 py-3 border-b border-[rgba(30,28,23,0.1)] flex items-center gap-2">
+              <span className="text-[rgba(30,28,23,0.5)] text-[12px]">⚡</span>
+              <span className="text-[13px] font-medium text-[#1e1c17]">{basename(selectedFile)}</span>
+              <span className="text-[11px] text-[rgba(30,28,23,0.2)] ml-1 truncate">{selectedFile}</span>
             </div>
             <div className="flex-1 overflow-auto p-5">
               {fileError ? (
                 <p className="text-[12px] text-red-400">{fileError}</p>
               ) : (
-                <div className="bg-[rgba(61,57,41,0.06)] rounded-xl p-4 border border-[rgba(61,57,41,0.08)]">
+                <div className="bg-[rgba(30,28,23,0.06)] rounded p-4 border border-[rgba(30,28,23,0.08)]">
                   <WhipHighlight code={fileContent} />
                 </div>
               )}
             </div>
           </>
         ) : (
-          <div className="flex-1 flex items-center justify-center text-[13px] text-[rgba(61,57,41,0.3)]">
+          <div className="flex-1 flex items-center justify-center text-[13px] text-[rgba(30,28,23,0.3)]">
             Select a .whip file to preview
           </div>
         )}
@@ -1868,20 +2047,20 @@ function SettingsPane() {
   }
 
   return (
-    <div className="p-8 h-full flex flex-col">
-      <header className="mb-6 flex-shrink-0">
-        <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Settings</h2>
-        <p className="text-[13px] text-[rgba(61,57,41,0.4)] mt-1 font-mono">{filePath}</p>
+    <div className="p-6 h-full flex flex-col">
+      <header className="mb-5 flex-shrink-0 border-b border-dashed border-[rgba(30,28,23,0.1)] pb-4">
+        <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// settings</h2>
+        <p className="text-[10px] text-[rgba(30,28,23,0.3)] mt-0.5 font-mono">{filePath}</p>
       </header>
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}
         spellCheck={false}
-        className="flex-1 min-h-0 w-full max-w-2xl px-4 py-3 text-[13px] font-mono bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.12)] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] resize-none leading-relaxed text-[#3d3929] placeholder-[rgba(61,57,41,0.3)] backdrop-blur-xl"
+        className="flex-1 min-h-0 w-full max-w-2xl px-4 py-3 text-[13px] font-mono bg-[rgba(30,28,23,0.05)] border border-[rgba(30,28,23,0.12)] rounded-sm focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] resize-none leading-relaxed text-[#1e1c17] placeholder-[rgba(30,28,23,0.3)] backdrop-blur-xl"
       />
       <div className="flex items-center gap-3 mt-4 flex-shrink-0">
         <button onClick={handleSave} disabled={saving}
-          className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
+          className="px-5 py-2 bg-[#c85a2a] text-white text-[13px] rounded hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
           {saving ? "Saving…" : "Save & Reload"}
         </button>
         {error && <p className="text-[13px] text-red-400">{error}</p>}
@@ -1929,9 +2108,9 @@ function WhatsAppCard() {
   const waMap: Record<string, { label: string; cls: string }> = {
     connected:    { label: "Connected",    cls: "bg-[rgba(52,199,89,0.15)] text-emerald-400" },
     qr_pending:   { label: "Scan QR",      cls: "bg-[rgba(255,179,64,0.15)] text-amber-400" },
-    disconnected: { label: "Disconnected", cls: "bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)]" },
+    disconnected: { label: "Disconnected", cls: "bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)]" },
     logged_out:   { label: "Logged out",   cls: "bg-[rgba(255,69,58,0.15)] text-red-400" },
-    disabled:     { label: "Disabled",     cls: "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.2)]" },
+    disabled:     { label: "Disabled",     cls: "bg-[rgba(30,28,23,0.05)] text-[rgba(30,28,23,0.2)]" },
   };
 
   return (
@@ -1942,22 +2121,22 @@ function WhatsAppCard() {
         : null}>
       {status === "qr_pending" && qrURL && (
         <div className="flex flex-col items-center gap-2 pt-2">
-          <p className="text-[11px] text-[rgba(61,57,41,0.5)] text-center">WhatsApp → Linked Devices → Link a Device → scan QR</p>
-          <img src={qrURL} alt="QR" className="w-44 h-44 rounded-xl border border-[rgba(61,57,41,0.12)]" />
+          <p className="text-[11px] text-[rgba(30,28,23,0.5)] text-center">WhatsApp → Linked Devices → Link a Device → scan QR</p>
+          <img src={qrURL} alt="QR" className="w-44 h-44 rounded border border-[rgba(30,28,23,0.12)]" />
         </div>
       )}
-      {status === "qr_pending" && !qrURL && <p className="text-[11px] text-[rgba(61,57,41,0.4)] italic pt-1">Generating QR…</p>}
+      {status === "qr_pending" && !qrURL && <p className="text-[11px] text-[rgba(30,28,23,0.4)] italic pt-1">Generating QR…</p>}
       {status === "disabled" && (
-        <p className="text-[11px] text-[rgba(61,57,41,0.4)] pt-1">
-          Set <code className="font-mono bg-[rgba(61,57,41,0.08)] px-1 rounded">whatsapp.enabled: true</code> in config.yml to enable.
+        <p className="text-[11px] text-[rgba(30,28,23,0.4)] pt-1">
+          Set <code className="font-mono bg-[rgba(30,28,23,0.08)] px-1 rounded">whatsapp.enabled: true</code> in config.yml to enable.
         </p>
       )}
       {(status === "disconnected" || status === "logged_out") && (
-        <p className="text-[11px] text-[rgba(61,57,41,0.4)] italic pt-1">
+        <p className="text-[11px] text-[rgba(30,28,23,0.4)] italic pt-1">
           {status === "logged_out" ? "Logged out — restart app to pair again." : "Waiting for gateway…"}
         </p>
       )}
-      {status === "connected" && <p className="text-[11px] text-[rgba(61,57,41,0.4)] pt-1">Connected and receiving messages.</p>}
+      {status === "connected" && <p className="text-[11px] text-[rgba(30,28,23,0.4)] pt-1">Connected and receiving messages.</p>}
     </Card>
   );
 }
@@ -1992,32 +2171,32 @@ function FeishuCard() {
     <Card title="飞书"
       badge={configured
         ? <Badge label="已配置" cls="bg-[rgba(52,199,89,0.15)] text-emerald-400" />
-        : <Badge label="未配置" cls="bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)]" />}
+        : <Badge label="未配置" cls="bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)]" />}
       action={configured && !editing
         ? <button onClick={() => setEditing(true)} className="text-[11px] text-[#c85a2a] hover:text-[#5aa3fb]">修改</button>
         : null}>
       {(!configured || editing) ? (
         <div className="space-y-3 pt-1">
-          <p className="text-[11px] text-[rgba(61,57,41,0.4)]">企业自建应用，开启消息事件订阅（长连接）。</p>
+          <p className="text-[11px] text-[rgba(30,28,23,0.4)]">企业自建应用，开启消息事件订阅（长连接）。</p>
           <div>
-            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">App ID</label>
+            <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">App ID</label>
             <input type="text" placeholder="cli_xxxxxxxxxxxx" value={appID} onChange={(e) => setAppID(e.target.value)}
-              className="w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]" />
+              className="w-full px-3 py-2 text-[13px] border border-[rgba(30,28,23,0.12)] rounded focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(30,28,23,0.05)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.3)]" />
           </div>
           <div>
-            <label className="block text-[11px] text-[rgba(61,57,41,0.5)] mb-1">App Secret</label>
+            <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">App Secret</label>
             <input type="password" placeholder={secretMasked || "App Secret"} value={appSecret} onChange={(e) => setAppSecret(e.target.value)}
-              className="w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]" />
+              className="w-full px-3 py-2 text-[13px] border border-[rgba(30,28,23,0.12)] rounded focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(30,28,23,0.05)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.3)]" />
           </div>
           {error && <p className="text-[11px] text-red-400">{error}</p>}
           <div className="flex gap-2">
             <button onClick={handleSave} disabled={saving}
-              className="flex-1 py-2 rounded-xl bg-[#c85a2a] text-white text-[13px] font-semibold hover:bg-[#a84a22] disabled:opacity-50">
+              className="flex-1 py-2 rounded bg-[#c85a2a] text-white text-[13px] font-semibold hover:bg-[#a84a22] disabled:opacity-50">
               {saving ? "保存中…" : "保存并连接"}
             </button>
             {editing && (
               <button onClick={() => { setEditing(false); setAppSecret(""); setError(""); }}
-                className="px-3 py-2 rounded-xl border border-[rgba(61,57,41,0.12)] text-[13px] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.05)]">
+                className="px-3 py-2 rounded border border-[rgba(30,28,23,0.12)] text-[13px] text-[rgba(30,28,23,0.5)] hover:bg-[rgba(30,28,23,0.05)]">
                 取消
               </button>
             )}
@@ -2025,8 +2204,8 @@ function FeishuCard() {
         </div>
       ) : (
         <div className="pt-1">
-          <p className="text-[13px] text-[rgba(61,57,41,0.5)]">App ID: <span className="font-mono text-[#3d3929] text-[11px]">{appID}</span></p>
-          <p className="mt-1 text-[11px] text-[rgba(61,57,41,0.4)]">通过 WebSocket 长连接接收消息，无需公网地址。</p>
+          <p className="text-[13px] text-[rgba(30,28,23,0.5)]">App ID: <span className="font-mono text-[#1e1c17] text-[11px]">{appID}</span></p>
+          <p className="mt-1 text-[11px] text-[rgba(30,28,23,0.4)]">通过 WebSocket 长连接接收消息，无需公网地址。</p>
         </div>
       )}
     </Card>
@@ -2080,7 +2259,7 @@ function RemoteCard() {
 
   const badgeProps = enabled
     ? { label: "Running", cls: "bg-[rgba(52,199,89,0.15)] text-emerald-400" }
-    : { label: "Off", cls: "bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)]" };
+    : { label: "Off", cls: "bg-[rgba(30,28,23,0.08)] text-[rgba(30,28,23,0.5)]" };
 
   return (
     <Card title="Remote"
@@ -2093,13 +2272,13 @@ function RemoteCard() {
       ) : undefined}>
       {!enabled && (
         <div className="space-y-3 pt-1">
-          <p className="text-[11px] text-[rgba(61,57,41,0.4)]">
+          <p className="text-[11px] text-[rgba(30,28,23,0.4)]">
             Connect via ngrok so the mobile app can access your agents remotely.
           </p>
           <input type="text" placeholder="ngrok auth token" value={ngrokToken} onChange={(e) => setNgrokToken(e.target.value)}
-            className="w-full px-3 py-2 text-[12px] border border-[rgba(61,57,41,0.12)] rounded-xl focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)] font-mono" />
+            className="w-full px-3 py-2 text-[12px] border border-[rgba(30,28,23,0.12)] rounded focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] bg-[rgba(30,28,23,0.05)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.3)] font-mono" />
           <button onClick={handleEnable} disabled={enabling}
-            className="w-full py-2 rounded-xl bg-[#c85a2a] text-white text-[12px] font-semibold hover:bg-[#a84a22] disabled:opacity-50">
+            className="w-full py-2 rounded bg-[#c85a2a] text-white text-[12px] font-semibold hover:bg-[#a84a22] disabled:opacity-50">
             {enabling ? "Starting…" : "Enable Remote"}
           </button>
         </div>
@@ -2109,19 +2288,19 @@ function RemoteCard() {
           {/* QR Code */}
           {status.qrCode && (
             <div className="flex flex-col items-center gap-2">
-              <img src={status.qrCode} alt="Remote QR" className="w-44 h-44 rounded-xl border border-[rgba(61,57,41,0.12)]" />
-              <p className="text-[11px] text-[rgba(61,57,41,0.4)] text-center">Scan with mobile app to connect</p>
+              <img src={status.qrCode} alt="Remote QR" className="w-44 h-44 rounded border border-[rgba(30,28,23,0.12)]" />
+              <p className="text-[11px] text-[rgba(30,28,23,0.4)] text-center">Scan with mobile app to connect</p>
             </div>
           )}
           {/* ngrok URL */}
           <div>
-            <p className="text-[11px] text-[rgba(61,57,41,0.5)]">Public URL</p>
-            <p className="text-[12px] font-mono text-[#3d3929] break-all">{status.ngrokUrl}</p>
+            <p className="text-[11px] text-[rgba(30,28,23,0.5)]">Public URL</p>
+            <p className="text-[12px] font-mono text-[#1e1c17] break-all">{status.ngrokUrl}</p>
           </div>
           {/* Connected clients */}
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-[rgba(61,57,41,0.5)]">Connected devices:</span>
-            <span className="text-[12px] font-semibold text-[#3d3929]">{status.clients}</span>
+            <span className="text-[11px] text-[rgba(30,28,23,0.5)]">Connected devices:</span>
+            <span className="text-[12px] font-semibold text-[#1e1c17]">{status.clients}</span>
           </div>
         </div>
       )}
@@ -2135,7 +2314,7 @@ function RemoteCard() {
 // ─────────────────────────────────────────────────────────────────────────────
 function GlassCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-[rgba(61,57,41,0.05)] backdrop-blur-xl border border-[rgba(61,57,41,0.12)] rounded-2xl p-5 shadow-[inset_0_1px_0_rgba(61,57,41,0.08)] ${className}`}>
+    <div className={`bg-[rgba(30,28,23,0.03)] border border-dashed border-[rgba(30,28,23,0.12)] p-4 ${className}`}>
       {children}
     </div>
   );
@@ -2148,7 +2327,7 @@ function Card({ title, badge, action, children }: {
     <GlassCard>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-[#3d3929] text-[13px]">{title}</span>
+          <span className="font-bold text-[#1e1c17] text-[11px] uppercase tracking-widest">// {title}</span>
           {badge}
         </div>
         {action}
@@ -2159,5 +2338,5 @@ function Card({ title, badge, action, children }: {
 }
 
 function Badge({ label, cls }: { label: string; cls: string }) {
-  return <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${cls}`}>{label}</span>;
+  return <span className={`text-[10px] font-mono px-1.5 py-0.5 border border-dashed uppercase tracking-wider ${cls}`}>{label}</span>;
 }

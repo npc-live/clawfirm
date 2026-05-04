@@ -44,14 +44,14 @@ interface ProviderEntry {
 }
 
 const inputCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
-  "bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.3)]";
+  "w-full px-2 py-1.5 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] " +
+  "focus:outline-none focus:border-[rgba(30,28,23,0.5)] " +
+  "bg-[rgba(30,28,23,0.03)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.25)]";
 
 const selectCls =
-  "w-full px-3 py-2 text-[13px] border border-[rgba(61,57,41,0.12)] rounded-xl " +
-  "focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] " +
-  "bg-[#ece5d8] text-[#3d3929]";
+  "w-full px-2 py-1.5 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] " +
+  "focus:outline-none focus:border-[rgba(30,28,23,0.5)] " +
+  "bg-[#f0ece3] text-[#1e1c17]";
 
 export function ProvidersPane() {
   const [cfg, setCfg] = useState<Config | null>(null);
@@ -168,36 +168,36 @@ export function ProvidersPane() {
   }
 
   return (
-    <div className="p-8">
-      <header className="mb-6 flex items-center justify-between">
+    <div className="max-w-2xl">
+      <header className="mb-4 flex items-start justify-between border-b border-dashed border-[rgba(30,28,23,0.3)] pb-4">
         <div>
-          <h2 className="text-[22px] font-semibold text-[#3d3929] tracking-[-0.43px]">Providers</h2>
-          <p className="text-[13px] text-[rgba(61,57,41,0.3)] mt-1">Manage LLM provider API keys and endpoints</p>
+          <h2 className="text-[11px] font-bold text-[#1e1c17] tracking-widest uppercase">// providers</h2>
+          <p className="text-[10px] text-[rgba(30,28,23,0.3)] mt-0.5 font-mono">// llm api keys and endpoints</p>
         </div>
         {editing === null && (
           <button onClick={startAdd}
-            className="px-4 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] transition-colors font-semibold">
-            + Add Provider
+            className="text-[10px] px-2.5 py-1 border border-dashed border-[rgba(30,28,23,0.25)] text-[rgba(30,28,23,0.55)] hover:text-[#1e1c17] hover:border-[rgba(30,28,23,0.4)] transition-colors font-mono uppercase tracking-wider">
+            [+ add]
           </button>
         )}
       </header>
 
       {error && (
-        <div className="mb-4 px-4 py-3 bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] rounded-xl text-[13px] text-red-400">
-          {error}
+        <div className="mb-4 px-3 py-2 border border-dashed border-[rgba(200,50,30,0.4)] text-[10px] font-mono text-red-400 flex-shrink-0">
+          // err: {error}
         </div>
       )}
 
       {/* Add / Edit form */}
       {editing !== null && (
-        <div className="mb-6 p-5 bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.12)] rounded-2xl max-w-xl">
-          <h3 className="text-[14px] font-semibold text-[#3d3929] mb-4">
-            {editing === "new" ? "New Provider" : `Edit · ${editing}`}
-          </h3>
-          <div className="space-y-3">
+        <div className="mb-4 p-4 bg-[rgba(30,28,23,0.03)] border border-dashed border-[rgba(30,28,23,0.3)] flex-shrink-0">
+          <p className="text-[10px] font-mono text-[rgba(30,28,23,0.45)] uppercase tracking-wider mb-3">
+            // {editing === "new" ? "new provider" : `edit: ${editing}`}
+          </p>
+          <div className="space-y-2.5">
             {editing === "new" && (
               <div>
-                <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">Provider ID</label>
+                <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">// id</label>
                 <input
                   className={inputCls}
                   placeholder="e.g. my-openai"
@@ -207,7 +207,7 @@ export function ProvidersPane() {
               </div>
             )}
             <div>
-              <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">Type</label>
+              <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">// type</label>
               <select className={selectCls} value={form.type} onChange={e => handleTypeChange(e.target.value)}>
                 {PROVIDER_TYPES.map(t => (
                   <option key={t} value={t}>{t}</option>
@@ -215,7 +215,7 @@ export function ProvidersPane() {
               </select>
             </div>
             <div>
-              <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">API Key</label>
+              <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">// api key</label>
               <input
                 className={inputCls}
                 type="password"
@@ -225,8 +225,8 @@ export function ProvidersPane() {
               />
             </div>
             <div>
-              <label className="block text-[12px] text-[rgba(61,57,41,0.4)] mb-1">
-                Base URL <span className="text-[rgba(61,57,41,0.3)]">(optional, uses default if empty)</span>
+              <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">
+                // base url <span className="normal-case">(optional)</span>
               </label>
               <input
                 className={inputCls}
@@ -236,81 +236,81 @@ export function ProvidersPane() {
               />
             </div>
           </div>
-          <div className="flex gap-2 mt-4">
+          <div className="flex gap-2 mt-3">
             <button onClick={handleSave} disabled={saving}
-              className="px-4 py-2 bg-[#c85a2a] text-white text-[13px] rounded-xl hover:bg-[#a84a22] disabled:opacity-50 transition-colors font-semibold">
-              {saving ? "Saving…" : "Save"}
+              className="text-[10px] px-2.5 py-1 border border-dashed border-[rgba(30,28,23,0.35)] text-[rgba(30,28,23,0.7)] hover:text-[#1e1c17] hover:border-[rgba(30,28,23,0.5)] disabled:opacity-40 transition-colors font-mono uppercase tracking-wider">
+              {saving ? "[saving]" : "[save]"}
             </button>
             <button onClick={cancelEdit}
-              className="px-4 py-2 bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.55)] text-[13px] rounded-xl hover:bg-[rgba(61,57,41,0.12)] transition-colors">
-              Cancel
+              className="text-[10px] px-2.5 py-1 border border-dashed border-[rgba(30,28,23,0.3)] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.6)] transition-colors font-mono uppercase tracking-wider">
+              [cancel]
             </button>
           </div>
         </div>
       )}
 
       {/* Provider list */}
-      <div className="space-y-3 max-w-2xl">
+      <div className="space-y-2">
         {providers.length === 0 && editing === null && (
-          <p className="text-[13px] text-[rgba(61,57,41,0.3)] py-8 text-center">
-            No providers configured. Click "Add Provider" to get started.
-          </p>
+          <div className="py-12 text-center">
+            <pre className="text-[10px] font-mono text-[rgba(30,28,23,0.2)] leading-tight">{`// NO PROVIDERS CONFIGURED\n// CLICK [+ ADD] TO GET STARTED`}</pre>
+          </div>
         )}
         {providers.map(p => (
           <div key={p.id}
-            className="p-4 bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-2xl hover:border-[rgba(61,57,41,0.15)] transition-colors">
+            className="px-3 py-2.5 bg-[rgba(30,28,23,0.02)] border border-dashed border-[rgba(30,28,23,0.25)] hover:border-[rgba(30,28,23,0.4)] transition-colors">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[14px] font-semibold text-[#3d3929]">{p.id}</span>
-                  <span className="px-2 py-0.5 text-[11px] bg-[rgba(200,90,42,0.15)] text-[#c85a2a] rounded-full font-medium">
+                  <span className="text-[12px] font-mono font-bold text-[#1e1c17]">{p.id}</span>
+                  <span className="text-[10px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] text-[rgba(30,28,23,0.5)] px-1.5 py-0.5 uppercase tracking-wider">
                     {p.type}
                   </span>
                   {testResult[p.id] === true && (
-                    <span className="text-[11px] text-emerald-400">✓ connected</span>
+                    <span className="text-[10px] font-mono text-[rgba(30,150,60,0.8)]">[ok]</span>
                   )}
                   {testResult[p.id] === false && (
-                    <span className="text-[11px] text-red-400">✗ failed</span>
+                    <span className="text-[10px] font-mono text-red-400">[fail]</span>
                   )}
                 </div>
-                <div className="mt-1.5 space-y-0.5">
-                  <p className="text-[12px] text-[rgba(61,57,41,0.35)] font-mono truncate">
-                    key: {p.api_key ? "••••••••" + p.api_key.slice(-4) : <span className="text-[rgba(255,100,100,0.6)]">not set</span>}
+                <div className="mt-1 space-y-0.5">
+                  <p className="text-[10px] text-[rgba(30,28,23,0.35)] font-mono truncate">
+                    key: {p.api_key ? "••••••••" + p.api_key.slice(-4) : <span className="text-[rgba(200,50,30,0.6)]">not set</span>}
                   </p>
                   {p.base_url && (
-                    <p className="text-[12px] text-[rgba(61,57,41,0.2)] font-mono truncate">
+                    <p className="text-[10px] text-[rgba(30,28,23,0.2)] font-mono truncate">
                       {p.base_url}
                     </p>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => handleTest(p.id)}
                   disabled={testing === p.id}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] disabled:opacity-50 transition-colors">
-                  {testing === p.id ? "…" : "Test"}
+                  className="text-[10px] px-2 py-1 border border-dashed border-[rgba(30,28,23,0.3)] text-[rgba(30,28,23,0.45)] hover:text-[#1e1c17] hover:border-[rgba(30,28,23,0.4)] disabled:opacity-40 transition-colors font-mono uppercase tracking-wider">
+                  {testing === p.id ? "[...]" : "[test]"}
                 </button>
                 <button
-                  onClick={() => { startEdit(p); }}
-                  className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] hover:text-[rgba(61,57,41,0.8)] transition-colors">
-                  Edit
+                  onClick={() => startEdit(p)}
+                  className="text-[10px] px-2 py-1 border border-dashed border-[rgba(30,28,23,0.3)] text-[rgba(30,28,23,0.45)] hover:text-[#1e1c17] hover:border-[rgba(30,28,23,0.4)] transition-colors font-mono uppercase tracking-wider">
+                  [edit]
                 </button>
                 {deleteConfirm === p.id ? (
                   <>
                     <button onClick={() => handleDelete(p.id)}
-                      className="px-3 py-1.5 text-[12px] bg-[rgba(239,68,68,0.15)] text-red-400 rounded-lg hover:bg-[rgba(239,68,68,0.25)] transition-colors">
-                      Confirm
+                      className="text-[10px] px-2 py-1 border border-dashed border-[rgba(200,50,30,0.4)] text-red-400 hover:border-red-400 transition-colors font-mono uppercase tracking-wider">
+                      [confirm]
                     </button>
                     <button onClick={() => setDeleteConfirm(null)}
-                      className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(61,57,41,0.12)] transition-colors">
-                      Cancel
+                      className="text-[10px] px-2 py-1 border border-dashed border-[rgba(30,28,23,0.3)] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.6)] transition-colors font-mono uppercase tracking-wider">
+                      [no]
                     </button>
                   </>
                 ) : (
                   <button onClick={() => setDeleteConfirm(p.id)}
-                    className="px-3 py-1.5 text-[12px] bg-[rgba(61,57,41,0.08)] text-[rgba(61,57,41,0.5)] rounded-lg hover:bg-[rgba(239,68,68,0.15)] hover:text-red-400 transition-colors">
-                    Delete
+                    className="text-[10px] px-2 py-1 border border-dashed border-[rgba(30,28,23,0.3)] text-[rgba(30,28,23,0.45)] hover:border-[rgba(200,50,30,0.4)] hover:text-red-400 transition-colors font-mono uppercase tracking-wider">
+                    [del]
                   </button>
                 )}
               </div>

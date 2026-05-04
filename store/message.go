@@ -100,19 +100,19 @@ func isSQLiteTransient(err error) bool {
 }
 
 // ListMessages returns decoded types.Message values for a channel+user, ordered oldest-first.
-// Default limit is 100 if Limit == 0.
+// Default limit is 100 if Limit == 0. Set NoLimit=true to fetch all messages.
 func (s *MessageStore) ListMessages(p QueryParams) ([]types.Message, error) {
-	limit := p.Limit
-	if limit <= 0 {
-		limit = 100
+	query := `SELECT content FROM messages WHERE channel_id=? AND user_id=? ORDER BY created_at ASC, id ASC`
+	args := []any{p.ChannelID, p.UserID}
+	if !p.NoLimit {
+		limit := p.Limit
+		if limit <= 0 {
+			limit = 100
+		}
+		query += ` LIMIT ? OFFSET ?`
+		args = append(args, limit, p.Offset)
 	}
-	rows, err := s.db.sql.Query(
-		`SELECT content FROM messages
-		 WHERE channel_id=? AND user_id=?
-		 ORDER BY created_at ASC, id ASC
-		 LIMIT ? OFFSET ?`,
-		p.ChannelID, p.UserID, limit, p.Offset,
-	)
+	rows, err := s.db.sql.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +212,7 @@ type QueryParams struct {
 	UserID    string
 	Limit     int
 	Offset    int
+	NoLimit   bool
 }
 
 func roleOf(m types.Message) string {

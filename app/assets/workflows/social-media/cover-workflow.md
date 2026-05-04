@@ -86,9 +86,7 @@ ffmpeg -y -i "$VIDEO_PATH" \
 
 ## Step 3: AI 生成封面 (media_gen)
 
-### 3a. 内置 media_gen 工具
-
-`tool/builtin/media_gen.go` — 直接在 ClawFirm 内调用：
+内置工具 `media_gen`，直接调用：
 
 ```json
 {
@@ -98,25 +96,10 @@ ffmpeg -y -i "$VIDEO_PATH" \
 }
 ```
 
-支持 Gemini (默认) 和 OpenAI (dall-e-3) 两个后端：
-- **Gemini**: `gemini-2.5-flash-preview-04-17`, aspect ratio 通过 prompt 提示
-- **OpenAI**: `dall-e-3`, 精确尺寸映射 (portrait=1024×1792, landscape=1792×1024)
+- provider 和 model 在 config.yml `tools.media_gen` 中配置
+- 支持的尺寸：`portrait` (9:16), `landscape` (16:9), `landscape_4x3` (4:3), `square` (1:1)
 
-### 3b. CLI 插件 media-gen
-
-`cmd/media-gen/main.go` — 独立 CLI 工具，支持参考图：
-
-```bash
-CLAWD_TOOL_INPUT='{"prompt":"...", "output_path":"/tmp/cover.png", "size":"portrait", "reference_images":["/tmp/cover_ref_frame_1.jpg"]}' \
-  ./bin/media-gen
-```
-
-**参考图 (reference_images) 用法：**
-- **人物参考（必须）**：传入包含人物正面的视频帧，prompt 中必须明确要求"将参考图中的人物作为封面主体，保留其面部特征、发型、服装"。仅传入参考图而不在 prompt 中明确要求保留人物，模型只会提取风格而忽略人物本身。
-- **风格参考（可选）**：传入额外图片用于色调/构图参考
-- 支持多张参考图，第一张应为人物帧
-
-### 3c. 封面 prompt 模板
+### 封面 prompt 模板
 
 ```
 为{平台}制作视频封面。
@@ -263,7 +246,7 @@ video-skills/video-stitcher → 视频成片
         ↓
 social-publish/{platform}/SKILL.md → 文案 + 封面 prompt
         ↓
-media_gen (或 cmd/media-gen) → 封面图片
+media_gen → 封面图片
         ↓
 ffmpeg cover-to-first-frame → 带封面首帧的视频
         ↓
@@ -317,14 +300,14 @@ eval $(ffprobe -v error -select_streams v:0 \
 # 截取参考帧
 ffmpeg -y -i "$VIDEO" -vf "select=eq(n\,90)" -frames:v 1 -q:v 2 /tmp/ref_frame.jpg
 
-# 通用横版封面（4:3, 默认必出）
-CLAWD_TOOL_INPUT='{"prompt":"制作通用横版视频封面。主题：'$TITLE'。大字标题，高对比度，人物突出，横屏4:3比例，适配微信视频号/朋友圈","output_path":"/tmp/cover_default.png","size":"landscape_4x3","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
+# 通用横版封面（4:3）— 调用内置 media_gen 工具
+# {"prompt":"制作通用横版视频封面。主题：$TITLE。大字标题，高对比度，人物突出，横屏4:3比例","size":"landscape_4x3","output":"/tmp/cover_default.png"}
 
-# 抖音版封面（竖屏 3:4）
-CLAWD_TOOL_INPUT='{"prompt":"为抖音制作视频封面。主题：'$TITLE'。大字标题，高对比度，人物突出，竖屏3:4比例","output_path":"/tmp/cover_douyin.png","size":"portrait","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
+# 抖音版封面（竖屏 3:4）— 调用内置 media_gen 工具
+# {"prompt":"为抖音制作视频封面。主题：$TITLE。大字标题，高对比度，人物突出，竖屏3:4比例","size":"portrait","output":"/tmp/cover_douyin.png"}
 
-# B站版封面（横屏 16:9）
-CLAWD_TOOL_INPUT='{"prompt":"为B站制作视频封面。主题：'$TITLE'。【教程】标签，大字标题+描边，横屏16:9比例","output_path":"/tmp/cover_bilibili.png","size":"landscape","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
+# B站版封面（横屏 16:9）— 调用内置 media_gen 工具
+# {"prompt":"为B站制作视频封面。主题：$TITLE。【教程】标签，大字标题+描边，横屏16:9比例","size":"landscape","output":"/tmp/cover_bilibili.png"}
 
 # 为每个平台合成首帧
 for PLATFORM in default douyin bilibili; do
@@ -361,8 +344,7 @@ done
 
 | 组件 | 路径 | 说明 |
 |------|------|------|
-| 内置 media_gen | `tool/builtin/media_gen.go` | Gemini/OpenAI 图片生成, portrait/landscape/square |
-| CLI media-gen | `cmd/media-gen/main.go` | 独立CLI, 支持 reference_images + landscape_4x3 |
+| media_gen | `tool/builtin/media_gen.go` | 内置工具，provider/model 在 config.yml 配置 |
 | video-stitcher | `app/assets/skills/video-skills/video-stitcher/SKILL.md` | ffmpeg 拼接, 转场, BGM |
 | 抖音封面规范 | `app/assets/skills/social-publish/douyin/SKILL.md` L80-92 | 1080×1440, ≤8字, 人脸+30% |
 | 小红书封面规范 | `app/assets/skills/social-publish/xiaohongshu/SKILL.md` L58-70 | 3:4, ≤10字 |

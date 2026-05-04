@@ -239,6 +239,8 @@ func handleAgentEvent(write func(any), ev types.AgentEvent) {
 				})
 			}
 		}
+	case types.EventMessageEnd:
+		write(serverMessage{Type: "message_end"})
 	case types.EventToolExecutionStart:
 		write(serverMessage{
 			Type:       "tool_start",

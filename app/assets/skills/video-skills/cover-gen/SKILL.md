@@ -1,6 +1,5 @@
 ---
 name: cover-gen
-version: 1.0.0
 description: |
   社交媒体封面生成 + 视频首帧插入。从视频成片提取关键帧，按各平台规格 AI 生成封面，
   最终将封面作为视频第一帧（0.1秒）合成到视频中。底层使用 media_gen (Gemini/OpenAI) + FFmpeg。
@@ -25,7 +24,7 @@ Step 1: 提取视频关键帧 + 技术参数 (ffprobe/ffmpeg)
   ↓
 Step 2: 确定平台封面规格（尺寸、比例、文字规范）
   ↓
-Step 3: AI 生成封面 (media_gen / cmd/media-gen)
+Step 3: AI 生成封面 (media_gen)
   ↓
 Step 4: 封面合成到视频第一帧 — 0.1s (ffmpeg concat)
   ↓
@@ -83,9 +82,7 @@ ffmpeg -y -i "$VIDEO_PATH" \
 
 ## Step 3: AI 生成封面
 
-### 3a. 内置 media_gen 工具
-
-`tool/builtin/media_gen.go` — 直接在 ClawFirm 内调用：
+内置工具 `media_gen`，直接调用：
 
 ```json
 {
@@ -95,41 +92,66 @@ ffmpeg -y -i "$VIDEO_PATH" \
 }
 ```
 
-支持 Gemini (默认) 和 OpenAI (dall-e-3) 两个后端：
-- **Gemini**: `gemini-2.5-flash-preview-04-17`, aspect ratio 通过 prompt 提示
-- **OpenAI**: `dall-e-3`, 精确尺寸映射 (portrait=1024x1792, landscape=1792x1024)
+- provider 和 model 在 config.yml `tools.media_gen` 中配置
+- 支持的尺寸：`portrait` (9:16), `landscape` (16:9), `landscape_4x3` (4:3), `square` (1:1)
 
-### 3b. CLI 插件 media-gen
+### 推荐模型
 
-`cmd/media-gen/main.go` — 独立 CLI 工具，支持参考图风格迁移：
+使用 GPT Image 2（`gpt-image-2`）生成封面——它能准确渲染中英文文字。
+Gemini 对中文文字渲染不稳定，容易出现文字缺失或乱码。
 
-```bash
-CLAWD_TOOL_INPUT='{"prompt":"...", "output_path":"/tmp/cover.png", "size":"portrait", "reference_images":["/tmp/cover_ref_frame_1.jpg"]}' \
-  ./bin/media-gen
+在 config.yml 中配置：
+```yaml
+tools:
+  media_gen:
+    platform: openai
+    model: gpt-image-2
 ```
 
-**参考图 (reference_images) 用法：**
-- 传入视频关键帧作为风格参考
-- AI 模型会基于参考图风格生成封面
-- 支持多张参考图
+### 封面 prompt 模板
 
-支持的尺寸：`portrait` (9:16), `landscape` (16:9), `landscape_4x3` (4:3), `square` (1:1)
-
-### 3c. 封面 prompt 模板
+**关键规则：prompt 中必须明确指定要渲染的文字内容。**
 
 ```
-为{平台}制作视频封面。
+Design a video cover image for {平台}.
 
-视频主题：{title}
-核心卖点：{desc中的关键信息}
+Topic: {title}
+Key selling points: {desc中的关键信息}
 
-要求：
-- 尺寸：{平台对应尺寸}
-- 大字标题："{≤N字标题}"，高对比度，加描边/阴影
-- 风格：{平台风格}
-- 人物/产品突出展示
-- 背景简洁不杂乱
-- 关键数字/利益点可视化
+TEXT OVERLAY (must appear exactly as written):
+- Main title: "{≤N字标题}" — large bold text, centered, with dark stroke/shadow for readability
+- Optional subtitle: "{副标题}" — smaller text below the title
+
+Visual requirements:
+- Aspect ratio: {平台对应尺寸}
+- Style: {平台风格}
+- Background: clean, not cluttered, complementary to the text
+- Subject/product prominently displayed
+- Key numbers or benefits visualized
+- High contrast between text and background
+
+The text MUST be clearly readable and rendered accurately — do not omit or alter any characters.
+```
+
+**使用示例（B站横屏）：**
+```
+Design a video cover image for Bilibili.
+
+Topic: AI时代的终端新玩法
+Key selling points: AI terminal tools, productivity boost, modern workflow
+
+TEXT OVERLAY (must appear exactly as written):
+- Main title: "AI时代的终端新玩法" — large bold text with white stroke outline, centered
+- Category tag: "【教程】" — top-left corner badge
+
+Visual requirements:
+- Aspect ratio: 16:9 landscape (1920x1080)
+- Style: tech/futuristic, dark background with neon accent colors
+- Terminal/code editor interface elements in the background
+- AI neural network visual elements
+- High contrast between text and background
+
+The text MUST be clearly readable and rendered accurately — do not omit or alter any characters.
 ```
 
 ---
@@ -325,11 +347,11 @@ eval $(ffprobe -v error -select_streams v:0 \
 # 截取参考帧
 ffmpeg -y -i "$VIDEO" -vf "select=eq(n\,90)" -frames:v 1 -q:v 2 /tmp/ref_frame.jpg
 
-# 抖音版封面（竖屏 3:4）
-CLAWD_TOOL_INPUT='{"prompt":"为抖音制作视频封面。主题：'"$TITLE"'。大字标题，高对比度，人物突出，竖屏3:4比例","output_path":"/tmp/cover_douyin.png","size":"portrait","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
+# 抖音版封面（竖屏 3:4）— 调用内置 media_gen 工具
+# {"prompt":"为抖音制作视频封面。主题：$TITLE。大字标题，高对比度，人物突出，竖屏3:4比例","size":"portrait","output":"/tmp/cover_douyin.png"}
 
-# B站版封面（横屏 16:9）
-CLAWD_TOOL_INPUT='{"prompt":"为B站制作视频封面。主题：'"$TITLE"'。【教程】标签，大字标题+描边，横屏16:9比例","output_path":"/tmp/cover_bilibili.png","size":"landscape","reference_images":["/tmp/ref_frame.jpg"]}' ./bin/media-gen
+# B站版封面（横屏 16:9）— 调用内置 media_gen 工具
+# {"prompt":"为B站制作视频封面。主题：$TITLE。【教程】标签，大字标题+描边，横屏16:9比例","size":"landscape","output":"/tmp/cover_bilibili.png"}
 
 # 为每个平台合成首帧
 for PLATFORM in douyin bilibili; do

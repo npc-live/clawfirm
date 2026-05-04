@@ -417,92 +417,21 @@ func initUserDirs() {
 	extractBuiltinAssets(embeddedWorkflows, "assets/workflows", filepath.Join(bundled, "workflows"))
 	extractBuiltinAssets(embeddedShortcuts, "assets/shortcuts", filepath.Join(bundled, "shortcuts"))
 
-	// Extract media-understand binary and register as claw-code plugin.
-	if len(embeddedMediaUnderstand) > 4096 {
-		muBin := filepath.Join(base, "bin", "media-understand")
-		if err := os.WriteFile(muBin, embeddedMediaUnderstand, 0o755); err != nil {
-			log.Printf("app: write media-understand binary: %v", err)
-		} else {
-			pluginDir := filepath.Join(base, "plugins", "installed", "media-understand", ".claude-plugin")
-			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
-				pluginJSON := fmt.Sprintf(`{
-  "name": "media-understand",
-  "version": "1.0.0",
-  "description": "用视觉模型分析图片或视频帧内容，返回文字描述。",
-  "defaultEnabled": true,
-  "tools": [{
-    "name": "media_understand",
-    "description": "Analyse an image or video frame with a vision LLM and return a text description. Supports JPEG, PNG, GIF, WEBP.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "file_path": {"type": "string", "description": "Local path to the image or video frame file"},
-        "prompt":    {"type": "string", "description": "Optional analysis prompt"}
-      },
-      "required": ["file_path"]
-    },
-    "command": %q,
-    "requiredPermission": "danger-full-access"
-  }]
-}`, muBin)
-				if err := os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(pluginJSON), 0o644); err != nil {
-					log.Printf("app: write media-understand plugin.json: %v", err)
-				} else {
-					registerClaudePlugin("media-understand@external")
-					log.Printf("app: registered claw plugin media-understand")
-				}
-			}
-		}
-	}
-
-	// Extract media-gen binary and register as claw-code plugin.
-	if len(embeddedMediaGen) > 4096 {
-		mgBin := filepath.Join(base, "bin", "media-gen")
-		if err := os.WriteFile(mgBin, embeddedMediaGen, 0o755); err != nil {
-			log.Printf("app: write media-gen binary: %v", err)
-		} else {
-			pluginDir := filepath.Join(base, "plugins", "installed", "media-gen", ".claude-plugin")
-			if err := os.MkdirAll(pluginDir, 0o755); err == nil {
-				pluginJSON := fmt.Sprintf(`{
-  "name": "media-gen",
-  "version": "1.0.0",
-  "description": "根据文字描述用 Gemini 生成图片，保存为 PNG 文件。",
-  "defaultEnabled": true,
-  "tools": [{
-    "name": "media_gen",
-    "description": "Generate an image from a text prompt using Gemini image generation and save it to a PNG file.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "prompt":      {"type": "string", "description": "Image generation prompt (English works best)"},
-        "output_path": {"type": "string", "description": "Output file path (default /tmp/media_gen_output.png)"}
-      },
-      "required": ["prompt"]
-    },
-    "command": %q,
-    "requiredPermission": "danger-full-access"
-  }]
-}`, mgBin)
-				if err := os.WriteFile(filepath.Join(pluginDir, "plugin.json"), []byte(pluginJSON), 0o644); err != nil {
-					log.Printf("app: write media-gen plugin.json: %v", err)
-				} else {
-					registerClaudePlugin("media-gen@external")
-					log.Printf("app: registered claw plugin media-gen")
-				}
-			}
-		}
-	}
-
 	cfgPath := filepath.Join(base, "config.yml")
 	if _, err := os.Stat(cfgPath); os.IsNotExist(err) {
 		defaultCfg := `# clawfirm configuration
 # Docs: https://github.com/ai-gateway/clawfirm
 providers:
     # anthropic:
-    #     type: anthropic
+    #     protocol: anthropic
     #     api_key: ${ANTHROPIC_API_KEY}
+    # my-zenmux:
+    #     platform: zenmux
+    #     protocol: anthropic
+    #     api_key: ${ZENMUX_API_KEY}
+    #     base_url: https://zenmux.ai/api/anthropic
     # openai:
-    #     type: openai
+    #     protocol: openai
     #     api_key: ${OPENAI_API_KEY}
 
 agents:
@@ -522,12 +451,14 @@ agents:
         - ~/.clawfirm/skills/
 
 # tools:
+#     # Built-in tools — provider must be a key from the providers section.
+#     # Platform/protocol are inherited from the provider config.
 #     media_gen:
-#         provider: anthropic
-#         model: gemini-2.5-flash
+#         provider: my-zenmux
+#         model: google/gemini-3.1-flash-image-preview
 #     media_understand:
-#         provider: anthropic
-#         model: gemini-2.0-flash
+#         provider: my-zenmux
+#         model: google/gemini-2.0-flash
 #     web_search:
 #         api_key: ${BRAVE_SEARCH_API_KEY}
 
@@ -1463,10 +1394,7 @@ func (a *App) GetModels(providerID string) []string {
 	if !ok {
 		return nil
 	}
-	t := pc.Type
-	if t == "" {
-		t = providerID
-	}
+	t := pc.ResolvedProtocol()
 	switch t {
 	case "anthropic":
 		return []string{
@@ -1846,7 +1774,7 @@ func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) 
 	msgs, err := db.Messages().ListMessages(store.QueryParams{
 		ChannelID: channelID,
 		UserID:    userID,
-		Limit:     50,
+		NoLimit:   true,
 	})
 	if err != nil {
 		return nil, err
@@ -1856,7 +1784,7 @@ func (a *App) GetHistory(channelID, userID string) ([]map[string]string, error) 
 		msgs, err = db.Messages().ListMessages(store.QueryParams{
 			ChannelID: "webchat",
 			UserID:    userID,
-			Limit:     50,
+			NoLimit:   true,
 		})
 		if err != nil {
 			return nil, err
@@ -2656,6 +2584,75 @@ func (a *App) GetMemoryDir() string {
 	return filepath.Join(clawfirmDataDir(), "memory")
 }
 
+const defaultSoulPrompt = `# 助手身份
+
+你是用户的私人智能助手，运行在言出法随（clawfirm）平台上。
+
+## 核心定位
+
+你不是一个通用问答机器人，而是用户的得力伙伴：
+- **主动推进**：用户说想做什么，你就帮他做到，不只是给建议
+- **言出法随**：用户的话就是指令，你来把它变成现实
+- **务实高效**：直接行动，少废话，结果说话
+
+## 性格特点
+
+- 语气自然、平等，像聪明的同事而非服务员
+- 遇到问题主动想办法，不推卸给用户自己解决
+- 简洁表达，不堆砌废话，但需要解释时能说清楚
+
+## 能力边界
+
+你可以调用工具完成真实任务：搜索、写代码、操作文件、控制浏览器、发布内容等。
+优先动手做，而不是光说"你可以……"。`
+
+// GetSoulPrompt reads SOUL.md from the default agent's workspace directory.
+// Returns the default soul prompt if the file does not exist yet.
+func (a *App) GetSoulPrompt() (string, error) {
+	dir := a.soulPromptDir()
+	data, err := os.ReadFile(filepath.Join(dir, "SOUL.md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return defaultSoulPrompt, nil
+		}
+		return "", err
+	}
+	return string(data), nil
+}
+
+// SaveSoulPrompt writes SOUL.md to the default agent's workspace directory
+// and rebuilds the system prompt for the running agent.
+func (a *App) SaveSoulPrompt(content string) error {
+	dir := a.soulPromptDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SOUL.md"), []byte(content), 0o644); err != nil {
+		return err
+	}
+	a.rebuildSystemPrompt()
+	return nil
+}
+
+func (a *App) soulPromptDir() string {
+	a.mu.RLock()
+	cfg := a.cfg
+	a.mu.RUnlock()
+	if cfg != nil {
+		for _, ac := range cfg.Agents {
+			if ac.WorkspaceDir != "" {
+				return ac.WorkspaceDir
+			}
+		}
+	}
+	cwd, _ := os.Getwd()
+	return cwd
+}
+
+func (a *App) rebuildSystemPrompt() {
+	_ = a.restartGateway()
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 func saveConfig(cfg *config.Config) error {
@@ -3062,9 +3059,18 @@ func (a *App) BrowserTestCDP() BrowserStatus {
 // BrowserLaunchChrome launches Chrome with --remote-debugging-port=9222 using a dedicated
 // user-data-dir so it can coexist with a running Chrome instance.
 func (a *App) BrowserLaunchChrome() BrowserStatus {
-	// If CDP is already reachable, return immediately.
+	// If CDP is already reachable, check it's not a headless instance.
 	if status := a.BrowserTestCDP(); status.Connected {
-		return status
+		if !isChromeHeadlessOnPort(9222) {
+			// Already running headed Chrome — just bring it to the foreground.
+			if runtime.GOOS == "darwin" {
+				exec.Command("osascript", "-e", `tell application "Google Chrome" to activate`).Run()
+			}
+			return status
+		}
+		// Headless Chrome is serving CDP — force-kill it so we can launch a headed instance.
+		killChromeHeadlessOnPort(9222)
+		time.Sleep(1500 * time.Millisecond)
 	}
 
 	// Find Chrome binary.
@@ -3080,12 +3086,15 @@ func (a *App) BrowserLaunchChrome() BrowserStatus {
 		profileDir = filepath.Join(os.Getenv("HOME"), ".clawfirm", "chrome-profile")
 	}
 
+	// Always use the direct binary so CDP flags are passed reliably (not through `open`).
+	// Explicitly exclude --headless to guarantee a visible headed window.
 	cmd := exec.Command(chromePath,
 		"--remote-debugging-port=9222",
 		"--user-data-dir="+profileDir,
 		"--no-first-run",
 		"--no-default-browser-check",
 		"--disable-blink-features=AutomationControlled",
+		"--disable-background-mode",
 	)
 	if err := cmd.Start(); err != nil {
 		return BrowserStatus{Connected: false, Error: "failed to launch Chrome: " + err.Error()}
@@ -3093,15 +3102,23 @@ func (a *App) BrowserLaunchChrome() BrowserStatus {
 	// Detach — don't wait for Chrome to exit.
 	go func() { _ = cmd.Wait() }()
 
-	// Poll for CDP readiness (up to 5 seconds).
-	for i := 0; i < 10; i++ {
+	// On macOS, activate the window after a short delay to bring it to the foreground.
+	if runtime.GOOS == "darwin" {
+		go func() {
+			time.Sleep(1 * time.Second)
+			exec.Command("osascript", "-e", `tell application "Google Chrome" to activate`).Run()
+		}()
+	}
+
+	// Poll for CDP readiness (up to 10 seconds).
+	for i := 0; i < 20; i++ {
 		time.Sleep(500 * time.Millisecond)
 		status := a.BrowserTestCDP()
 		if status.Connected {
 			return status
 		}
 	}
-	return BrowserStatus{Connected: false, Error: "Chrome launched but CDP not ready after 5s"}
+	return BrowserStatus{Connected: false, Error: "Chrome launched but CDP not ready after 10s"}
 }
 
 // findChromeBinary returns the path to a Chrome/Chromium binary, or "" if not found.
@@ -3136,6 +3153,43 @@ func findChromeBinary() string {
 		}
 	}
 	return ""
+}
+
+// isChromeHeadlessOnPort returns true if the Chrome process bound to cdpPort
+// was launched with --headless.
+func isChromeHeadlessOnPort(cdpPort int) bool {
+	portFlag := fmt.Sprintf("--remote-debugging-port=%d", cdpPort)
+	out, err := exec.Command("pgrep", "-a", "Google Chrome").Output()
+	if err != nil {
+		// pgrep -a not available on all platforms; fall back to ps
+		out, err = exec.Command("ps", "ax", "-o", "pid,command").Output()
+		if err != nil {
+			return false
+		}
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, portFlag) && strings.Contains(line, "--headless") {
+			return true
+		}
+	}
+	return false
+}
+
+// killChromeHeadlessOnPort force-kills any Chrome process using --remote-debugging-port=cdpPort.
+func killChromeHeadlessOnPort(cdpPort int) {
+	portFlag := fmt.Sprintf("--remote-debugging-port=%d", cdpPort)
+	out, err := exec.Command("ps", "ax", "-o", "pid=,command=").Output()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, portFlag) {
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				exec.Command("kill", "-9", fields[0]).Run()
+			}
+		}
+	}
 }
 
 // ─── Browser Shortcuts (YAML adapters) ──────────────────────────────────────

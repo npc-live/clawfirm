@@ -287,6 +287,7 @@ export namespace config {
 	}
 	export class ToolConfig {
 	    provider: string;
+	    protocol: string;
 	    model: string;
 	    api_key: string;
 	
@@ -297,6 +298,7 @@ export namespace config {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.provider = source["provider"];
+	        this.protocol = source["protocol"];
 	        this.model = source["model"];
 	        this.api_key = source["api_key"];
 	    }
@@ -462,6 +464,8 @@ export namespace config {
 	    }
 	}
 	export class ProviderConfig {
+	    platform: string;
+	    protocol: string;
 	    type: string;
 	    api_key: string;
 	    base_url: string;
@@ -472,6 +476,8 @@ export namespace config {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.platform = source["platform"];
+	        this.protocol = source["protocol"];
 	        this.type = source["type"];
 	        this.api_key = source["api_key"];
 	        this.base_url = source["base_url"];

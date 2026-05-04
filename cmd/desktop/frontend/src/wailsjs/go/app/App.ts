@@ -45,11 +45,19 @@ export interface WhipflowConfig {
   }>;
 }
 
+export interface ToolConfig {
+  provider: string;
+  protocol?: string;
+  model: string;
+  api_key: string;
+}
+
 export interface Config {
   providers: Record<string, { type: string; api_key: string; base_url: string }>;
   agents: AgentConfig[];
   default_agent: string;
   whipflow?: WhipflowConfig;
+  tools?: Record<string, ToolConfig>;
 }
 
 export interface HistoryMessage {
@@ -328,6 +336,12 @@ export const SyncMemory = (): Promise<void> =>
 
 export const GetMemoryDir = (): Promise<string> =>
   callGo<string>(PKG, STRUCT, "GetMemoryDir");
+
+export const GetSoulPrompt = (): Promise<string> =>
+  callGo<string>(PKG, STRUCT, "GetSoulPrompt");
+
+export const SaveSoulPrompt = (content: string): Promise<void> =>
+  callGo<void>(PKG, STRUCT, "SaveSoulPrompt", content);
 
 export const ListWhipFiles = (): Promise<string[]> =>
   callGo<string[]>(PKG, STRUCT, "ListWhipFiles");

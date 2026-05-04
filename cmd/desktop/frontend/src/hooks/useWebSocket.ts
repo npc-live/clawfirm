@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
 
 export interface WSMessage {
-  type: "thinking" | "thinking_delta" | "delta" | "done" | "error" | "tool_start" | "tool_update" | "tool_end";
+  type: "thinking" | "thinking_delta" | "delta" | "done" | "error" | "message_end" | "tool_start" | "tool_update" | "tool_end";
   content?: string;
   stop_reason?: string;
   // Tool event fields

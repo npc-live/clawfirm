@@ -63,9 +63,11 @@ func discoverProvidersFromEnv(cfg *Config) {
 		}
 		envPrefix := prefix + strings.ToUpper(id)
 		cfg.Providers[id] = ProviderConfig{
-			Type:    os.Getenv(envPrefix + "_TYPE"),
-			APIKey:  v,
-			BaseURL: os.Getenv(envPrefix + "_BASE_URL"),
+			Platform: os.Getenv(envPrefix + "_PLATFORM"),
+			Protocol: os.Getenv(envPrefix + "_PROTOCOL"),
+			Type:     os.Getenv(envPrefix + "_TYPE"),
+			APIKey:   v,
+			BaseURL:  os.Getenv(envPrefix + "_BASE_URL"),
 		}
 	}
 }
@@ -93,10 +95,24 @@ func applyEnvDefaults(cfg *Config) {
 }
 
 // ProviderConfig holds connection settings for a single LLM provider.
+//
+// Three orthogonal axes:
+//
+//	Platform: hosting service   — "zenmux", "openrouter", "google", "openai", …
+//	Protocol: API wire format   — "anthropic", "openai", "gemini", "ollama", …
+//	Model:    (on AgentConfig)  — "claude-opus-4.6", "gpt-4o", "gemini-2.5-flash", …
 type ProviderConfig struct {
-	// Type identifies the API protocol to use.
-	// Supported values: "anthropic" (default), "openai", "gemini", "ollama".
-	// Use "anthropic" for any Anthropic-compatible proxy (ZenMux, MiniMax, etc.).
+	// Platform identifies the hosting service (e.g. "zenmux", "openrouter").
+	// Used by tools like media_gen to select the correct endpoint.
+	// Auto-inferred from base_url when empty.
+	Platform string `yaml:"platform" json:"platform"`
+
+	// Protocol is the API wire format: "anthropic", "openai", "gemini", "ollama", etc.
+	// Takes precedence over the deprecated Type field.
+	Protocol string `yaml:"protocol" json:"protocol"`
+
+	// Type is a backward-compatible alias for Protocol.
+	// Deprecated: use Protocol instead.
 	Type string `yaml:"type" json:"type"`
 
 	// APIKey is the credential used to authenticate with the provider.
@@ -105,6 +121,17 @@ type ProviderConfig struct {
 
 	// BaseURL overrides the provider's default API endpoint.
 	BaseURL string `yaml:"base_url" json:"base_url"`
+}
+
+// ResolvedProtocol returns the effective protocol: Protocol > Type > "anthropic".
+func (p ProviderConfig) ResolvedProtocol() string {
+	if p.Protocol != "" {
+		return p.Protocol
+	}
+	if p.Type != "" {
+		return p.Type
+	}
+	return "anthropic"
 }
 
 // AgentConfig defines a named agent with its own provider, model, and persona.
@@ -218,8 +245,14 @@ type CronJobConfig struct {
 
 // ToolConfig holds per-tool configuration (provider, model, or direct API key).
 type ToolConfig struct {
-	// Provider references a key in the top-level providers map.
+	// Provider references a key in the top-level providers map (= platform).
+	// For media_gen this is the hosting platform: "zenmux", "Openrouter", etc.
 	Provider string `yaml:"provider" json:"provider"`
+
+	// Protocol is the API wire format for tools that support multiple backends.
+	// For media_gen: "google" (Vertex AI / generateContent), "openai" (images/generations),
+	// "openai-chat" (chat/completions + modalities). Auto-inferred from platform if empty.
+	Protocol string `yaml:"protocol" json:"protocol"`
 
 	// Model is the model ID to use for this tool.
 	Model string `yaml:"model" json:"model"`
@@ -281,9 +314,11 @@ func expandEnv(s string) string {
 // expandProviderConfig applies env expansion to all string fields.
 func expandProviderConfig(p ProviderConfig) ProviderConfig {
 	return ProviderConfig{
-		Type:    expandEnv(p.Type),
-		APIKey:  expandEnv(p.APIKey),
-		BaseURL: expandEnv(p.BaseURL),
+		Platform: expandEnv(p.Platform),
+		Protocol: expandEnv(p.Protocol),
+		Type:     expandEnv(p.Type),
+		APIKey:   expandEnv(p.APIKey),
+		BaseURL:  expandEnv(p.BaseURL),
 	}
 }
 
@@ -398,10 +433,10 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
-// ProviderType returns the API type for the given provider ID (default: "anthropic").
+// ProviderType returns the API protocol for the given provider ID (default: "anthropic").
 func (c *Config) ProviderType(providerID string) string {
-	if p, ok := c.Providers[providerID]; ok && p.Type != "" {
-		return p.Type
+	if p, ok := c.Providers[providerID]; ok {
+		return p.ResolvedProtocol()
 	}
 	return "anthropic"
 }

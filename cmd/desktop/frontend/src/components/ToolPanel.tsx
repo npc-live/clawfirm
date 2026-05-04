@@ -124,13 +124,13 @@ function CollapsibleJSON({ label, data }: { label: string; data: any }) {
     <div className="mt-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.55)] flex items-center gap-1 transition-colors"
+        className="text-[11px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.55)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         {label}
       </button>
       {open && (
-        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono">
+        <pre className="mt-1 text-[11px] text-[rgba(30,28,23,0.6)] bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.08)] p-2 overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all font-mono border border-dashed">
           {text}
         </pre>
       )}
@@ -140,25 +140,17 @@ function CollapsibleJSON({ label, data }: { label: string; data: any }) {
 
 function StatusIndicator({ status }: { status: ToolExecution["status"] }) {
   if (status === "running") {
-    return <span className="inline-block w-2 h-2 rounded-full bg-[#c85a2a] animate-pulse" />;
+    return <span className="text-[10px] font-mono text-[rgba(200,90,42,0.8)] animate-pulse">[run]</span>;
   }
   if (status === "done") {
-    return <span className="text-emerald-400 text-[13px]">&#10003;</span>;
+    return <span className="text-[10px] font-mono text-[rgba(22,163,74,1)]">[ok]</span>;
   }
   if (status === "interrupted") {
-    return <span className="text-amber-400 text-[13px]">&#9888;</span>;
+    return <span className="text-[10px] font-mono text-[rgba(180,140,20,0.8)]">[brk]</span>;
   }
-  return <span className="text-red-400 text-[13px]">&#10007;</span>;
+  return <span className="text-[10px] font-mono text-[rgba(200,50,30,0.8)]">[err]</span>;
 }
 
-function Spinner() {
-  return (
-    <svg className="animate-spin w-4 h-4 text-[#c85a2a]" viewBox="0 0 24 24" fill="none">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
-  );
-}
 
 function formatDuration(start: number, end?: number): string {
   const ms = (end ?? Date.now()) - start;
@@ -186,18 +178,18 @@ function WhipflowSource({ exec }: { exec: ToolExecution }) {
     <div className="mt-1.5">
       <button
         onClick={() => setOpen(!open)}
-        className="text-[11px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.55)] flex items-center gap-1 transition-colors"
+        className="text-[11px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.55)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         {label}
       </button>
       {open && content && (
-        <pre className="mt-1 text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
+        <pre className="mt-1 text-[11px] text-[rgba(30,28,23,0.6)] bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.08)] rounded-lg p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all font-mono leading-relaxed">
           {content}
         </pre>
       )}
       {open && !content && args.file && (
-        <p className="mt-1 text-[11px] text-[rgba(61,57,41,0.3)] font-mono">{args.file}</p>
+        <p className="mt-1 text-[11px] text-[rgba(30,28,23,0.3)] font-mono">{args.file}</p>
       )}
     </div>
   );
@@ -218,7 +210,7 @@ function WhipflowSessionSteps({ exec, onCommand }: { exec: ToolExecution; onComm
   return (
     <div className="mt-2 space-y-1.5">
       {/* Summary row */}
-      <div className="flex items-center gap-2 text-[11px] text-[rgba(61,57,41,0.4)]">
+      <div className="flex items-center gap-2 text-[11px] text-[rgba(30,28,23,0.4)]">
         <span className="font-mono">{doneCount + errorCount}/{steps.length} sessions</span>
         {runningCount > 0 && <span className="text-[#c85a2a] animate-pulse">· {runningCount} running</span>}
         {errorCount > 0 && <span className="text-red-400">· {errorCount} failed</span>}
@@ -269,7 +261,7 @@ function SessionMessages({ messages }: { messages: any[] }) {
     <div className="mt-1">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="text-[10px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.55)] flex items-center gap-1 transition-colors"
+        className="text-[10px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.55)] flex items-center gap-1 transition-colors"
       >
         <span className={`transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
         Conversation · {turns.filter(t => !t.isToolUse && !t.isToolResult).length} messages
@@ -282,21 +274,21 @@ function SessionMessages({ messages }: { messages: any[] }) {
               turn.isToolUse
                 ? "bg-[rgba(200,90,42,0.08)] border border-[rgba(200,90,42,0.15)]"
                 : turn.isToolResult
-                ? "bg-[rgba(61,57,41,0.04)] border border-[rgba(61,57,41,0.08)]"
+                ? "bg-[rgba(30,28,23,0.04)] border border-[rgba(30,28,23,0.08)]"
                 : turn.role === "user"
                 ? "bg-[rgba(200,90,42,0.06)] border border-[rgba(200,90,42,0.1)] ml-4"
-                : "bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.08)]"
+                : "bg-[rgba(30,28,23,0.05)] border border-[rgba(30,28,23,0.08)]"
             }`}>
               <div className="flex items-center gap-1.5 mb-0.5">
                 {turn.isToolUse ? (
                   <span className="text-[9px] font-mono text-[rgba(200,90,42,0.7)] uppercase tracking-wider">⚙ {turn.toolName}</span>
                 ) : turn.isToolResult ? (
-                  <span className="text-[9px] font-mono text-[rgba(61,57,41,0.4)] uppercase tracking-wider">↩ result</span>
+                  <span className="text-[9px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider">↩ result</span>
                 ) : (
-                  <span className="text-[9px] font-mono text-[rgba(61,57,41,0.4)] uppercase tracking-wider">{turn.role}</span>
+                  <span className="text-[9px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider">{turn.role}</span>
                 )}
               </div>
-              <pre className="whitespace-pre-wrap break-words font-mono text-[rgba(61,57,41,0.7)] leading-relaxed line-clamp-4">
+              <pre className="whitespace-pre-wrap break-words font-mono text-[rgba(30,28,23,0.7)] leading-relaxed line-clamp-4">
                 {turn.text.length > 300 ? turn.text.slice(0, 300) + "…" : turn.text}
               </pre>
             </div>
@@ -338,43 +330,43 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
     ? "border-[rgba(200,90,42,0.3)] bg-[rgba(200,90,42,0.04)]"
     : isError
     ? "border-[rgba(239,68,68,0.3)] bg-[rgba(239,68,68,0.04)]"
-    : "border-[rgba(61,57,41,0.08)] bg-[rgba(61,57,41,0.04)]";
+    : "border-[rgba(22,163,74,0.35)] bg-[rgba(22,163,74,0.04)]";
 
   const label = step.name
     ? `#${step.index + 1} · ${step.name}`
     : `Session ${step.index + 1}`;
 
   return (
-    <div className={`rounded-lg border overflow-hidden ${borderCls}`}>
+    <div className={`border border-dashed overflow-hidden ${borderCls}`}>
       <button
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[rgba(61,57,41,0.04)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[rgba(30,28,23,0.04)] transition-colors"
         onClick={() => setOpen((o) => !o)}
       >
         {/* Status dot */}
         {isRunning ? (
           <span className="w-2 h-2 rounded-full bg-[#c85a2a] animate-pulse flex-shrink-0" />
         ) : isDone ? (
-          <span className="text-emerald-400 text-[12px] flex-shrink-0">✓</span>
+          <span className="text-[rgba(22,163,74,0.9)] text-[12px] flex-shrink-0">✓</span>
         ) : (
           <span className="text-red-400 text-[12px] flex-shrink-0">✗</span>
         )}
         {/* Label */}
-        <span className="flex-1 text-[12px] text-[rgba(61,57,41,0.8)] font-medium truncate">
+        <span className="flex-1 text-[12px] text-[rgba(30,28,23,0.8)] font-medium truncate">
           {label}
         </span>
         {/* Provider badge */}
         {step.provider && (
-          <span className="text-[10px] font-mono text-[rgba(61,57,41,0.3)] flex-shrink-0">
+          <span className="text-[10px] font-mono text-[rgba(30,28,23,0.3)] flex-shrink-0">
             {step.provider}
           </span>
         )}
         {/* Elapsed / Duration */}
         {isRunning ? (
-          <span className={`text-[10px] font-mono flex-shrink-0 ${isStuck ? "text-amber-400" : "text-[rgba(61,57,41,0.3)]"}`}>
+          <span className={`text-[10px] font-mono flex-shrink-0 ${isStuck ? "text-amber-400" : "text-[rgba(30,28,23,0.3)]"}`}>
             {isStuck ? `⚠ ${elapsed}s` : `${elapsed}s`}
           </span>
         ) : step.duration_ms != null && step.duration_ms > 0 ? (
-          <span className="text-[10px] text-[rgba(61,57,41,0.2)] font-mono flex-shrink-0">
+          <span className="text-[10px] text-[rgba(30,28,23,0.2)] font-mono flex-shrink-0">
             {step.duration_ms < 1000 ? `${step.duration_ms}ms` : `${(step.duration_ms / 1000).toFixed(1)}s`}
           </span>
         ) : null}
@@ -382,7 +374,7 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
         {isDone && onContinue && (
           <button
             onClick={(e) => { e.stopPropagation(); onContinue(); }}
-            className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.6)] hover:bg-[rgba(61,57,41,0.2)] transition-colors flex-shrink-0"
+            className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(30,28,23,0.12)] text-[rgba(30,28,23,0.6)] hover:bg-[rgba(30,28,23,0.2)] transition-colors flex-shrink-0"
             title="Open this session's conversation to continue"
           >
             Continue
@@ -398,7 +390,7 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
           </button>
         )}
         {/* Expand toggle */}
-        <span className={`text-[rgba(61,57,41,0.3)] text-[10px] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+        <span className={`text-[rgba(30,28,23,0.3)] text-[10px] flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
       </button>
 
       {/* Streaming text preview (collapsed, while running) */}
@@ -410,7 +402,7 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
             </p>
           )}
           {step.stream_text && (
-            <pre className="text-[11px] text-[rgba(61,57,41,0.5)] bg-[rgba(61,57,41,0.03)] rounded p-1.5 whitespace-pre-wrap break-words max-h-16 overflow-hidden font-mono leading-relaxed line-clamp-3">
+            <pre className="text-[11px] text-[rgba(30,28,23,0.5)] bg-[rgba(30,28,23,0.03)] rounded p-1.5 whitespace-pre-wrap break-words max-h-16 overflow-hidden font-mono leading-relaxed line-clamp-3">
               {step.stream_text.length > 200 ? "…" + step.stream_text.slice(-200) : step.stream_text}
             </pre>
           )}
@@ -418,12 +410,12 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
       )}
 
       {open && (
-        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[rgba(61,57,41,0.08)]">
+        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[rgba(30,28,23,0.08)]">
           {/* Prompt */}
           {step.prompt && (
           <div>
-            <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Prompt</p>
-            <pre className="text-[11px] text-[rgba(61,57,41,0.55)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto font-mono leading-relaxed">
+            <p className="text-[10px] font-semibold text-[rgba(30,28,23,0.3)] uppercase tracking-wider mb-1">Prompt</p>
+            <pre className="text-[11px] text-[rgba(30,28,23,0.55)] bg-[rgba(30,28,23,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-40 overflow-y-auto font-mono leading-relaxed">
               {step.prompt}
             </pre>
           </div>
@@ -432,7 +424,7 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
           {isRunning && step.stream_text && (
             <div>
               <p className="text-[10px] font-semibold text-[rgba(200,90,42,0.5)] uppercase tracking-wider mb-1">Generating…</p>
-              <pre className="text-[11px] text-[rgba(61,57,41,0.6)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
+              <pre className="text-[11px] text-[rgba(30,28,23,0.6)] bg-[rgba(30,28,23,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
                 {step.stream_text}
               </pre>
             </div>
@@ -440,8 +432,8 @@ function SessionStepCard({ step, onRetry, onContinue }: { step: WhipflowSessionS
           {/* Output */}
           {step.output && (
             <div>
-              <p className="text-[10px] font-semibold text-[rgba(61,57,41,0.3)] uppercase tracking-wider mb-1">Output</p>
-              <pre className="text-[11px] text-[rgba(61,57,41,0.7)] bg-[rgba(61,57,41,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
+              <p className="text-[10px] font-semibold text-[rgba(30,28,23,0.3)] uppercase tracking-wider mb-1">Output</p>
+              <pre className="text-[11px] text-[rgba(30,28,23,0.7)] bg-[rgba(30,28,23,0.04)] rounded-lg p-2 whitespace-pre-wrap break-words max-h-48 overflow-y-auto font-mono leading-relaxed">
                 {step.output}
               </pre>
             </div>
@@ -487,15 +479,15 @@ function StepPreviewCard({
     analysis.tier === "medium" ? "Multi-step" : "Complex";
 
   const tierColor =
-    analysis.tier === "simple" ? "text-emerald-500" :
+    analysis.tier === "simple" ? "text-[rgba(22,163,74,1)]" :
     analysis.tier === "medium" ? "text-amber-500" : "text-red-400";
 
   return (
-    <div className="mt-2 rounded-xl border border-[rgba(200,90,42,0.2)] bg-[rgba(200,90,42,0.04)] overflow-hidden">
+    <div className="mt-2 border border-dashed border-[rgba(200,90,42,0.25)] bg-[rgba(200,90,42,0.03)] overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 flex items-center gap-2 border-b border-[rgba(200,90,42,0.1)]">
         <span className={`text-[11px] font-semibold ${tierColor}`}>{tierLabel}</span>
-        <span className="text-[10px] text-[rgba(61,57,41,0.4)] font-mono">
+        <span className="text-[10px] text-[rgba(30,28,23,0.4)] font-mono">
           {analysis.session_count} session{analysis.session_count !== 1 ? "s" : ""}
           {analysis.has_parallel && " · parallel"}
           {analysis.has_loops && " · loops"}
@@ -523,7 +515,7 @@ function StepPreviewCard({
         {!confirmed && (
           <button
             onClick={() => { setConfirmed(true); onCommand("Execute session 0 only (step-by-step mode)."); }}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.18)] transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(30,28,23,0.1)] text-[rgba(30,28,23,0.5)] hover:bg-[rgba(30,28,23,0.18)] transition-colors"
             title="Execute one session at a time"
           >
             Next Step
@@ -532,14 +524,14 @@ function StepPreviewCard({
         {onEdit && !confirmed && (
           <button
             onClick={onEdit}
-            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.15)] transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(30,28,23,0.1)] text-[rgba(30,28,23,0.5)] hover:bg-[rgba(30,28,23,0.15)] transition-colors"
           >
             Edit
           </button>
         )}
         <button
           onClick={() => setShowSource((s) => !s)}
-          className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.04)] text-[rgba(61,57,41,0.35)] hover:bg-[rgba(61,57,41,0.08)] transition-colors"
+          className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(30,28,23,0.04)] text-[rgba(30,28,23,0.35)] hover:bg-[rgba(30,28,23,0.08)] transition-colors"
         >
           {showSource ? "Steps" : "Code"}
         </button>
@@ -547,7 +539,7 @@ function StepPreviewCard({
 
       {showSource ? (
         /* Source code view */
-        <pre className="px-3 py-2 text-[11px] font-mono text-[rgba(61,57,41,0.7)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto leading-relaxed">
+        <pre className="px-3 py-2 text-[11px] font-mono text-[rgba(30,28,23,0.7)] whitespace-pre-wrap break-words max-h-64 overflow-y-auto leading-relaxed">
           {preview.source}
         </pre>
       ) : (
@@ -560,12 +552,12 @@ function StepPreviewCard({
               </span>
               <div className="flex-1 min-w-0">
                 {step.name && (
-                  <span className="text-[11px] font-medium text-[rgba(61,57,41,0.7)] mr-1.5">{step.name}</span>
+                  <span className="text-[11px] font-medium text-[rgba(30,28,23,0.7)] mr-1.5">{step.name}</span>
                 )}
-                <span className="text-[11px] text-[rgba(61,57,41,0.45)] truncate">{step.prompt}</span>
+                <span className="text-[11px] text-[rgba(30,28,23,0.45)] truncate">{step.prompt}</span>
               </div>
               {step.agent && (
-                <span className="text-[9px] font-mono text-[rgba(61,57,41,0.3)] flex-shrink-0">{step.agent}</span>
+                <span className="text-[9px] font-mono text-[rgba(30,28,23,0.3)] flex-shrink-0">{step.agent}</span>
               )}
               {!confirmed && (
                 <button
@@ -607,30 +599,30 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
     : "Waiting...";
 
   return (
-    <div className="flex-shrink-0 border-b border-[rgba(61,57,41,0.08)]">
+    <div className="flex-shrink-0 border-b border-dashed border-[rgba(30,28,23,0.12)]">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-[rgba(61,57,41,0.04)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[rgba(30,28,23,0.04)] transition-colors"
       >
         {/* Status icon */}
         {hasRunning ? (
-          <Spinner />
+          <span className="text-[10px] font-mono text-[rgba(200,90,42,0.8)] animate-pulse">[run]</span>
         ) : errorCount > 0 ? (
-          <span className="text-red-400 text-[14px]">&#10007;</span>
+          <span className="text-[10px] font-mono text-[rgba(200,50,30,0.8)]">[err]</span>
         ) : (
-          <span className="text-emerald-400 text-[14px]">&#10003;</span>
+          <span className="text-[10px] font-mono text-[rgba(22,163,74,1)]">[ok]</span>
         )}
         {/* Task label */}
-        <span className="flex-1 text-left text-[13px] text-[rgba(61,57,41,0.85)] truncate">
+        <span className={`flex-1 text-left text-[11px] font-mono truncate uppercase tracking-wider ${allDone ? "text-[rgba(22,163,74,0.9)]" : "text-[rgba(30,28,23,0.7)]"}`}>
           {label}
         </span>
         {/* Progress counter */}
-        <span className="text-[12px] text-[rgba(61,57,41,0.4)] font-mono tabular-nums">
+        <span className={`text-[10px] font-mono tabular-nums ${allDone ? "text-[rgba(22,163,74,0.75)]" : "text-[rgba(30,28,23,0.35)]"}`}>
           {doneCount + errorCount}/{total}
         </span>
         {/* Collapse toggle */}
-        <span className={`text-[rgba(61,57,41,0.3)] text-[11px] transition-transform ${collapsed ? "" : "rotate-180"}`}>
-          ▾
+        <span className="text-[rgba(30,28,23,0.3)] text-[10px] font-mono">
+          {collapsed ? "v" : "^"}
         </span>
       </button>
     </div>
@@ -643,34 +635,34 @@ function TaskSummaryBar({ executions }: { executions: ToolExecution[] }) {
 
 export function ToolPanel({ executions, onCommand, onEditPreview }: Props) {
   return (
-    <div className="flex flex-col h-full bg-[#ece5d8] text-[#3d3929]">
+    <div className="flex flex-col h-full bg-[#e8e4db] text-[#1e1c17]">
       {/* Task summary bar */}
       <TaskSummaryBar executions={executions} />
 
       {/* Tool execution cards */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
         {executions.length === 0 && (
-          <div className="text-center text-[rgba(61,57,41,0.3)] mt-8 text-[13px]">No tool activity</div>
+          <div className="text-center text-[rgba(30,28,23,0.25)] mt-8 text-[10px] font-mono tracking-widest uppercase">// no tool activity</div>
         )}
         {executions.map((exec) => (
           <div
             key={exec.id}
-            className={`rounded-xl p-3 text-[13px] border ${
+            className={`p-2.5 text-[12px] border border-dashed ${
               exec.status === "running"
-                ? "border-[rgba(200,90,42,0.25)] bg-[rgba(200,90,42,0.05)]"
+                ? "border-[rgba(200,90,42,0.3)] bg-[rgba(200,90,42,0.04)]"
                 : exec.status === "error"
-                ? "border-[rgba(255,69,58,0.25)] bg-[rgba(255,69,58,0.05)]"
+                ? "border-[rgba(200,50,30,0.3)] bg-[rgba(200,50,30,0.04)]"
                 : exec.status === "interrupted"
-                ? "border-[rgba(245,158,11,0.25)] bg-[rgba(245,158,11,0.05)]"
-                : "border-[rgba(61,57,41,0.08)] bg-[rgba(61,57,41,0.05)]"
+                ? "border-[rgba(180,140,20,0.3)] bg-[rgba(180,140,20,0.04)]"
+                : "border-[rgba(22,163,74,0.35)] bg-[rgba(22,163,74,0.04)]"
             }`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <StatusIndicator status={exec.status} />
-                <span className="font-mono font-medium text-[#3d3929] text-[13px]">{exec.name}</span>
+                <span className="font-mono text-[#1e1c17] text-[11px] uppercase tracking-wider">{exec.name}</span>
               </div>
-              <span className="text-[11px] text-[rgba(61,57,41,0.3)]">
+              <span className="text-[10px] text-[rgba(30,28,23,0.3)] font-mono">
                 {formatDuration(exec.startTime, exec.endTime)}
               </span>
             </div>
@@ -699,7 +691,7 @@ export function ToolPanel({ executions, onCommand, onEditPreview }: Props) {
             ) : (
               <>
                 <CollapsibleJSON label="Arguments" data={exec.args} />
-                {exec.partialResult !== undefined && exec.status === "running" && (
+                {exec.partialResult !== undefined && (
                   <CollapsibleJSON label="Partial Result" data={exec.partialResult} />
                 )}
               </>

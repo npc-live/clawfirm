@@ -45,10 +45,7 @@ func BuildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, e
 	if key == "" {
 		key = os.Getenv(ProviderEnvVar(id))
 	}
-	t := pc.Type
-	if t == "" {
-		t = "anthropic"
-	}
+	t := pc.ResolvedProtocol()
 	switch t {
 	case "anthropic":
 		base := pc.BaseURL
@@ -83,6 +80,9 @@ func BuildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, e
 	case "gemini":
 		if key == "" {
 			return nil, fmt.Errorf("provider %q: no api_key", id)
+		}
+		if pc.BaseURL != "" {
+			return gemini.NewWithBaseURL(key, pc.BaseURL), nil
 		}
 		return gemini.New(key), nil
 
@@ -393,9 +393,11 @@ func BuildTools(names []string, memMgr *memory.Manager, cfg *config.Config, vaul
 		},
 		// Image generation
 		"media_gen": &builtin.MediaGen{
-			Provider: toolProviderType(cfg, "media_gen"),
+			Platform: toolPlatform(cfg, "media_gen"),
+			Protocol: toolProtocol(cfg, "media_gen"),
 			Model:    toolModel(cfg, "media_gen"),
 			APIKey:   toolAPIKey(cfg, "media_gen"),
+			BaseURL:  toolBaseURL(cfg, "media_gen"),
 		},
 	}
 
@@ -455,8 +457,8 @@ func toolAPIKey(cfg *config.Config, toolName string) string {
 	return os.Getenv(ProviderEnvVar(tc.Provider))
 }
 
-// toolProviderType returns the provider type string (e.g. "gemini", "openai")
-// for a named tool, falling back to the provider ID if Type is unset.
+// toolProviderType returns the provider protocol string (e.g. "gemini", "openai")
+// for a named tool, falling back to the provider ID if unset.
 func toolProviderType(cfg *config.Config, toolName string) string {
 	if cfg == nil {
 		return ""
@@ -465,8 +467,8 @@ func toolProviderType(cfg *config.Config, toolName string) string {
 	if !ok || tc.Provider == "" {
 		return ""
 	}
-	if pc, ok := cfg.Providers[tc.Provider]; ok && pc.Type != "" {
-		return pc.Type
+	if pc, ok := cfg.Providers[tc.Provider]; ok {
+		return pc.ResolvedProtocol()
 	}
 	return tc.Provider
 }
@@ -483,6 +485,33 @@ func toolLLMProvider(cfg *config.Config, providerMap map[string]provider.LLMProv
 	return providerMap[tc.Provider]
 }
 
+// toolPlatform returns the hosting platform for a named tool.
+// Priority: ProviderConfig.Platform > provider key name.
+func toolPlatform(cfg *config.Config, toolName string) string {
+	if cfg == nil {
+		return ""
+	}
+	tc, ok := cfg.Tools[toolName]
+	if !ok || tc.Provider == "" {
+		return ""
+	}
+	if pc, ok := cfg.Providers[tc.Provider]; ok && pc.Platform != "" {
+		return pc.Platform
+	}
+	return tc.Provider
+}
+
+// toolProtocol returns the explicit protocol override for a named tool.
+func toolProtocol(cfg *config.Config, toolName string) string {
+	if cfg == nil {
+		return ""
+	}
+	if tc, ok := cfg.Tools[toolName]; ok {
+		return tc.Protocol
+	}
+	return ""
+}
+
 // toolModel returns the configured model for a named tool.
 func toolModel(cfg *config.Config, toolName string) string {
 	if cfg == nil {
@@ -490,6 +519,21 @@ func toolModel(cfg *config.Config, toolName string) string {
 	}
 	if tc, ok := cfg.Tools[toolName]; ok {
 		return tc.Model
+	}
+	return ""
+}
+
+// toolBaseURL returns the base URL for a named tool's configured provider.
+func toolBaseURL(cfg *config.Config, toolName string) string {
+	if cfg == nil {
+		return ""
+	}
+	tc, ok := cfg.Tools[toolName]
+	if !ok || tc.Provider == "" {
+		return ""
+	}
+	if pc, ok := cfg.Providers[tc.Provider]; ok {
+		return pc.BaseURL
 	}
 	return ""
 }

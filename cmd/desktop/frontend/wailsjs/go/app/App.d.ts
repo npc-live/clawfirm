@@ -77,6 +77,8 @@ export function GetSessions():Promise<Array<app.SessionInfo>>;
 
 export function GetSkillContent(arg1:string):Promise<string>;
 
+export function GetSoulPrompt():Promise<string>;
+
 export function GetToolExecutionState(arg1:string,arg2:string):Promise<Array<app.ToolExecutionInfo>>;
 
 export function GetVault():Promise<Array<app.VaultEntry>>;
@@ -128,6 +130,8 @@ export function SaveConfigRaw(arg1:string):Promise<void>;
 export function SaveFeishuConfig(arg1:string,arg2:string):Promise<void>;
 
 export function SaveMemoryFileContent(arg1:string,arg2:string):Promise<void>;
+
+export function SaveSoulPrompt(arg1:string):Promise<void>;
 
 export function SearchMemory(arg1:string,arg2:number):Promise<Array<app.MemorySearchResult>>;
 

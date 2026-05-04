@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -355,11 +356,24 @@ func executeOne(
 		}
 	}
 
+	// Surface error text in the event so the UI can display it.
+	toolResultDisplay := any(details)
+	if isError && details == nil {
+		for _, c := range content {
+			if t, ok := c.(*types.TextContent); ok {
+				toolResultDisplay = t.Text
+				break
+			}
+		}
+	}
+	if isError {
+		log.Printf("[tool] %s error: %v", tc.Name, toolResultDisplay)
+	}
 	emit(types.AgentEvent{
 		Type:        types.EventToolExecutionEnd,
 		ToolCallID:  tc.ID,
 		ToolName:    tc.Name,
-		ToolResult:  details,
+		ToolResult:  toolResultDisplay,
 		ToolIsError: isError,
 	})
 

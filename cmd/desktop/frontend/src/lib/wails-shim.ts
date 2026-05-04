@@ -72,6 +72,8 @@ export {
   SearchMemory,
   SyncMemory,
   GetMemoryDir,
+  GetSoulPrompt,
+  SaveSoulPrompt,
   ListWhipFiles,
   GetWhipFileContent,
   BrowserTestCDP,

@@ -235,6 +235,16 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
       });
       return;
     }
+    if (msg.type === "message_end") {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.role === "assistant" && last.streaming) {
+          return [...prev.slice(0, -1), { ...last, streaming: false }];
+        }
+        return prev;
+      });
+      return;
+    }
     if (msg.type === "delta" && msg.content) {
       setIsThinking(false);
       setMessages((prev) => {
@@ -448,7 +458,7 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
         return;
       }
     }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -507,44 +517,52 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
   }
 
   const statusColor =
-    wsStatus === "open" ? "bg-emerald-400" :
-    wsStatus === "connecting" ? "bg-amber-400" :
-    "bg-red-400";
+    wsStatus === "open" ? "bg-[#1e1c17]" :
+    wsStatus === "connecting" ? "bg-[rgba(30,28,23,0.4)] animate-pulse" :
+    "bg-[rgba(200,90,42,0.6)]";
 
   return (
-    <div className="flex flex-col h-screen bg-[#f5f0e8]">
+    <div className="flex flex-col h-screen bg-[#f0ece3]">
       {/* Header */}
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-[rgba(61,57,41,0.08)]">
-        <button onClick={onBack} className="text-[rgba(61,57,41,0.4)] hover:text-[#3d3929] transition-colors">←</button>
-        <h1 className="font-semibold text-[#3d3929] text-[15px] tracking-tight">{agentName}</h1>
+      <header className="flex items-center gap-3 px-4 py-2.5 border-b border-dashed border-[rgba(30,28,23,0.15)]">
+        <button onClick={onBack} className="text-[rgba(30,28,23,0.4)] hover:text-[#1e1c17] transition-colors font-mono text-[13px]">←</button>
+        <h1 className="font-bold text-[#1e1c17] text-[12px] tracking-widest uppercase">// {agentName}</h1>
         <button
           onClick={() => navigator.clipboard.writeText(sessionID)}
           title="Copy thread ID"
-          className="text-[10px] text-[rgba(61,57,41,0.35)] hover:text-[rgba(61,57,41,0.65)] font-mono bg-[rgba(61,57,41,0.05)] hover:bg-[rgba(61,57,41,0.1)] px-1.5 py-0.5 rounded transition-colors"
+          className="text-[10px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.65)] font-mono bg-[rgba(30,28,23,0.05)] hover:bg-[rgba(30,28,23,0.08)] px-1.5 py-0.5 border border-dashed border-[rgba(30,28,23,0.12)] transition-colors"
         >
           #{sessionID}
         </button>
-        <span className="flex items-center gap-1.5 text-[11px] text-[rgba(61,57,41,0.4)] ml-auto">
-          <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
-          {wsStatus}
+        <span className="flex items-center gap-1.5 text-[10px] text-[rgba(30,28,23,0.4)] ml-auto tracking-wider font-mono uppercase">
+          <span className={`w-1.5 h-1.5 ${statusColor}`} />
+          // {wsStatus}
         </span>
       </header>
 
       {/* Main content: Chat (left) + Tool Panel (right) */}
       <div ref={containerRef} className="flex flex-1 min-h-0">
         {/* Left: Chat + Input */}
-        <div style={{ width: `${leftPanelWidth}%` }} className="flex flex-col min-w-0">
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div style={{ width: `${leftPanelWidth}%` }} className="flex flex-col min-w-0 bg-[#f0ece3]">
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 && (
-              <div className="text-center text-[rgba(61,57,41,0.3)] mt-16 text-[13px]">Start a conversation</div>
+              <div className="flex flex-col items-center justify-center mt-16 gap-3 select-none">
+                <pre className="text-[10px] leading-[1.4] font-mono text-center" style={{color: 'transparent', backgroundImage: 'linear-gradient(135deg, #6b8cba 0%, #c85a2a 40%, #6bba8c 80%)', WebkitBackgroundClip: 'text', backgroundClip: 'text'}}>
+{`  ___ _      _   __    __  ___  _  ___  __  __
+ / __| |    /_\\ \\ \\  / /  | __|| || _ \\|  \\/  |
+| (__| |__ / _ \\ \\ \\/ /   | _| | ||   /| |\\/| |
+ \\___|____/_/ \\_\\ \\__/    |_|  |_||_|_\\|_|  |_|`}
+                </pre>
+                <p className="text-[10px] text-[rgba(30,28,23,0.35)] tracking-[0.2em] uppercase font-mono">// SYSTEM READY // AWAITING INPUT...</p>
+              </div>
             )}
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[75%] min-w-0 overflow-hidden rounded-2xl px-4 py-3 text-[13px] ${
+                  className={`max-w-[75%] min-w-0 overflow-hidden px-3 py-2.5 text-[12px] border border-dashed ${
                     msg.role === "user"
-                      ? "bg-[#c85a2a] text-white"
-                      : "bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.85)] border border-[rgba(61,57,41,0.08)]"
+                      ? "bg-[rgba(30,28,23,0.07)] text-[#1e1c17] border-[rgba(30,28,23,0.25)]"
+                      : "bg-[rgba(30,28,23,0.03)] text-[rgba(30,28,23,0.85)] border-[rgba(30,28,23,0.1)]"
                   }`}
                 >
                   <div className="prose-pre:overflow-x-auto prose-pre:max-w-full [&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal [&_table]:border-collapse [&_table]:w-full [&_th]:border [&_th]:border-white/20 [&_th]:px-2 [&_th]:py-1 [&_td]:border [&_td]:border-white/20 [&_td]:px-2 [&_td]:py-1">
@@ -552,15 +570,15 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                       <>
                         {/* Native thinking (Anthropic extended thinking) */}
                         {msg.thinking && (
-                          <details className="my-2 rounded-lg border border-[rgba(61,57,41,0.1)] bg-[rgba(61,57,41,0.03)] overflow-hidden"
+                          <details className="my-2 border border-dashed border-[rgba(30,28,23,0.12)] bg-[rgba(30,28,23,0.02)] overflow-hidden"
                             open={msg.streaming && !msg.content}>
-                            <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.6)] transition-colors flex items-center gap-1.5">
+                            <summary className="cursor-pointer select-none px-3 py-2 text-[10px] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.6)] transition-colors flex items-center gap-1.5 tracking-wider uppercase">
                               {msg.streaming && !msg.content && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-[rgba(200,90,42,0.4)] animate-pulse" />
+                                <span className="w-1.5 h-1.5 bg-[rgba(200,90,42,0.5)] animate-pulse" />
                               )}
-                              {msg.streaming && !msg.content ? "Thinking..." : "Thinking"}
+                              // {msg.streaming && !msg.content ? "THINKING..." : "THINKING"}
                             </summary>
-                            <div className="px-3 pb-2 text-[12px] text-[rgba(61,57,41,0.5)] leading-relaxed">
+                            <div className="px-3 pb-2 text-[11px] text-[rgba(30,28,23,0.5)] leading-relaxed">
                               <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.thinking}</ReactMarkdown>
                             </div>
                           </details>
@@ -569,22 +587,22 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                         {msg.content.includes("<think>") || msg.content.includes("</think>") ? (
                           parseThinkingBlocks(msg.content).map((seg, si) =>
                             seg.type === "thinking" ? (
-                              <details key={si} className="my-2 rounded-lg border border-[rgba(61,57,41,0.1)] bg-[rgba(61,57,41,0.03)] overflow-hidden">
-                                <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.6)] transition-colors">
-                                  Thinking
+                              <details key={si} className="my-2 border border-dashed border-[rgba(30,28,23,0.12)] bg-[rgba(30,28,23,0.02)] overflow-hidden">
+                                <summary className="cursor-pointer select-none px-3 py-2 text-[10px] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.6)] transition-colors tracking-wider uppercase">
+                                  // THINKING
                                 </summary>
-                                <div className="px-3 pb-2 text-[12px] text-[rgba(61,57,41,0.5)] leading-relaxed">
+                                <div className="px-3 pb-2 text-[11px] text-[rgba(30,28,23,0.5)] leading-relaxed">
                                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
                                 </div>
                               </details>
                             ) : seg.type === "thinking_open" ? (
-                              <details key={si} open className="my-2 rounded-lg border border-[rgba(200,90,42,0.15)] bg-[rgba(200,90,42,0.03)] overflow-hidden">
-                                <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-[rgba(200,90,42,0.5)] flex items-center gap-1.5">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(200,90,42,0.4)] animate-pulse" />
-                                  Thinking...
+                              <details key={si} open className="my-2 border border-dashed border-[rgba(200,90,42,0.2)] bg-[rgba(200,90,42,0.02)] overflow-hidden">
+                                <summary className="cursor-pointer select-none px-3 py-2 text-[10px] text-[rgba(200,90,42,0.6)] flex items-center gap-1.5 tracking-wider uppercase">
+                                  <span className="w-1.5 h-1.5 bg-[rgba(200,90,42,0.5)] animate-pulse" />
+                                  // THINKING...
                                 </summary>
                                 {seg.content && (
-                                  <div className="px-3 pb-2 text-[12px] text-[rgba(61,57,41,0.5)] leading-relaxed">
+                                  <div className="px-3 pb-2 text-[11px] text-[rgba(30,28,23,0.5)] leading-relaxed">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
                                   </div>
                                 )}
@@ -614,11 +632,8 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
             ))}
             {isThinking && !messages.some(m => m.role === "assistant" && m.streaming) && (
               <div className="flex justify-start">
-                <div className="flex items-center gap-1.5 rounded-2xl px-4 py-3 bg-[rgba(61,57,41,0.05)] border border-[rgba(61,57,41,0.08)]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_infinite]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.2s_infinite]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[rgba(61,57,41,0.35)] animate-[pulse_1.4s_ease-in-out_0.4s_infinite]" />
-                  <span className="ml-2 text-[12px] text-[rgba(61,57,41,0.35)]">思考中…</span>
+                <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-[rgba(30,28,23,0.15)] bg-[rgba(30,28,23,0.02)]">
+                  <span className="text-[10px] font-mono text-[rgba(30,28,23,0.4)] tracking-widest animate-pulse">// PROCESSING...</span>
                 </div>
               </div>
             )}
@@ -626,14 +641,13 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
           </div>
           {/* Whip Plan inline banner */}
           {whipPlanCode && (
-            <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3 flex flex-col gap-2">
+            <div className="border-t border-dashed border-[rgba(30,28,23,0.12)] px-4 py-3 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] text-[rgba(61,57,41,0.4)] font-mono">workflow.whip</span>
+                <span className="text-[10px] text-[rgba(30,28,23,0.4)] font-mono tracking-wider">// workflow.whip</span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
                       if (whipPlanEditing) {
-                        // Save edits back to whipPlanCode
                         setWhipPlanCode(whipPlanEditText);
                         setWhipPlanEditing(false);
                       } else {
@@ -641,9 +655,9 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                         setWhipPlanEditing(true);
                       }
                     }}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.1)] text-[rgba(61,57,41,0.5)] hover:bg-[rgba(61,57,41,0.1)] transition-colors"
+                    className="px-2 py-0.5 text-[10px] text-[rgba(30,28,23,0.5)] hover:text-[rgba(30,28,23,0.8)] border border-dashed border-[rgba(30,28,23,0.15)] hover:border-[rgba(30,28,23,0.3)] transition-colors uppercase tracking-wider"
                   >
-                    {whipPlanEditing ? "Save" : "Edit"}
+                    {whipPlanEditing ? "[save]" : "[edit]"}
                   </button>
                   <button
                     onClick={() => {
@@ -651,10 +665,10 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                       sendCommand(`Preview this workflow:\n\`\`\`whip\n${code}\n\`\`\``);
                     }}
                     disabled={isStreaming || wsStatus !== "open"}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.12)] text-[rgba(61,57,41,0.65)] hover:bg-[rgba(61,57,41,0.2)] disabled:opacity-40 transition-colors"
+                    className="px-2 py-0.5 text-[10px] text-[rgba(30,28,23,0.5)] hover:text-[rgba(30,28,23,0.8)] border border-dashed border-[rgba(30,28,23,0.15)] hover:border-[rgba(30,28,23,0.3)] disabled:opacity-40 transition-colors uppercase tracking-wider"
                     title="List sessions for step-by-step debug"
                   >
-                    Step
+                    [step]
                   </button>
                   <button
                     onClick={() => {
@@ -665,15 +679,15 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                       sendCommand(`Execute this workflow now${inputsStr}:\n\`\`\`whip\n${code}\n\`\`\``);
                     }}
                     disabled={isStreaming || wsStatus !== "open" || !whipAskReady}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[#c85a2a] text-white hover:bg-[#a84a22] disabled:opacity-40 transition-colors"
+                    className="px-2 py-0.5 text-[10px] text-[#1e1c17] bg-[rgba(30,28,23,0.08)] border border-dashed border-[rgba(30,28,23,0.3)] hover:bg-[rgba(30,28,23,0.14)] disabled:opacity-40 transition-colors uppercase tracking-wider font-bold"
                   >
-                    Execute
+                    [execute]
                   </button>
                   <button
                     onClick={() => { setWhipPlanCode(null); setWhipPlanEditing(false); setWhipAskFields([]); setWhipAskReady(false); }}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-[rgba(61,57,41,0.04)] text-[rgba(61,57,41,0.3)] hover:bg-[rgba(61,57,41,0.08)] transition-colors"
+                    className="px-2 py-0.5 text-[10px] text-[rgba(30,28,23,0.3)] hover:text-[rgba(30,28,23,0.6)] transition-colors"
                   >
-                    ✕
+                    [x]
                   </button>
                 </div>
               </div>
@@ -721,50 +735,50 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
                   value={whipPlanEditText}
                   onChange={(e) => setWhipPlanEditText(e.target.value)}
                   rows={6}
-                  className="w-full bg-[rgba(61,57,41,0.06)] border border-[rgba(61,57,41,0.12)] rounded-lg p-2.5 text-[11px] font-mono text-[rgba(61,57,41,0.85)] resize-none focus:outline-none focus:ring-1 focus:ring-[rgba(200,90,42,0.4)] leading-relaxed"
+                  className="w-full bg-[rgba(30,28,23,0.04)] border border-dashed border-[rgba(30,28,23,0.15)] p-2.5 text-[11px] font-mono text-[rgba(30,28,23,0.85)] resize-none focus:outline-none leading-relaxed"
                   spellCheck={false}
                 />
               ) : (
-                <pre className="text-[11px] font-mono text-[rgba(61,57,41,0.7)] bg-[rgba(61,57,41,0.06)] border border-[rgba(61,57,41,0.08)] rounded-lg p-2.5 max-h-36 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">{whipPlanCode}</pre>
+                <pre className="text-[11px] font-mono text-[rgba(30,28,23,0.65)] bg-[rgba(30,28,23,0.04)] border border-dashed border-[rgba(30,28,23,0.1)] p-2.5 max-h-36 overflow-y-auto whitespace-pre-wrap break-words leading-relaxed">{whipPlanCode}</pre>
               )}
             </div>
           )}
           {/* Input — inside left column */}
-          <div className="border-t border-[rgba(61,57,41,0.08)] px-4 py-3">
+          <div className="px-4 py-3">
             {/* Skill Picker */}
             {showSkillPicker && (showNewCommand || showPlanCommand || filteredSkills.length > 0) && (
-              <div className="mb-2 rounded-xl border border-[rgba(61,57,41,0.12)] bg-[#ece5d8] overflow-hidden shadow-xl">
+              <div className="mb-2 border border-dashed border-[rgba(30,28,23,0.2)] bg-[#ece9e0] overflow-hidden">
                 <div className="max-h-52 overflow-y-auto">
                   {showNewCommand && (
                     <button
                       onMouseDown={(e) => { e.preventDefault(); setInput("/new"); setShowSkillPicker(false); }}
-                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(61,57,41,0.05)] border-b border-[rgba(61,57,41,0.08)]"
+                      className="w-full text-left px-3 py-2 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(30,28,23,0.05)] border-b border-dashed border-[rgba(30,28,23,0.08)]"
                     >
-                      <span className="text-[13px] font-medium text-[#3d3929]">/new</span>
-                      <span className="text-[11px] text-[rgba(61,57,41,0.4)]">Start a new chat session</span>
+                      <span className="text-[11px] font-mono text-[#1e1c17]">/new</span>
+                      <span className="text-[10px] text-[rgba(30,28,23,0.4)]">// start a new session</span>
                     </button>
                   )}
                   {showPlanCommand && (
                     <button
                       onMouseDown={(e) => { e.preventDefault(); setInput("/plan "); setShowSkillPicker(false); inputRef.current?.focus(); }}
-                      className="w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(61,57,41,0.05)] border-b border-[rgba(61,57,41,0.08)]"
+                      className="w-full text-left px-3 py-2 flex flex-col gap-0.5 transition-colors hover:bg-[rgba(30,28,23,0.05)] border-b border-dashed border-[rgba(30,28,23,0.08)]"
                     >
-                      <span className="text-[13px] font-medium text-[#3d3929]">/plan</span>
-                      <span className="text-[11px] text-[rgba(61,57,41,0.4)]">Generate a Whipflow workflow from a description</span>
+                      <span className="text-[11px] font-mono text-[#1e1c17]">/plan</span>
+                      <span className="text-[10px] text-[rgba(30,28,23,0.4)]">// generate whipflow workflow</span>
                     </button>
                   )}
                   {filteredSkills.map((s, i) => (
                     <button
                       key={s.filePath}
                       onMouseDown={(e) => { e.preventDefault(); selectSkill(s); }}
-                      className={`w-full text-left px-3 py-2.5 flex flex-col gap-0.5 transition-colors ${
+                      className={`w-full text-left px-3 py-2 flex flex-col gap-0.5 transition-colors ${
                         i === skillPickerIdx
-                          ? "bg-[rgba(200,90,42,0.2)]"
-                          : "hover:bg-[rgba(61,57,41,0.05)]"
+                          ? "bg-[rgba(30,28,23,0.08)]"
+                          : "hover:bg-[rgba(30,28,23,0.04)]"
                       }`}
                     >
-                      <span className="text-[13px] font-medium text-[#3d3929]">{s.name}</span>
-                      <span className="text-[11px] text-[rgba(61,57,41,0.4)] line-clamp-1">{s.description}</span>
+                      <span className="text-[11px] font-mono text-[#1e1c17]">/{s.name}</span>
+                      <span className="text-[10px] text-[rgba(30,28,23,0.4)] line-clamp-1">// {s.description}</span>
                     </button>
                   ))}
                 </div>
@@ -799,42 +813,73 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
               className="hidden"
               onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }}
             />
-            <div className="flex gap-2 items-end">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isStreaming || wsStatus !== "open"}
-                className="flex-shrink-0 w-[42px] h-[42px] flex items-center justify-center rounded-xl border border-[rgba(61,57,41,0.12)] bg-[rgba(61,57,41,0.05)] text-[rgba(61,57,41,0.4)] hover:text-[#3d3929] hover:bg-[rgba(61,57,41,0.12)] disabled:opacity-40 transition-colors"
-                title="Attach files"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
-                </svg>
-              </button>
-              <textarea
-                ref={inputRef}
-                rows={1}
-                placeholder={wsStatus === "open" ? "Type a message… (/ for skills, /plan for workflows, ⌘↵ to send)" : `WebSocket ${wsStatus}…`}
-                value={input}
-                onChange={(e) => { handleInputChange(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }}
-                onKeyDown={handleInputKeyDown}
-                onPaste={handlePaste}
-                disabled={isStreaming || wsStatus !== "open"}
-                className="flex-1 border border-[rgba(61,57,41,0.12)] rounded-xl px-4 py-2.5 text-[13px] bg-[rgba(61,57,41,0.05)] text-[#3d3929] placeholder-[rgba(61,57,41,0.2)] focus:outline-none focus:ring-2 focus:ring-[rgba(200,90,42,0.4)] disabled:opacity-50 resize-none overflow-y-auto leading-relaxed"
-                style={{ minHeight: "42px", maxHeight: "200px" }}
-              />
-              {isStreaming ? (
-                <button onClick={handleStop} className="px-4 py-2.5 rounded-xl bg-[rgba(255,69,58,0.15)] text-red-400 text-[13px] font-medium hover:bg-[rgba(255,69,58,0.25)] transition-colors">
-                  Stop
-                </button>
-              ) : (
+            {/* Terminal input */}
+            <div className="border border-dashed border-[rgba(30,28,23,0.2)] bg-[rgba(30,28,23,0.02)]">
+              {/* Textarea row */}
+              <div className="flex items-start px-3 pt-2.5 pb-1.5">
+                <span className="text-[11px] text-[rgba(30,28,23,0.3)] font-mono mt-0.5 mr-2 select-none flex-shrink-0">&gt;</span>
+                <textarea
+                  ref={inputRef}
+                  rows={1}
+                  placeholder={wsStatus === "open" ? "// input command..." : "// connecting..."}
+                  value={input}
+                  onChange={(e) => { handleInputChange(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 200) + "px"; }}
+                  onKeyDown={handleInputKeyDown}
+                  onPaste={handlePaste}
+                  disabled={isStreaming || wsStatus !== "open"}
+                  className="flex-1 text-[12px] bg-transparent text-[#1e1c17] placeholder-[rgba(30,28,23,0.25)] focus:outline-none disabled:opacity-50 resize-none overflow-y-auto leading-relaxed font-mono"
+                  style={{ minHeight: "24px", maxHeight: "200px" }}
+                />
+              </div>
+              {/* Toolbar row */}
+              <div className="flex items-center gap-1 px-3 pb-2 pt-0.5 border-t border-dashed border-[rgba(30,28,23,0.08)]">
+                {/* Skill picker */}
                 <button
-                  onClick={handleSend}
-                  disabled={!input.trim() || wsStatus !== "open"}
-                  className="px-4 py-2.5 rounded-xl bg-[#c85a2a] text-white text-[13px] font-medium hover:bg-[#a84a22] disabled:opacity-40 transition-colors"
+                  onClick={() => { setInput("/"); handleInputChange("/"); inputRef.current?.focus(); }}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[10px] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.7)] hover:bg-[rgba(30,28,23,0.05)] transition-colors tracking-wider uppercase border border-dashed border-transparent hover:border-[rgba(30,28,23,0.15)]"
                 >
-                  Send
+                  <span>/ {agentName}</span>
                 </button>
-              )}
+                {/* Attach */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isStreaming || wsStatus !== "open"}
+                  className="px-2 py-0.5 text-[10px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.6)] disabled:opacity-40 transition-colors uppercase tracking-wider"
+                  title="添加附件"
+                >
+                  + attach
+                </button>
+                {/* Tool count */}
+                <button
+                  onClick={() => setActiveTab("tools")}
+                  className="px-2 py-0.5 text-[10px] text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.6)] transition-colors uppercase tracking-wider"
+                >
+                  tools:{agentSkills.length || 1}
+                </button>
+                {/* Spacer */}
+                <div className="flex-1" />
+                {/* Model display */}
+                <span className="text-[10px] text-[rgba(30,28,23,0.3)] font-mono uppercase tracking-wider">opus-4.6</span>
+                {/* Send / Stop */}
+                {isStreaming ? (
+                  <button
+                    onClick={handleStop}
+                    className="ml-2 px-2.5 py-0.5 text-[10px] text-red-400 border border-dashed border-red-300 hover:bg-[rgba(255,69,58,0.08)] transition-colors tracking-wider uppercase"
+                    title="停止"
+                  >
+                    [stop]
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSend}
+                    disabled={!input.trim() || wsStatus !== "open"}
+                    className="ml-2 px-2.5 py-0.5 text-[10px] text-[rgba(30,28,23,0.5)] border border-dashed border-[rgba(30,28,23,0.2)] hover:border-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.8)] disabled:opacity-30 transition-colors tracking-wider uppercase"
+                    title="发送 (⌘↵)"
+                  >
+                    [send]
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -842,34 +887,35 @@ export function ChatView({ agentName, sessionID, onBack, onNewSession, onOpenSes
         {/* Resize handle */}
         <div
           onMouseDown={handleSplitterMouseDown}
-          className="w-1 flex-shrink-0 cursor-col-resize bg-[rgba(61,57,41,0.08)] hover:bg-[rgba(200,90,42,0.3)] active:bg-[rgba(200,90,42,0.5)] transition-colors"
+          className="w-px flex-shrink-0 cursor-col-resize bg-[rgba(30,28,23,0.1)] hover:bg-[rgba(200,90,42,0.4)] active:bg-[rgba(200,90,42,0.6)] transition-colors"
+          style={{borderLeft: '1px dashed rgba(30,28,23,0.15)'}}
         />
 
         {/* Right: Tabbed Panel */}
-        <div style={{ width: `${100 - leftPanelWidth}%` }} className="border-l border-[rgba(61,57,41,0.08)] min-h-0 flex flex-col">
+        <div style={{ width: `${100 - leftPanelWidth}%` }} className="border-l border-dashed border-[rgba(30,28,23,0.12)] min-h-0 flex flex-col">
           {/* Tab bar */}
-          <div className="flex border-b border-[rgba(61,57,41,0.08)] flex-shrink-0">
+          <div className="flex border-b border-dashed border-[rgba(30,28,23,0.1)] flex-shrink-0">
             <button
               onClick={() => setActiveTab("tools")}
-              className={`px-4 py-2.5 text-[13px] font-medium transition-colors ${
+              className={`px-4 py-2 text-[10px] tracking-widest uppercase transition-colors ${
                 activeTab === "tools"
-                  ? "text-[#3d3929] border-b-2 border-[#c85a2a]"
-                  : "text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.55)]"
+                  ? "text-[#1e1c17] border-b border-[#1e1c17]"
+                  : "text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.55)]"
               }`}
             >
-              Tool Activity
+              // tool activity
             </button>
             <button
               onClick={() => previewHtml && setActiveTab("preview")}
-              className={`px-4 py-2.5 text-[13px] font-medium transition-colors ${
+              className={`px-4 py-2 text-[10px] tracking-widest uppercase transition-colors ${
                 activeTab === "preview"
-                  ? "text-[#3d3929] border-b-2 border-[#c85a2a]"
+                  ? "text-[#1e1c17] border-b border-[#1e1c17]"
                   : previewHtml
-                  ? "text-[rgba(61,57,41,0.4)] hover:text-[rgba(61,57,41,0.55)]"
-                  : "text-[rgba(61,57,41,0.3)] cursor-not-allowed"
+                  ? "text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.55)]"
+                  : "text-[rgba(30,28,23,0.2)] cursor-not-allowed"
               }`}
             >
-              HTML Preview
+              // html preview
             </button>
           </div>
           {/* Tab content */}

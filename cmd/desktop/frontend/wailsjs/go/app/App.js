@@ -146,6 +146,10 @@ export function GetSkillContent(arg1) {
   return window['go']['app']['App']['GetSkillContent'](arg1);
 }
 
+export function GetSoulPrompt() {
+  return window['go']['app']['App']['GetSoulPrompt']();
+}
+
 export function GetToolExecutionState(arg1, arg2) {
   return window['go']['app']['App']['GetToolExecutionState'](arg1, arg2);
 }
@@ -248,6 +252,10 @@ export function SaveFeishuConfig(arg1, arg2) {
 
 export function SaveMemoryFileContent(arg1, arg2) {
   return window['go']['app']['App']['SaveMemoryFileContent'](arg1, arg2);
+}
+
+export function SaveSoulPrompt(arg1) {
+  return window['go']['app']['App']['SaveSoulPrompt'](arg1);
 }
 
 export function SearchMemory(arg1, arg2) {
