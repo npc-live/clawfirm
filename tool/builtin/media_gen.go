@@ -46,8 +46,8 @@ func (m *MediaGen) Schema() map[string]any {
 			},
 			"size": map[string]any{
 				"type":        "string",
-				"enum":        []string{"portrait", "landscape", "landscape_4x3", "square"},
-				"description": "Output aspect ratio. portrait=9:16 (竖屏封面), landscape=16:9 (横屏封面), landscape_4x3=4:3 (通用横版, 默认必出), square=1:1. Default: portrait.",
+				"enum":        []string{"portrait", "portrait_3x4", "landscape", "landscape_4x3", "square"},
+				"description": "Output aspect ratio. portrait=9:16 (TikTok竖屏), portrait_3x4=3:4 (抖音/小红书竖版封面), landscape=16:9 (横屏封面), landscape_4x3=4:3 (通用横版, 默认必出), square=1:1. Default: portrait.",
 			},
 			"style": map[string]any{
 				"type":        "string",
@@ -165,6 +165,7 @@ func generateGeminiImage(ctx context.Context, apiKey, model, prompt, sizeKey str
 	// does not expose a dedicated size parameter via this endpoint.
 	aspectHints := map[string]string{
 		"portrait":      "vertical 9:16 aspect ratio",
+		"portrait_3x4":  "vertical 3:4 aspect ratio",
 		"landscape":     "horizontal 16:9 aspect ratio",
 		"landscape_4x3": "horizontal 4:3 aspect ratio",
 		"square":        "square 1:1 aspect ratio",
@@ -259,6 +260,7 @@ func generateGeminiImage(ctx context.Context, apiKey, model, prompt, sizeKey str
 func generateOpenAIImage(ctx context.Context, apiKey, model, prompt, sizeKey, quality, style string) ([]byte, error) {
 	sizeMap := map[string]string{
 		"portrait":      "1024x1792",
+		"portrait_3x4":  "1024x1365",
 		"landscape":     "1792x1024",
 		"landscape_4x3": "1440x1080",
 		"square":        "1024x1024",

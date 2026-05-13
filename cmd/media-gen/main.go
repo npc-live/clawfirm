@@ -6,7 +6,7 @@
 //
 //	{"prompt": "...", "output_path": "/path/to/output.png", "size": "landscape_4x3", "reference_images": ["/path/to/ref.jpg"]}
 //
-// Supported sizes: portrait (9:16), landscape (16:9), landscape_4x3 (4:3), square (1:1).
+// Supported sizes: portrait (9:16), portrait_3x4 (3:4), landscape (16:9), landscape_4x3 (4:3), square (1:1).
 // Default: portrait. The size hint is appended to the prompt for Gemini models.
 //
 // Output (stdout): path of the saved image.
@@ -40,6 +40,7 @@ type input struct {
 // sizeHints maps size keys to aspect ratio descriptions appended to the prompt.
 var sizeHints = map[string]string{
 	"portrait":       "Generate the image in vertical portrait 9:16 aspect ratio (e.g. 1080×1920).",
+	"portrait_3x4":   "Generate the image in vertical portrait 3:4 aspect ratio (e.g. 1080×1440).",
 	"landscape":      "Generate the image in horizontal landscape 16:9 aspect ratio (e.g. 1920×1080).",
 	"landscape_4x3":  "Generate the image in horizontal landscape 4:3 aspect ratio (e.g. 1440×1080).",
 	"square":         "Generate the image in square 1:1 aspect ratio (e.g. 1024×1024).",
@@ -78,7 +79,7 @@ func main() {
 	if hint, ok := sizeHints[inp.Size]; ok {
 		inp.Prompt = inp.Prompt + "\n\n" + hint
 	} else {
-		fmt.Fprintf(os.Stderr, "error: unknown size %q (supported: portrait, landscape, landscape_4x3, square)\n", inp.Size)
+		fmt.Fprintf(os.Stderr, "error: unknown size %q (supported: portrait, portrait_3x4, landscape, landscape_4x3, square)\n", inp.Size)
 		os.Exit(1)
 	}
 
@@ -253,7 +254,27 @@ func genOpenRouter(apiKey, prompt string, refs []referenceImage) ([]byte, error)
 		}
 	}
 
-	// Fallback: message.content as string data URL
+	// Fallback A: message.content as multimodal array (OpenAI-compatible proxy format)
+	if arr, ok := msg.Content.([]any); ok {
+		for _, item := range arr {
+			block, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			if block["type"] == "image_url" {
+				if iu, ok := block["image_url"].(map[string]any); ok {
+					if u, ok := iu["url"].(string); ok && len(u) > 5 {
+						return decodeDataURL(u)
+					}
+				}
+			}
+			if b64, ok := block["b64_json"].(string); ok && len(b64) > 0 {
+				return base64.StdEncoding.DecodeString(b64)
+			}
+		}
+	}
+
+	// Fallback B: message.content as string data URL
 	if s, ok := msg.Content.(string); ok && len(s) > 5 {
 		return decodeDataURL(s)
 	}

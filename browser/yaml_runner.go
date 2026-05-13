@@ -514,32 +514,60 @@ func executeStep(
 			log.Printf("  → cdp_upload SKIP (file path empty or unresolved: %q)", f)
 		} else {
 			log.Printf("  → cdp_upload ← %s", f)
-			raw, err := cdpClient.Send("Runtime.evaluate", map[string]any{
-				"expression":    js,
-				"returnByValue": false,
-			})
-			if err != nil {
-				return fmt.Errorf("cdp_upload: eval failed: %w", err)
+			uploaded := false
+			// Try file chooser interception first (fires trusted change event)
+			if _, err := cdpClient.Send("Page.setInterceptFileChooserDialog", map[string]any{"enabled": true}); err == nil {
+				// Click the file input to trigger the intercepted file chooser
+				_, clickErr := cdpClient.Send("Runtime.evaluate", map[string]any{
+					"expression": `(function(){ var el = ` + js + `; if(el){ el.click(); return true; } return false; })()`,
+				})
+				if clickErr == nil {
+					// Provide the file to the pending file chooser (fires trusted change event)
+					_, handleErr := cdpClient.Send("Page.handleFileChooser", map[string]any{
+						"action": "accept",
+						"files":  []string{f},
+					})
+					if handleErr == nil {
+						uploaded = true
+						log.Printf("  → cdp_upload OK (file chooser)")
+					} else {
+						log.Printf("  → cdp_upload file chooser handle failed: %v, falling back", handleErr)
+					}
+				}
+				cdpClient.Send("Page.setInterceptFileChooserDialog", map[string]any{"enabled": false})
 			}
-			var evalRes struct {
-				Result struct {
-					ObjectID string `json:"objectId"`
-				} `json:"result"`
+			// Fallback: DOM.setFileInputFiles + synthetic change event
+			if !uploaded {
+				raw, err := cdpClient.Send("Runtime.evaluate", map[string]any{
+					"expression":    js,
+					"returnByValue": false,
+				})
+				if err != nil {
+					return fmt.Errorf("cdp_upload: eval failed: %w", err)
+				}
+				var evalRes struct {
+					Result struct {
+						ObjectID string `json:"objectId"`
+					} `json:"result"`
+				}
+				if err := json.Unmarshal(raw, &evalRes); err != nil {
+					return fmt.Errorf("cdp_upload: parse eval result: %w", err)
+				}
+				if evalRes.Result.ObjectID == "" {
+					return fmt.Errorf("cdp_upload: element not found (objectId is empty)")
+				}
+				_, err = cdpClient.Send("DOM.setFileInputFiles", map[string]any{
+					"files":    []string{f},
+					"objectId": evalRes.Result.ObjectID,
+				})
+				if err != nil {
+					return fmt.Errorf("cdp_upload: DOM.setFileInputFiles failed: %w", err)
+				}
+				cdpClient.Send("Runtime.evaluate", map[string]any{
+					"expression": `(function(){ var el = ` + js + `; if(el){ el.dispatchEvent(new Event('change', {bubbles:true})); el.dispatchEvent(new Event('input', {bubbles:true})); } })()`,
+				})
+				log.Printf("  → cdp_upload OK (setFileInputFiles fallback)")
 			}
-			if err := json.Unmarshal(raw, &evalRes); err != nil {
-				return fmt.Errorf("cdp_upload: parse eval result: %w", err)
-			}
-			if evalRes.Result.ObjectID == "" {
-				return fmt.Errorf("cdp_upload: element not found (objectId is empty)")
-			}
-			_, err = cdpClient.Send("DOM.setFileInputFiles", map[string]any{
-				"files":    []string{f},
-				"objectId": evalRes.Result.ObjectID,
-			})
-			if err != nil {
-				return fmt.Errorf("cdp_upload: DOM.setFileInputFiles failed: %w", err)
-			}
-			log.Printf("  → cdp_upload OK")
 		}
 
 	case step.Screenshot != "":
