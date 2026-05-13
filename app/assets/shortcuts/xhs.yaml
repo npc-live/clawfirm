@@ -85,7 +85,7 @@ commands:
             value: "{{input_text}}"
 
   post_video:
-    args: [video, title, desc, cover, tags]   # video: 本地视频路径（必填）, cover: 封面图片路径（可选）, tags: 逗号分隔话题标签（可选，最多5个）
+    args: [video, title, desc, tags]   # video: 本地视频路径（必填）, tags: 逗号分隔话题标签（可选，最多5个）, 封面默认使用视频第一帧
     steps:
       - open: "https://creator.xiaohongshu.com/publish/publish?source=official"
       - wait: 3000
@@ -313,26 +313,42 @@ commands:
           })()
       - wait: 500
       # ── 话题标签结束 ────────────────────────────────────────────────────────────
-      # 封面上传（可选，cover 为空时自动跳过）
+      # 封面设置：使用视频第一帧（XHS 封面编辑器默认显示视频首帧，直接确认即可）
       - eval: >-
           (function(){
-            var cover = "{{cover}}";
-            if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            return "has_cover";
+            var btn = [...document.querySelectorAll('span,div,a')]
+              .find(function(el){ var t = el.textContent.trim(); return t === '修改封面'; });
+            if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:修改封面"; }
+            var cover = document.querySelector('.cover');
+            if (cover) { cover.scrollIntoView({block:'center'}); cover.click(); return "clicked:.cover"; }
+            return "no_cover_btn";
           })()
-      - click:
-          text: "设置封面"
       - wait: 2000
-      - click:
-          text: "本地上传"
-      - wait: 1000
-      - upload:
-          selector: "input[type=file][accept*=image]"
-          file: "{{cover}}"
-      - wait: 3000
-      - click:
-          text: "完成"
-      - wait: 1000
+      # 等待封面编辑器对话框出现（"确定"按钮可见）
+      - wait_until:
+          eval: >-
+            (function(){
+              var btns = document.querySelectorAll('button');
+              for (var i = 0; i < btns.length; i++) {
+                if (btns[i].textContent.trim() === '确定' && btns[i].offsetParent !== null) return true;
+              }
+              return false;
+            })()
+          timeout: 10000
+          interval: 1000
+      # 直接点击确定，保存视频第一帧作为封面
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button');
+            for (var i = 0; i < btns.length; i++) {
+              if (btns[i].textContent.trim() === '确定' && btns[i].offsetParent !== null) {
+                btns[i].click();
+                return "clicked:确定";
+              }
+            }
+            return "no_confirm_btn";
+          })()
+      - wait: 2000
       # 点击发布
       - eval: >-
           (function(){

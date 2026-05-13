@@ -244,9 +244,10 @@ commands:
                          document.querySelector('div[contenteditable="true"][role="textbox"]');
             if (!editor) return "no_editor";
             editor.focus();
-            document.execCommand("insertText", false, "{{text}}");
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{text}}"
       - wait: 500
       - eval: >-
           (function(){
@@ -364,9 +365,10 @@ commands:
                          document.querySelector('[class*=comment] [contenteditable=true]');
             if (!editor) return "no_editor";
             editor.focus();
-            document.execCommand("insertText", false, "{{text}}");
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{text}}"
       - wait: 500
       # 点击提交评论
       - eval: >-
@@ -494,9 +496,10 @@ commands:
                          document.querySelector('div[contenteditable="true"][role="textbox"]');
             if (!editor) return "no_editor";
             editor.focus();
-            document.execCommand("insertText", false, "{{text}}");
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{text}}"
       - wait: 500
       - eval: >-
           (function(){

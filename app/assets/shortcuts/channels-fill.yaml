@@ -52,9 +52,10 @@ commands:
             if(!el) return "no desc editor";
             el.focus();
             document.execCommand("selectAll", false, null);
-            document.execCommand("insertText", false, "{{desc}}");
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{desc}}"
       - wait: 500
       - eval: >-
           (function(){

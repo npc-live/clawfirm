@@ -49,9 +49,10 @@ commands:
             if(!el) return "no desc editor";
             el.focus();
             document.execCommand("selectAll", false, null);
-            document.execCommand("insertText", false, "{{desc}}");
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{desc}}"
       - wait: 500
       # 填写短标题（不超过16字符）
       - eval: >-

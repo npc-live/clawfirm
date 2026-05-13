@@ -8,7 +8,6 @@ commands:
     - video
     - title
     - desc
-    - cover
     - tags
     steps:
     - open: https://creator.xiaohongshu.com/publish/publish?source=official
@@ -25,15 +24,11 @@ commands:
         eval: '!!document.querySelector(''input.d-text, input[placeholder*=标题], #title'')'
         timeout: 120000
         interval: 2000
+    # 检测文件已被接受（"重新上传"出现即可开始填表，无需等上传完成）
     - wait_until:
-        eval: "(function(){\n  var body = document.body.innerText;\n  if (body.includes('上传完成')\
-          \ || body.includes('转码完成')) return true;\n  var progress = document.querySelector('[class*=progress],[class*=uploading],[class*=upload-progress]');\n\
-          \  if (progress) {\n    var text = progress.textContent || '';\n    if (text.includes('100%'))\
-          \ return true;\n  }\n  var btn = [...document.querySelectorAll('button')].filter(function(b){\
-          \ return b.textContent.trim() === '发布'; }).pop();\n  return !!(btn && !btn.disabled);\n\
-          })()"
-        timeout: 600000
-        interval: 3000
+        eval: "(function(){\n  var body = document.body.innerText;\n  return body.includes('重新上传');\n})()"
+        timeout: 120000
+        interval: 2000
     - wait: 1000
     - eval: "(function(){\n  var el = document.querySelector('input.d-text');\n  if\
         \ (!el) return 'no_title_input';\n  var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,\
@@ -159,21 +154,24 @@ commands:
         \ return \"selected:\" + sels[s]; }\n    }\n  }\n  return \"no_suggestion\"\
         ;\n})()"
     - wait: 500
-    - eval: "(function(){\n  var cover = \"{{cover}}\";\n  if (!cover || cover.indexOf(\"\
-        {{\") === 0) return \"no_cover\";\n  return \"has_cover\";\n})()"
-    - click:
-        text: 设置封面
+    - eval: "(function(){\n  var btn = [...document.querySelectorAll('span,div,a')].find(function(el){\
+        \ return el.textContent.trim() === '修改封面'; });\n  if (btn) { btn.scrollIntoView({block:'center'});\
+        \ btn.click(); return 'clicked:修改封面'; }\n  var cover = document.querySelector('.cover');\n\
+        \  if (cover) { cover.scrollIntoView({block:'center'}); cover.click(); return\
+        \ 'clicked:.cover'; }\n  return 'no_cover_btn';\n})()"
     - wait: 2000
-    - click:
-        text: 本地上传
-    - wait: 1000
-    - upload:
-        selector: input[type=file][accept*=image]
-        file: '{{cover}}'
-    - wait: 3000
-    - click:
-        text: 完成
-    - wait: 1000
+    - wait_until:
+        eval: "(function(){\n  var btns = document.querySelectorAll('button');\n  for\
+          \ (var i = 0; i < btns.length; i++) {\n    if (btns[i].textContent.trim()\
+          \ === '确定' && btns[i].offsetParent !== null) return true;\n  }\n  return\
+          \ false;\n})()"
+        timeout: 10000
+        interval: 1000
+    - eval: "(function(){\n  var btns = document.querySelectorAll('button');\n  for\
+        \ (var i = 0; i < btns.length; i++) {\n    if (btns[i].textContent.trim() ===\
+        \ '确定' && btns[i].offsetParent !== null) {\n      btns[i].click();\n      return\
+        \ 'clicked:确定';\n    }\n  }\n  return 'no_confirm_btn';\n})()"
+    - wait: 2000
     - capture:
         name: result_url
         eval: location.href

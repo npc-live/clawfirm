@@ -21,7 +21,7 @@ const CONFIGS: Record<string, { yaml: string; cmd: string; build: (c: any, u: an
   },
   xiaohongshu: {
     yaml: "xhs-fill.yaml", cmd: "post_video",
-    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || ""],
+    build: (c, u) => [u.video, c.title, c.desc, c.tags || ""],
   },
   douyin: {
     yaml: "douyin-fill.yaml", cmd: "post",

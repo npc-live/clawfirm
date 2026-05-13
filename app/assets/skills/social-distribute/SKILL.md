@@ -17,13 +17,13 @@ export SOCIAL_DISTRIBUTE_INPUT='{"video":"/path/to/video.mp4","topic":"视频主
 
 2. Run the compiled script:
 ```bash
-node /tmp/skflow/packages/cli/dist/index.js run social-distribute
+node scripts/skflow-run.mjs run social-distribute
 ```
 
 3. Parse the JSON output:
    - If `yield`: read `yield.prompt` and `yield.data`, generate the requested copywriting JSON, then resume:
      ```bash
-     node /tmp/skflow/packages/cli/dist/index.js resume <session> --answer='<copywriting JSON>'
+     node scripts/skflow-run.mjs resume <session> --answer='<copywriting JSON>'
      ```
    - If `done`: display `done.summary` — distribution complete
    - If `error`: report `error.message`

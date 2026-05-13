@@ -118,10 +118,11 @@ commands:
                          document.querySelector('[contenteditable="true"]');
             if (!editor) return "no_editor";
             editor.focus();
-            document.execCommand("insertText", false, "{{desc}}");
-            editor.dispatchEvent(new Event('input', {bubbles: true}));
+            document.execCommand("selectAll", false, null);
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{desc}}"
       - wait: 800
       # ── 话题标签（可选，tags 为空时全部跳过）──────────────────────────────────
       - capture:

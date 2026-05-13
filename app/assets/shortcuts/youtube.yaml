@@ -123,51 +123,58 @@ commands:
             return "ok";
           })()
       - wait: 500
-      # 填写描述
+      # 填写描述 (split into focus+selectAll eval + insert_text to avoid JS escaping issues with newlines)
       - eval: >-
           (function(){
             var descBox = document.querySelector('#description-textarea #textbox') ||
                           document.querySelector('ytcp-mention-textbox#description-textarea #textbox') ||
                           document.querySelector('#description-textarea [contenteditable="true"]') ||
+                          document.querySelector('#description-container [contenteditable="true"]') ||
+                          document.querySelector('[aria-label*="Tell viewers"][contenteditable]') ||
                           document.querySelector('[aria-label*="description"][contenteditable]') ||
                           document.querySelector('[aria-label*="描述"][contenteditable]');
             if (!descBox) return "no_desc";
             descBox.focus();
             document.execCommand("selectAll", false, null);
-            document.execCommand("delete", false, null);
-            document.execCommand("insertText", false, "{{desc}}");
-            descBox.dispatchEvent(new Event('input', {bubbles: true}));
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{desc}}"
       - wait: 500
-      # 封面/缩略图上传（可选，cover 为空时跳过）
+      # 选择 "Not made for kids" 受众设置
+      - eval: >-
+          (function(){
+            var radios = document.querySelectorAll('tp-yt-paper-radio-button');
+            for (var i = 0; i < radios.length; i++) {
+              var t = radios[i].textContent || '';
+              if (/not made for kids|不是面向儿童/i.test(t)) {
+                radios[i].click();
+                return "selected_not_for_kids";
+              }
+            }
+            var radioByName = document.querySelector('tp-yt-paper-radio-button[name="NOT_MADE_FOR_KIDS"]');
+            if (radioByName) { radioByName.click(); return "selected_by_name"; }
+            return "no_kids_radio";
+          })()
+      - wait: 500
+      # 封面/缩略图上传（cdp_upload 直接写入，不触发系统文件选择器）
       - eval: >-
           (function(){
             var cover = "{{cover}}";
             if (!cover || cover.indexOf("{{") === 0) return "no_cover";
-            var uploadBtn = document.querySelector('#still-picker-upload-button') ||
-                            document.querySelector('ytcp-thumbnails-compact-editor-uploader button') ||
-                            document.querySelector('[test-id="thumbnail-upload-button"]');
-            if (uploadBtn) { uploadBtn.click(); return "clicked_thumb_upload"; }
-            var btns = document.querySelectorAll('button, ytcp-button');
-            for (var i = 0; i < btns.length; i++) {
-              var t = btns[i].textContent.trim();
-              if (/Upload thumbnail|上传缩略图|Upload custom thumbnail/i.test(t)) {
-                btns[i].click();
-                return "clicked_thumb_text";
-              }
-            }
-            return "no_thumb_btn";
+            return "has_cover";
           })()
-      - wait: 1500
-      - eval: >-
-          (function(){
-            var cover = "{{cover}}";
-            if (!cover || cover.indexOf("{{") === 0) return "skip";
-            return "upload_cover";
-          })()
-      - upload:
-          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+      - wait_until:
+          eval: >-
+            (function(){
+              var cover = "{{cover}}";
+              if (!cover || cover.indexOf("{{") === 0) return true;
+              return !!document.querySelector('input[type=file][accept*=image]');
+            })()
+          timeout: 10000
+          interval: 1000
+      - cdp_upload:
+          eval: "document.querySelector('input[type=file][accept*=image]') || document.querySelector(\"input[type=file][accept*='.jpg']\")"
           file: "{{cover}}"
       - wait: 3000
       # 点击 Next（Details → Video elements）
@@ -369,9 +376,10 @@ commands:
                          document.querySelector('#creation-box [contenteditable="true"]');
             if (!editor) return "no_editor";
             editor.focus();
-            document.execCommand("insertText", false, "{{text}}");
             return "ok";
           })()
+      - wait: 200
+      - insert_text: "{{text}}"
       - wait: 800
       # 点击提交按钮
       - eval: >-
