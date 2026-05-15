@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -126,6 +127,8 @@ func AgentLoop(
 	cumUsage := &types.CumulativeUsage{}
 
 	turn := 0
+	streamRetries := 0
+	lastRetriedTurn := 0
 	for {
 		turn++
 		log.Printf("[agent-loop] === turn %d start, history=%d msgs ===", turn, len(agentCtx.Messages))
@@ -331,7 +334,10 @@ func AgentLoop(
 				assistantMsg.Timestamp = time.Now().UnixMilli()
 			}
 			emit(types.AgentEvent{Type: types.EventMessageEnd, AssistantMsg: assistantMsg})
-			agentCtx.Messages = append(agentCtx.Messages, stripToolCalls(assistantMsg))
+			stripped := stripToolCalls(assistantMsg)
+			if len(stripped.Content) > 0 {
+				agentCtx.Messages = append(agentCtx.Messages, stripped)
+			}
 			emit(types.AgentEvent{Type: types.EventAgentEnd, Messages: agentCtx.Messages})
 			return agentCtx.Messages, ctx.Err()
 		}
@@ -356,7 +362,10 @@ func AgentLoop(
 				assistantMsg.Timestamp = time.Now().UnixMilli()
 			}
 			emit(types.AgentEvent{Type: types.EventMessageEnd, AssistantMsg: assistantMsg})
-			agentCtx.Messages = append(agentCtx.Messages, stripToolCalls(assistantMsg))
+			stripped := stripToolCalls(assistantMsg)
+			if len(stripped.Content) > 0 {
+				agentCtx.Messages = append(agentCtx.Messages, stripped)
+			}
 			emit(types.AgentEvent{Type: types.EventAgentEnd, Messages: agentCtx.Messages})
 			return agentCtx.Messages, ctx.Err()
 		}
@@ -462,6 +471,29 @@ func AgentLoop(
 				},
 			})
 			continue
+		}
+
+		// Auto-retry when the stream was interrupted (SSE closed without message_stop).
+		// Covers both explicit "stream interrupted" errors and empty responses (0 content, 0 usage)
+		// which indicate the SSE connection died before any data arrived.
+		isStreamInterrupted := (assistantMsg.StopReason == types.StopReasonError &&
+			strings.Contains(assistantMsg.ErrorMessage, "stream interrupted")) ||
+			(assistantMsg.StopReason == types.StopReasonError &&
+				len(assistantMsg.Content) == 0 && assistantMsg.Usage.Input == 0 && assistantMsg.Usage.Output == 0)
+		if isStreamInterrupted {
+			if lastRetriedTurn != turn {
+				streamRetries = 0
+				lastRetriedTurn = turn
+			}
+			streamRetries++
+			if streamRetries <= 2 {
+				// Remove the empty failed assistant message we just appended so history stays clean.
+				agentCtx.Messages = agentCtx.Messages[:len(agentCtx.Messages)-1]
+				log.Printf("[agent-loop] turn %d: stream interrupted, retrying (%d/2)", turn, streamRetries)
+				turn--
+				continue
+			}
+			log.Printf("[agent-loop] turn %d: stream interrupted, max retries reached", turn)
 		}
 
 		// If stop reason is not toolUse, check for follow-up

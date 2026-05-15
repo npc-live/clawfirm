@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
 import { GetConfig, SaveConfig, TestProviderConnection } from "../lib/wails-shim";
 import type { Config } from "../lib/wails-shim";
+import { DashedSelect } from "./DashedSelect";
 
-const PROVIDER_TYPES = [
-  "anthropic", "minimax", "openai", "gemini", "ollama",
-  "deepseek", "moonshot", "volcengine", "modelstudio", "glm", "zai",
+const PROTOCOLS = [
+  "anthropic", "openai", "gemini", "ollama",
+  "minimax", "deepseek", "moonshot", "volcengine", "modelstudio", "glm", "zai",
   "groq", "openrouter", "together", "mistral", "xai", "nvidia",
-  "xiaomi", "venice", "huggingface", "perplexity", "zenmux",
+  "xiaomi", "venice", "huggingface", "perplexity",
   "litellm", "sglang", "vllm",
+];
+
+const PLATFORMS = [
+  "", "zenmux", "openrouter", "google", "openai", "anthropic",
 ];
 
 const DEFAULT_BASE_URLS: Record<string, string> = {
@@ -38,7 +43,8 @@ const DEFAULT_BASE_URLS: Record<string, string> = {
 
 interface ProviderEntry {
   id: string;
-  type: string;
+  platform: string;
+  protocol: string;
   api_key: string;
   base_url: string;
 }
@@ -48,16 +54,12 @@ const inputCls =
   "focus:outline-none focus:border-[rgba(30,28,23,0.5)] " +
   "bg-[rgba(30,28,23,0.03)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.25)]";
 
-const selectCls =
-  "w-full px-2 py-1.5 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] " +
-  "focus:outline-none focus:border-[rgba(30,28,23,0.5)] " +
-  "bg-[#f0ece3] text-[#1e1c17]";
 
 export function ProvidersPane() {
   const [cfg, setCfg] = useState<Config | null>(null);
   const [providers, setProviders] = useState<ProviderEntry[]>([]);
   const [editing, setEditing] = useState<string | null>(null); // id or "new"
-  const [form, setForm] = useState<ProviderEntry>({ id: "", type: "anthropic", api_key: "", base_url: "" });
+  const [form, setForm] = useState<ProviderEntry>({ id: "", platform: "", protocol: "anthropic", api_key: "", base_url: "" });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, boolean | null>>({});
@@ -72,7 +74,8 @@ export function ProvidersPane() {
       setCfg(c);
       const list: ProviderEntry[] = Object.entries(c.providers ?? {}).map(([id, p]) => ({
         id,
-        type: p.type,
+        platform: p.platform ?? "",
+        protocol: p.protocol || p.type || "anthropic",
         api_key: p.api_key,
         base_url: p.base_url,
       }));
@@ -83,7 +86,7 @@ export function ProvidersPane() {
   }
 
   function startAdd() {
-    setForm({ id: "", type: "anthropic", api_key: "", base_url: "" });
+    setForm({ id: "", platform: "", protocol: "anthropic", api_key: "", base_url: "" });
     setEditing("new");
     setError("");
   }
@@ -99,10 +102,10 @@ export function ProvidersPane() {
     setError("");
   }
 
-  function handleTypeChange(t: string) {
+  function handleProtocolChange(t: string) {
     setForm(f => ({
       ...f,
-      type: t,
+      protocol: t,
       base_url: f.base_url === "" || Object.values(DEFAULT_BASE_URLS).includes(f.base_url)
         ? (DEFAULT_BASE_URLS[t] ?? "")
         : f.base_url,
@@ -147,7 +150,7 @@ export function ProvidersPane() {
     if (!cfg) return;
     const newProviders: Config["providers"] = {};
     for (const p of list) {
-      newProviders[p.id] = { type: p.type, api_key: p.api_key, base_url: p.base_url };
+      newProviders[p.id] = { platform: p.platform || undefined, protocol: p.protocol, type: p.protocol, api_key: p.api_key, base_url: p.base_url };
     }
     const newCfg: Config = { ...cfg, providers: newProviders };
     await SaveConfig(newCfg);
@@ -207,12 +210,14 @@ export function ProvidersPane() {
               </div>
             )}
             <div>
-              <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">// type</label>
-              <select className={selectCls} value={form.type} onChange={e => handleTypeChange(e.target.value)}>
-                {PROVIDER_TYPES.map(t => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+              <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">// protocol</label>
+              <DashedSelect value={form.protocol} onChange={handleProtocolChange} options={PROTOCOLS.map(t => ({ value: t, label: t }))} />
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">
+                // platform <span className="normal-case">(optional, e.g. zenmux)</span>
+              </label>
+              <DashedSelect value={form.platform} onChange={v => setForm(f => ({ ...f, platform: v }))} options={PLATFORMS.map(t => ({ value: t, label: t || "— none —" }))} />
             </div>
             <div>
               <label className="block text-[10px] font-mono text-[rgba(30,28,23,0.4)] uppercase tracking-wider mb-1">// api key</label>
@@ -230,7 +235,7 @@ export function ProvidersPane() {
               </label>
               <input
                 className={inputCls}
-                placeholder={DEFAULT_BASE_URLS[form.type] ?? "https://..."}
+                placeholder={DEFAULT_BASE_URLS[form.protocol] ?? "https://..."}
                 value={form.base_url}
                 onChange={e => setForm(f => ({ ...f, base_url: e.target.value }))}
               />
@@ -264,8 +269,13 @@ export function ProvidersPane() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[12px] font-mono font-bold text-[#1e1c17]">{p.id}</span>
                   <span className="text-[10px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] text-[rgba(30,28,23,0.5)] px-1.5 py-0.5 uppercase tracking-wider">
-                    {p.type}
+                    {p.protocol}
                   </span>
+                  {p.platform && (
+                    <span className="text-[10px] font-mono text-[rgba(30,28,23,0.3)] px-1 py-0.5">
+                      @{p.platform}
+                    </span>
+                  )}
                   {testResult[p.id] === true && (
                     <span className="text-[10px] font-mono text-[rgba(30,150,60,0.8)]">[ok]</span>
                   )}

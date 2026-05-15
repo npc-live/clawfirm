@@ -26,7 +26,7 @@ type Bash struct {
 func (b *Bash) Name() string  { return "bash" }
 func (b *Bash) Label() string { return "Bash" }
 func (b *Bash) Description() string {
-	return "Execute a bash command and return the combined stdout and stderr. Output is truncated to 30 KB."
+	return "Execute a bash command and return the combined stdout and stderr. Output is truncated to 30 KB. Do NOT use this tool to write or create files — use the write or edit tool instead."
 }
 func (b *Bash) Schema() map[string]any {
 	return map[string]any{

@@ -30,7 +30,9 @@ type SSEReader struct {
 
 // NewSSEReader creates an SSEReader that parses SSE from r.
 func NewSSEReader(r io.Reader) *SSEReader {
-	return &SSEReader{scanner: bufio.NewScanner(r)}
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	return &SSEReader{scanner: s}
 }
 
 // ReadEvent reads and returns the next SSE event.
@@ -120,8 +122,14 @@ func ParseSSEStream(ctx context.Context, body io.ReadCloser) <-chan SSEEvent {
 
 		const stallTimeout = 3 * time.Minute
 
+		streamStart := time.Now()
+		eventCount := 0
+
+		log.Printf("[sse-stream] starting reader goroutine at %v", streamStart.Format(time.RFC3339Nano))
+
 		for {
 			if ctx.Err() != nil {
+				log.Printf("[sse-stream] ctx cancelled after %v (events=%d)", time.Since(streamStart).Round(time.Millisecond), eventCount)
 				return
 			}
 
@@ -131,6 +139,7 @@ func ParseSSEStream(ctx context.Context, body io.ReadCloser) <-chan SSEEvent {
 				err error
 			}
 			resultCh := make(chan readResult, 1)
+			readStart := time.Now()
 			go func() {
 				ev, err := reader.ReadEvent()
 				resultCh <- readResult{ev, err}
@@ -138,21 +147,39 @@ func ParseSSEStream(ctx context.Context, body io.ReadCloser) <-chan SSEEvent {
 
 			select {
 			case <-ctx.Done():
+				log.Printf("[sse-stream] ctx cancelled while waiting for event (elapsed=%v, events=%d)",
+					time.Since(streamStart).Round(time.Millisecond), eventCount)
 				return
 			case <-time.After(stallTimeout):
-				log.Printf("[sse-stream] stall timeout (%v) — no SSE event received, closing body", stallTimeout)
+				log.Printf("[sse-stream] stall timeout (%v) after %v elapsed — no SSE event received (events=%d), closing body",
+					stallTimeout, time.Since(streamStart).Round(time.Millisecond), eventCount)
 				body.Close() // force-close to unblock the scanner
 				return
 			case res := <-resultCh:
+				readDuration := time.Since(readStart)
+				elapsed := time.Since(streamStart)
 				if res.err != nil {
+					// Log the exact error type to distinguish RST/EOF/timeout
+					log.Printf("[sse-stream] ReadEvent error after %v (events=%d, read_took=%v): %T: %v",
+						elapsed.Round(time.Millisecond), eventCount, readDuration.Round(time.Millisecond), res.err, res.err)
 					return
 				}
 				if res.ev == nil {
 					continue
 				}
+				eventCount++
+				evType := res.ev.Event
+				if evType == "" {
+					evType = "(no-event-field)"
+				}
+				dataLen := len(res.ev.Data)
+				log.Printf("[sse-stream] event #%d type=%q data_len=%d elapsed=%v read_took=%v",
+					eventCount, evType, dataLen, elapsed.Round(time.Millisecond), readDuration.Round(time.Millisecond))
 				select {
 				case ch <- *res.ev:
 				case <-ctx.Done():
+					log.Printf("[sse-stream] ctx cancelled while sending event #%d to channel (elapsed=%v)",
+						eventCount, elapsed.Round(time.Millisecond))
 					return
 				}
 			}

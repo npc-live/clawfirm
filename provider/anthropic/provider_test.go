@@ -7,7 +7,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+
+	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/types"
@@ -181,9 +184,20 @@ func TestAnthropicAPIError(t *testing.T) {
 	defer srv.Close()
 
 	p := NewWithBaseURL("bad-key", srv.URL)
-	_, err := p.Stream(context.Background(), makeRequest(testModel()))
-	if err == nil {
-		t.Fatal("expected error for 401 response")
+	// The SDK defers the HTTP request to the goroutine, so Stream() returns a channel.
+	// The 401 error surfaces as a StreamEventError on the channel.
+	ch, err := p.Stream(context.Background(), makeRequest(testModel()))
+	if err != nil {
+		return // early error is also acceptable
+	}
+	var gotError bool
+	for ev := range ch {
+		if ev.Type == types.StreamEventError {
+			gotError = true
+		}
+	}
+	if !gotError {
+		t.Fatal("expected error event for 401 response")
 	}
 }
 
@@ -231,7 +245,7 @@ func TestAnthropicModels(t *testing.T) {
 	}
 }
 
-func TestConvertContentBlocks_ThinkingCleanup(t *testing.T) {
+func TestConvertBlocks_Thinking(t *testing.T) {
 	t.Run("thinking with signature keeps signature only", func(t *testing.T) {
 		blocks := []types.ContentBlock{
 			&types.TextContent{Type: "text", Text: "hello"},
@@ -241,7 +255,7 @@ func TestConvertContentBlocks_ThinkingCleanup(t *testing.T) {
 				ThinkingSignature: "sig_abc123",
 			},
 		}
-		out, err := convertContentBlocks(blocks)
+		out, err := convertBlocks(blocks)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -249,14 +263,14 @@ func TestConvertContentBlocks_ThinkingCleanup(t *testing.T) {
 			t.Fatalf("expected 2 blocks, got %d", len(out))
 		}
 		thinkBlock := out[1]
-		if thinkBlock["type"] != "thinking" {
-			t.Errorf("expected type=thinking, got %v", thinkBlock["type"])
+		if thinkBlock.OfThinking == nil {
+			t.Fatal("expected thinking block at index 1")
 		}
-		if thinkBlock["thinking"] != "" {
-			t.Errorf("thinking text should be empty, got %v", thinkBlock["thinking"])
+		if thinkBlock.OfThinking.Thinking != "" {
+			t.Errorf("thinking text should be empty, got %q", thinkBlock.OfThinking.Thinking)
 		}
-		if thinkBlock["signature"] != "sig_abc123" {
-			t.Errorf("signature should be preserved, got %v", thinkBlock["signature"])
+		if thinkBlock.OfThinking.Signature != "sig_abc123" {
+			t.Errorf("signature should be preserved, got %q", thinkBlock.OfThinking.Signature)
 		}
 	})
 
@@ -268,84 +282,69 @@ func TestConvertContentBlocks_ThinkingCleanup(t *testing.T) {
 				Thinking: "some thinking without signature",
 			},
 		}
-		out, err := convertContentBlocks(blocks)
+		out, err := convertBlocks(blocks)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if len(out) != 1 {
 			t.Fatalf("expected 1 block (thinking skipped), got %d", len(out))
 		}
-		if out[0]["type"] != "text" {
-			t.Errorf("remaining block should be text, got %v", out[0]["type"])
+		if out[0].OfText == nil {
+			t.Error("remaining block should be text")
 		}
 	})
 }
 
-func TestInjectMessageCacheBreakpoints(t *testing.T) {
+func TestInjectCacheBreakpoints(t *testing.T) {
+	hasCacheControl := func(block anthropicsdk.ContentBlockParamUnion) bool {
+		b, _ := json.Marshal(block)
+		return strings.Contains(string(b), "cache_control")
+	}
+
 	t.Run("no breakpoint for single user message", func(t *testing.T) {
-		msgs := []anthropicMessage{
-			{Role: "user", Content: "hello"},
+		msgs := []anthropicsdk.MessageParam{
+			anthropicsdk.NewUserMessage(anthropicsdk.NewTextBlock("hello")),
 		}
-		injectMessageCacheBreakpoints(msgs)
-		// Should not modify — only 1 user message, need at least 2.
-		if _, ok := msgs[0].Content.(string); !ok {
-			t.Error("single user message should remain a string (no breakpoint)")
-		}
-	})
-
-	t.Run("breakpoint on second-to-last user message (string content)", func(t *testing.T) {
-		msgs := []anthropicMessage{
-			{Role: "user", Content: "first user msg"},
-			{Role: "assistant", Content: []map[string]any{{"type": "text", "text": "reply"}}},
-			{Role: "user", Content: "second user msg"},
-		}
-		injectMessageCacheBreakpoints(msgs)
-
-		// msgs[0] (first user) should be converted to structured with cache_control.
-		blocks, ok := msgs[0].Content.([]map[string]any)
-		if !ok {
-			t.Fatalf("expected first user msg converted to []map, got %T", msgs[0].Content)
-		}
-		if len(blocks) != 1 {
-			t.Fatalf("expected 1 block, got %d", len(blocks))
-		}
-		if blocks[0]["cache_control"] == nil {
-			t.Error("expected cache_control on first user message")
-		}
-		if blocks[0]["text"] != "first user msg" {
-			t.Errorf("text should be preserved, got %v", blocks[0]["text"])
-		}
-
-		// msgs[2] (last user) should NOT have cache_control.
-		if s, ok := msgs[2].Content.(string); ok {
-			_ = s // still a string, no cache_control
-		} else if blocks, ok := msgs[2].Content.([]map[string]any); ok {
-			for _, b := range blocks {
-				if b["cache_control"] != nil {
-					t.Error("last user message should NOT have cache_control")
-				}
-			}
+		injectCacheBreakpoints(msgs)
+		if hasCacheControl(msgs[0].Content[0]) {
+			t.Error("single user message should not have cache_control")
 		}
 	})
 
-	t.Run("breakpoint on structured content", func(t *testing.T) {
-		msgs := []anthropicMessage{
-			{Role: "user", Content: []map[string]any{
-				{"type": "text", "text": "block1"},
-				{"type": "text", "text": "block2"},
-			}},
-			{Role: "assistant", Content: []map[string]any{{"type": "text", "text": "reply"}}},
-			{Role: "user", Content: "latest"},
+	t.Run("breakpoint on second-to-last user message", func(t *testing.T) {
+		msgs := []anthropicsdk.MessageParam{
+			anthropicsdk.NewUserMessage(anthropicsdk.NewTextBlock("first user msg")),
+			anthropicsdk.NewAssistantMessage(anthropicsdk.NewTextBlock("reply")),
+			anthropicsdk.NewUserMessage(anthropicsdk.NewTextBlock("second user msg")),
 		}
-		injectMessageCacheBreakpoints(msgs)
+		injectCacheBreakpoints(msgs)
 
-		blocks := msgs[0].Content.([]map[string]any)
-		// cache_control should be on the LAST block of the target message.
-		if blocks[0]["cache_control"] != nil {
+		if !hasCacheControl(msgs[0].Content[0]) {
+			b, _ := json.Marshal(msgs[0].Content[0])
+			t.Errorf("second-to-last user message should have cache_control, got: %s", b)
+		}
+		if hasCacheControl(msgs[2].Content[0]) {
+			t.Error("last user message should NOT have cache_control")
+		}
+	})
+
+	t.Run("breakpoint on last block of multi-block message", func(t *testing.T) {
+		msgs := []anthropicsdk.MessageParam{
+			anthropicsdk.NewUserMessage(
+				anthropicsdk.NewTextBlock("block1"),
+				anthropicsdk.NewTextBlock("block2"),
+			),
+			anthropicsdk.NewAssistantMessage(anthropicsdk.NewTextBlock("reply")),
+			anthropicsdk.NewUserMessage(anthropicsdk.NewTextBlock("latest")),
+		}
+		injectCacheBreakpoints(msgs)
+
+		if hasCacheControl(msgs[0].Content[0]) {
 			t.Error("first block should not have cache_control")
 		}
-		if blocks[1]["cache_control"] == nil {
-			t.Error("last block of target message should have cache_control")
+		if !hasCacheControl(msgs[0].Content[1]) {
+			b, _ := json.Marshal(msgs[0].Content[1])
+			t.Errorf("last block of target message should have cache_control, got: %s", b)
 		}
 	})
 }

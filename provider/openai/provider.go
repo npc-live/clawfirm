@@ -33,16 +33,16 @@ func New(apiKey string) *Provider {
 	return &Provider{
 		apiKey:  apiKey,
 		baseURL: defaultBaseURL,
-		client:  &http.Client{Timeout: 10 * time.Minute},
+		client:  provider.NewStreamingHTTPClient(),
 	}
 }
 
-// NewWithBaseURL creates an OpenAI Provider with a custom base URL (for testing).
+// NewWithBaseURL creates an OpenAI Provider with a custom base URL.
 func NewWithBaseURL(apiKey, baseURL string) *Provider {
 	return &Provider{
 		apiKey:  apiKey,
 		baseURL: baseURL,
-		client:  &http.Client{Timeout: 10 * time.Minute},
+		client:  provider.NewStreamingHTTPClient(),
 	}
 }
 
@@ -159,7 +159,8 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range req.Options.Headers {
+	httpReq.Header.Set("Accept", "text/event-stream")
+for k, v := range req.Options.Headers {
 		httpReq.Header.Set(k, v)
 	}
 
@@ -451,6 +452,9 @@ func convertMessages(msgs []types.Message, systemPrompt string) []openAIMessage 
 					tc.Function.Arguments = string(argsBytes)
 					toolCalls = append(toolCalls, tc)
 				}
+			}
+			if len(textParts) == 0 && len(toolCalls) == 0 {
+				continue
 			}
 			if len(textParts) > 0 {
 				oam.Content = strings.Join(textParts, "\n")

@@ -32,6 +32,7 @@ Guidelines:
 - For long-running commands, use process(action=start) then process(action=poll, timeout=<ms>).
 - Do not poll sessions_list in a loop; only check on-demand.
 - For file edits, prefer edit over write unless creating a new file.
+- Keep tool-call arguments compact. For generated files or long text, split writes into chunks: first write with append=false, then continue with append=true chunks.
 - When multiple independent actions can be parallelised, batch them in one turn.
 - Use tool_search to discover additional tools not in your current tool list.`
 

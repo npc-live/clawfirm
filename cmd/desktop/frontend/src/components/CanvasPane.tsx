@@ -196,13 +196,13 @@ export function CanvasPane() {
   const ready = agentNames.length > 0;
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[rgb(22,22,20)] select-none">
+    <div className="relative w-full h-full overflow-hidden bg-[#f0ece3] select-none">
       {/* Dot grid */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }}>
         <defs>
           <pattern id="dots" x={pan.x % (20 * zoom)} y={pan.y % (20 * zoom)}
             width={20 * zoom} height={20 * zoom} patternUnits="userSpaceOnUse">
-            <circle cx={1} cy={1} r={0.8} fill="rgba(61,57,41,0.1)" />
+            <circle cx={1} cy={1} r={0.8} fill="rgba(30,28,23,0.08)" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#dots)" />
@@ -210,13 +210,13 @@ export function CanvasPane() {
 
       {/* Toolbar */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2
-        bg-[rgb(28,28,26)] border border-dashed border-[rgba(200,190,150,0.12)] px-3 py-1.5">
+        bg-[#e8e4db] border border-dashed border-[rgba(30,28,23,0.15)] px-3 py-1.5">
         <button
           onClick={handleAddFromToolbar}
           disabled={!ready}
           className="text-[10px] px-2.5 py-1 font-mono uppercase tracking-wider border border-dashed
-            border-[rgba(200,190,150,0.25)] text-[rgba(200,190,150,0.6)]
-            hover:text-[rgba(200,190,150,0.9)] hover:border-[rgba(200,190,150,0.45)]
+            border-[rgba(30,28,23,0.2)] text-[rgba(30,28,23,0.45)]
+            hover:text-[rgba(30,28,23,0.75)] hover:border-[rgba(30,28,23,0.4)]
             disabled:opacity-40 transition-colors">
           [+ chat]
         </button>
@@ -227,35 +227,45 @@ export function CanvasPane() {
             ListCanvasFiles().then(files => setCanvasFiles(files ?? [])).catch(() => setCanvasFiles([]));
           }}
           className="text-[10px] px-2.5 py-1 font-mono uppercase tracking-wider border border-dashed
-            border-[rgba(168,85,247,0.35)] text-[rgba(168,85,247,0.65)]
-            hover:text-purple-400 hover:border-[rgba(168,85,247,0.55)] transition-colors"
+            border-[rgba(168,85,247,0.3)] text-[rgba(168,85,247,0.6)]
+            hover:text-purple-500 hover:border-[rgba(168,85,247,0.5)] transition-colors"
           title="Bind a cell to ~/.clawfirm/canvas/<name>.html">
           [+ file]
         </button>
-        <span className="text-[rgba(200,190,150,0.2)] text-[10px] font-mono">// dbl-click</span>
-        <div className="w-px h-3 bg-[rgba(200,190,150,0.08)]" />
-        <span className="text-[10px] text-[rgba(200,190,150,0.3)] font-mono tabular-nums">{Math.round(zoom * 100)}%</span>
+        <span className="text-[rgba(30,28,23,0.25)] text-[10px] font-mono">// dbl-click</span>
+        <div className="w-px h-3 bg-[rgba(30,28,23,0.1)]" />
+        <button
+          onClick={() => setZoom(z => Math.max(0.2, z * 0.85))}
+          className="text-[10px] font-mono text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.7)] transition-colors px-0.5">
+          [-]
+        </button>
+        <span className="text-[10px] text-[rgba(30,28,23,0.35)] font-mono tabular-nums min-w-[32px] text-center">{Math.round(zoom * 100)}%</span>
+        <button
+          onClick={() => setZoom(z => Math.min(3, z * 1.18))}
+          className="text-[10px] font-mono text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.7)] transition-colors px-0.5">
+          [+]
+        </button>
         <button
           onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1); }}
-          className="text-[10px] font-mono text-[rgba(200,190,150,0.3)] hover:text-[rgba(200,190,150,0.6)] transition-colors">
+          className="text-[10px] font-mono text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.6)] transition-colors">
           [reset]
         </button>
-        <span className="text-[10px] text-[rgba(200,190,150,0.25)] font-mono">{nodes.length}c</span>
+        <span className="text-[10px] text-[rgba(30,28,23,0.3)] font-mono">{nodes.length}c</span>
       </div>
 
       {/* File cell name dialog */}
       {newFilePrompt && (
         <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/50"
           onClick={() => setNewFilePrompt(false)}>
-          <div className="bg-[rgb(28,28,26)] border border-dashed border-[rgba(168,85,247,0.3)] p-5 w-80"
+          <div className="bg-[#e8e4db] border border-dashed border-[rgba(168,85,247,0.3)] p-5 w-80"
             onClick={e => e.stopPropagation()}>
             <p className="text-[10px] font-mono text-[rgba(168,85,247,0.7)] uppercase tracking-widest mb-1">// bind file cell</p>
-            <p className="text-[10px] text-[rgba(200,190,150,0.35)] font-mono mb-3">
+            <p className="text-[10px] text-[rgba(30,28,23,0.4)] font-mono mb-3">
               watches ~/.clawfirm/canvas/<em className="text-purple-400">name</em>.html
             </p>
             {canvasFiles.length > 0 && (
               <div className="mb-3">
-                <div className="text-[10px] text-[rgba(200,190,150,0.3)] font-mono uppercase tracking-wider mb-1.5">// existing</div>
+                <div className="text-[10px] text-[rgba(30,28,23,0.35)] font-mono uppercase tracking-wider mb-1.5">// existing</div>
                 <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
                   {canvasFiles.map(f => (
                     <button
@@ -268,7 +278,7 @@ export function CanvasPane() {
                     </button>
                   ))}
                 </div>
-                <div className="my-3 border-t border-dashed border-[rgba(200,190,150,0.08)]" />
+                <div className="my-3 border-t border-dashed border-[rgba(30,28,23,0.1)]" />
               </div>
             )}
             <input
@@ -280,13 +290,13 @@ export function CanvasPane() {
                 if (e.key === "Escape") setNewFilePrompt(false);
               }}
               placeholder="// new name..."
-              className="w-full bg-[rgba(200,190,150,0.05)] border border-dashed border-[rgba(168,85,247,0.25)]
-                px-2 py-1.5 text-[11px] font-mono text-[rgba(200,190,150,0.8)] placeholder-[rgba(200,190,150,0.2)]
+              className="w-full bg-[rgba(30,28,23,0.04)] border border-dashed border-[rgba(168,85,247,0.25)]
+                px-2 py-1.5 text-[11px] font-mono text-[rgba(30,28,23,0.75)] placeholder-[rgba(30,28,23,0.3)]
                 focus:outline-none focus:border-[rgba(168,85,247,0.5)] mb-3"
             />
             <div className="flex gap-2 justify-end">
               <button onClick={() => setNewFilePrompt(false)}
-                className="text-[10px] px-2.5 py-1 font-mono border border-dashed border-[rgba(200,190,150,0.15)] text-[rgba(200,190,150,0.35)] hover:text-[rgba(200,190,150,0.6)] transition-colors uppercase tracking-wider">
+                className="text-[10px] px-2.5 py-1 font-mono border border-dashed border-[rgba(30,28,23,0.15)] text-[rgba(30,28,23,0.4)] hover:text-[rgba(30,28,23,0.65)] transition-colors uppercase tracking-wider">
                 [cancel]
               </button>
               <button
@@ -331,8 +341,8 @@ export function CanvasPane() {
       {nodes.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 2 }}>
           <div className="text-center">
-            <pre className="text-[10px] font-mono leading-tight text-[rgba(200,190,150,0.15)]">{`+--[CANVAS]--+\n|            |\n|   EMPTY    |\n|            |\n+------------+`}</pre>
-            <p className="text-[10px] font-mono text-[rgba(200,190,150,0.25)] mt-3 tracking-widest uppercase">
+            <pre className="text-[10px] font-mono leading-tight text-[rgba(30,28,23,0.12)]">{`+--[CANVAS]--+\n|            |\n|   EMPTY    |\n|            |\n+------------+`}</pre>
+            <p className="text-[10px] font-mono text-[rgba(30,28,23,0.25)] mt-3 tracking-widest uppercase">
               {ready ? "// dbl-click to create · scroll zoom · drag pan" : "// loading agents..."}
             </p>
           </div>
@@ -401,8 +411,10 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   const dragging = useRef(false);
   const dragStart = useRef({ mx: 0, my: 0, nx: 0, ny: 0 });
 
-  // Resize
+  // Resize — track axis so edges resize only width or height
   const resizing = useRef(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeAxis = useRef<"both" | "x" | "y">("both");
   const resizeStart = useRef({ mx: 0, my: 0, w: 0, h: 0 });
 
   function extractPreviewContent(text: string): string | null {
@@ -535,21 +547,24 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
   function onHeaderPointerUp() { dragging.current = false; }
 
   // ── Resize handle ──────────────────────────────────────────────────────────
-  function onResizePointerDown(e: React.PointerEvent) {
+  function onResizePointerDown(e: React.PointerEvent, axis: "both" | "x" | "y" = "both") {
     e.stopPropagation(); e.preventDefault();
     onFocus();
     resizing.current = true;
+    resizeAxis.current = axis;
+    setIsResizing(true);
     resizeStart.current = { mx: e.clientX, my: e.clientY, w: node.width, h: node.height };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
   }
   function onResizePointerMove(e: React.PointerEvent) {
     if (!resizing.current) return;
-    onUpdate({
-      width: Math.max(MIN_W, resizeStart.current.w + (e.clientX - resizeStart.current.mx) / zoom),
-      height: Math.max(MIN_H, resizeStart.current.h + (e.clientY - resizeStart.current.my) / zoom),
-    });
+    const axis = resizeAxis.current;
+    const patch: Partial<CanvasNode> = {};
+    if (axis !== "y") patch.width = Math.max(MIN_W, resizeStart.current.w + (e.clientX - resizeStart.current.mx) / zoom);
+    if (axis !== "x") patch.height = Math.max(MIN_H, resizeStart.current.h + (e.clientY - resizeStart.current.my) / zoom);
+    onUpdate(patch);
   }
-  function onResizePointerUp() { resizing.current = false; }
+  function onResizePointerUp() { resizing.current = false; setIsResizing(false); }
 
   const left = node.x * zoom + pan.x;
   const top = node.y * zoom + pan.y;
@@ -565,8 +580,8 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
     <button key={t} onClick={() => setTab(t)}
       className={`px-3 py-1 text-[10px] font-mono uppercase tracking-widest transition-colors ${
         tab === t
-          ? "text-[rgba(200,190,150,0.9)] border-b border-[rgba(200,190,150,0.5)]"
-          : "text-[rgba(200,190,150,0.3)] hover:text-[rgba(200,190,150,0.6)]"
+          ? "text-[rgba(30,28,23,0.8)] border-b border-[rgba(30,28,23,0.5)]"
+          : "text-[rgba(30,28,23,0.3)] hover:text-[rgba(30,28,23,0.55)]"
       }`}>
       // {label}{badge != null && badge > 0 ? `(${badge})` : ""}
     </button>
@@ -595,14 +610,14 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
           transform: `scale(${zoom})`,
           transformOrigin: "top left",
           border: focused
-            ? "1px dashed rgba(200,190,150,0.4)"
-            : "1px dashed rgba(200,190,150,0.12)",
-          background: "rgb(24,24,22)",
+            ? "1px dashed rgba(30,28,23,0.35)"
+            : "1px dashed rgba(30,28,23,0.15)",
+          background: "#e8e4db",
         }}
       >
         {/* Header */}
         <div
-          className="flex items-center gap-2 px-3 h-9 bg-[rgb(30,30,28)] border-b border-dashed border-[rgba(200,190,150,0.1)]
+          className="flex items-center gap-2 px-3 h-9 bg-[#ded9cf] border-b border-dashed border-[rgba(30,28,23,0.12)]
             cursor-grab active:cursor-grabbing flex-shrink-0"
           onPointerDown={onHeaderPointerDown}
           onPointerMove={onHeaderPointerMove}
@@ -620,23 +635,23 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
               value={node.agentName}
               onChange={e => onUpdate({ agentName: e.target.value })}
               onClick={e => e.stopPropagation()}
-              className="flex-1 bg-transparent text-[11px] font-mono text-[rgba(200,190,150,0.7)] outline-none cursor-pointer min-w-0"
+              className="flex-1 bg-transparent text-[11px] font-mono text-[rgba(30,28,23,0.65)] outline-none cursor-pointer min-w-0"
             >
               {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
               {agentNames.length === 0 && <option value={node.agentName}>{node.agentName}</option>}
             </select>
           )}
-          <span className="text-[9px] text-[rgba(200,190,150,0.2)] font-mono flex-shrink-0">
+          <span className="text-[9px] text-[rgba(30,28,23,0.25)] font-mono flex-shrink-0">
             #{node.sessionId.slice(1, 7)}
           </span>
           <button
             onClick={e => { e.stopPropagation(); onUpdate({ minimized: !node.minimized }); }}
-            className="text-[rgba(200,190,150,0.3)] hover:text-[rgba(200,190,150,0.7)] transition-colors text-[10px] font-mono px-1">
+            className="text-[rgba(30,28,23,0.35)] hover:text-[rgba(30,28,23,0.7)] transition-colors text-[10px] font-mono px-1">
             {node.minimized ? "[+]" : "[-]"}
           </button>
           <button
             onClick={e => { e.stopPropagation(); onRemove(); }}
-            className="text-[rgba(200,190,150,0.3)] hover:text-red-400 transition-colors text-[10px] font-mono px-1">
+            className="text-[rgba(30,28,23,0.35)] hover:text-red-500 transition-colors text-[10px] font-mono px-1">
             [x]
           </button>
         </div>
@@ -644,7 +659,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
         {!node.minimized && (
           <>
             {/* Tab bar */}
-            <div className="flex items-center gap-0 px-2 py-0.5 bg-[rgb(26,26,24)] border-b border-dashed border-[rgba(200,190,150,0.08)] flex-shrink-0">
+            <div className="flex items-center gap-0 px-2 py-0.5 bg-[#e2ddd3] border-b border-dashed border-[rgba(30,28,23,0.08)] flex-shrink-0">
               {tabBtn("chat", "chat")}
               {tabBtn("tools", "tools", toolExecutions.length)}
               {tabBtn("preview", "preview")}
@@ -656,7 +671,7 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
               <div className={`flex flex-col absolute inset-0 ${tab === "chat" ? "" : "hidden"}`}>
                 <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
                   {messages.length === 0 && (
-                    <p className="text-center text-[10px] font-mono text-[rgba(200,190,150,0.25)] mt-10 uppercase tracking-widest">
+                    <p className="text-center text-[10px] font-mono text-[rgba(30,28,23,0.25)] mt-10 uppercase tracking-widest">
                       {wsStatus === "connecting" ? "// connecting..." : wsStatus === "closed" ? "// disconnected" : "// awaiting input"}
                     </p>
                   )}
@@ -664,8 +679,8 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                     <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[85%] px-2.5 py-2 text-[11px] font-mono leading-relaxed ${
                         msg.role === "user"
-                          ? "border border-dashed border-[rgba(200,190,150,0.35)] text-[rgba(200,190,150,0.85)] bg-[rgba(200,190,150,0.05)]"
-                          : "border border-dashed border-[rgba(200,190,150,0.15)] text-[rgba(200,190,150,0.7)]"
+                          ? "border border-dashed border-[rgba(30,28,23,0.2)] text-[rgba(30,28,23,0.8)] bg-[rgba(30,28,23,0.04)]"
+                          : "border border-dashed border-[rgba(30,28,23,0.12)] text-[rgba(30,28,23,0.65)]"
                       }`}>
                         {msg.role === "assistant"
                           ? <div className="[&_pre]:overflow-x-auto [&_pre]:max-w-full [&_code]:break-all [&_pre_code]:break-normal">
@@ -679,14 +694,14 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                   ))}
                   {isThinking && !messages.some(m => m.role === "assistant" && m.streaming) && (
                     <div className="flex justify-start">
-                      <span className="text-[10px] font-mono text-[rgba(200,190,150,0.4)] animate-pulse">// PROCESSING...</span>
+                      <span className="text-[10px] font-mono text-[rgba(30,28,23,0.35)] animate-pulse">// PROCESSING...</span>
                     </div>
                   )}
                   <div ref={bottomRef} />
                 </div>
-                <div className="border-t border-dashed border-[rgba(200,190,150,0.08)] px-3 py-2 flex gap-2 items-end flex-shrink-0">
-                  <div className="flex-1 flex items-start border border-dashed border-[rgba(200,190,150,0.2)] bg-[rgba(200,190,150,0.03)]">
-                    <span className="pt-1.5 pl-2 text-[10px] font-mono text-[rgba(200,190,150,0.3)] flex-shrink-0">&gt;</span>
+                <div className="border-t border-dashed border-[rgba(30,28,23,0.08)] px-3 py-2 flex gap-2 items-end flex-shrink-0">
+                  <div className="flex-1 flex items-start border border-dashed border-[rgba(30,28,23,0.15)] bg-[rgba(30,28,23,0.03)]">
+                    <span className="pt-1.5 pl-2 text-[10px] font-mono text-[rgba(30,28,23,0.3)] flex-shrink-0">&gt;</span>
                     <textarea
                       ref={inputRef}
                       rows={1}
@@ -700,21 +715,21 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                       onKeyDown={e => {
                         if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); handleSend(); }
                       }}
-                      className="flex-1 bg-transparent px-2 py-1.5 text-[11px] font-mono text-[rgba(200,190,150,0.8)] placeholder-[rgba(200,190,150,0.2)]
+                      className="flex-1 bg-transparent px-2 py-1.5 text-[11px] font-mono text-[rgba(30,28,23,0.75)] placeholder-[rgba(30,28,23,0.25)]
                         focus:outline-none resize-none overflow-y-auto"
                       style={{ minHeight: "32px", maxHeight: "100px" }}
                     />
                   </div>
                   {isStreaming ? (
                     <button onClick={handleStop}
-                      className="px-2.5 py-1.5 text-[10px] font-mono border border-dashed border-[rgba(200,50,30,0.4)] text-red-400
+                      className="px-2.5 py-1.5 text-[10px] font-mono border border-dashed border-red-300 text-red-500
                         hover:border-red-400 transition-colors flex-shrink-0 uppercase tracking-wider">
                       [stop]
                     </button>
                   ) : (
                     <button onClick={handleSend} disabled={!input.trim() || wsStatus !== "open"}
-                      className="px-2.5 py-1.5 text-[10px] font-mono border border-dashed border-[rgba(200,190,150,0.25)] text-[rgba(200,190,150,0.5)]
-                        hover:text-[rgba(200,190,150,0.85)] hover:border-[rgba(200,190,150,0.45)] disabled:opacity-35 transition-colors flex-shrink-0 uppercase tracking-wider">
+                      className="px-2.5 py-1.5 text-[10px] font-mono border border-dashed border-[rgba(30,28,23,0.2)] text-[rgba(30,28,23,0.45)]
+                        hover:text-[rgba(30,28,23,0.8)] hover:border-[rgba(30,28,23,0.4)] disabled:opacity-35 transition-colors flex-shrink-0 uppercase tracking-wider">
                       [send]
                     </button>
                   )}
@@ -724,13 +739,13 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
               {/* Tools */}
               <div className={`absolute inset-0 overflow-y-auto ${tab === "tools" ? "" : "hidden"}`}>
                 {toolExecutions.length === 0
-                  ? <p className="text-center text-[10px] font-mono text-[rgba(200,190,150,0.25)] mt-10 uppercase tracking-widest">// no tool activity</p>
+                  ? <p className="text-center text-[10px] font-mono text-[rgba(30,28,23,0.25)] mt-10 uppercase tracking-widest">// no tool activity</p>
                   : <ToolPanel executions={toolExecutions} onCommand={() => {}} />
                 }
               </div>
 
               {/* Preview */}
-              <div className={`absolute inset-0 ${tab === "preview" ? "" : "hidden"}`}>
+              <div className={`absolute inset-0 ${tab === "preview" ? "" : "hidden"}`} style={isResizing ? { pointerEvents: "none" } : undefined}>
                 {previewHtml
                   ? <HtmlPreview html={previewHtml} />
                   : (
@@ -741,10 +756,10 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
                           <p className="text-[10px] font-mono text-purple-400/60 truncate px-4 text-center">
                             ~/.clawfirm/canvas/{node.htmlFile}.html
                           </p>
-                          <p className="text-[10px] font-mono text-[rgba(200,190,150,0.2)]">// polling 5s</p>
+                          <p className="text-[10px] font-mono text-[rgba(30,28,23,0.25)]">// polling 5s</p>
                         </>
                       ) : (
-                        <p className="text-[10px] font-mono text-[rgba(200,190,150,0.25)] uppercase tracking-widest">// no preview</p>
+                        <p className="text-[10px] font-mono text-[rgba(30,28,23,0.25)] uppercase tracking-widest">// no preview</p>
                       )}
                     </div>
                   )
@@ -752,11 +767,23 @@ function CanvasNodeCard({ node, pan, zoom, wsBase, agentNames, focused, onFocus,
               </div>
             </div>
 
-            {/* Resize handle */}
+            {/* Resize handles: right edge, bottom edge, corner */}
             <div
-              className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize z-10"
-              style={{ background: "linear-gradient(135deg, transparent 50%, rgba(200,190,150,0.1) 50%)" }}
-              onPointerDown={onResizePointerDown}
+              className="absolute top-0 right-0 w-2 h-full cursor-ew-resize z-20 hover:bg-[rgba(30,28,23,0.08)] transition-colors"
+              onPointerDown={e => onResizePointerDown(e, "x")}
+              onPointerMove={onResizePointerMove}
+              onPointerUp={onResizePointerUp}
+            />
+            <div
+              className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize z-20 hover:bg-[rgba(30,28,23,0.08)] transition-colors"
+              onPointerDown={e => onResizePointerDown(e, "y")}
+              onPointerMove={onResizePointerMove}
+              onPointerUp={onResizePointerUp}
+            />
+            <div
+              className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize z-30"
+              style={{ background: "linear-gradient(135deg, transparent 40%, rgba(30,28,23,0.15) 40%)" }}
+              onPointerDown={e => onResizePointerDown(e, "both")}
               onPointerMove={onResizePointerMove}
               onPointerUp={onResizePointerUp}
             />

@@ -28,7 +28,7 @@ func New(apiKey string) *Provider {
 	return &Provider{
 		apiKey:  apiKey,
 		baseURL: defaultBaseURL,
-		client:  &http.Client{Timeout: 10 * time.Minute},
+		client:  provider.NewStreamingHTTPClient(),
 	}
 }
 
@@ -37,7 +37,7 @@ func NewWithBaseURL(apiKey, baseURL string) *Provider {
 	return &Provider{
 		apiKey:  apiKey,
 		baseURL: baseURL,
-		client:  &http.Client{Timeout: 10 * time.Minute},
+		client:  provider.NewStreamingHTTPClient(),
 	}
 }
 
@@ -173,6 +173,7 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 		return nil, fmt.Errorf("gemini: create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
 	for k, v := range req.Options.Headers {
 		httpReq.Header.Set(k, v)
 	}
@@ -368,6 +369,9 @@ func convertMessages(msgs []types.Message) []geminiContent {
 						},
 					})
 				}
+			}
+			if len(parts) == 0 {
+				continue
 			}
 			out = append(out, geminiContent{Role: "model", Parts: parts})
 		case *types.ToolResultMessage:

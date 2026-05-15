@@ -1408,12 +1408,6 @@ func (a *App) GetModels(providerID string) []string {
 		return []string{"gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-mini", "o3-mini"}
 	case "gemini":
 		return []string{"gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-lite"}
-	case "zenmux":
-		return []string{
-			"anthropic/claude-sonnet-4-5", "anthropic/claude-haiku-4-5",
-			"openai/gpt-4o", "openai/gpt-4o-mini",
-			"google/gemini-2.0-flash",
-		}
 	case "ollama", "sglang", "vllm", "litellm":
 		return []string{} // dynamic; user types model name
 	case "deepseek":

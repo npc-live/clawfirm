@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { DashedSelect } from "./DashedSelect";
 import {
   GetChannels, GetChatSessions, GetHistory,
   GetConfig, SaveConfig,
@@ -583,10 +584,7 @@ function CronJobsPane() {
             </div>
             <div>
               <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Agent</label>
-              <select value={form.agentName} onChange={(e) => setForm({ ...form, agentName: e.target.value })} className={selectCls}>
-                <option value="">— select agent —</option>
-                {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <DashedSelect value={form.agentName} onChange={v => setForm({ ...form, agentName: v })} options={agentNames.map(n => ({ value: n, label: n }))} placeholder="— select agent —" />
             </div>
           </div>
           <div className="mt-3">
@@ -624,13 +622,12 @@ function CronJobsPane() {
               </div>
               <div>
                 <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Unit</label>
-                <select value={form.everyUnit} onChange={(e) => setForm({ ...form, everyUnit: e.target.value as EveryUnit })}
-                  className={`${inputCls} appearance-none cursor-pointer pr-8`}>
-                  <option value="seconds">Seconds</option>
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
-                  <option value="days">Days</option>
-                </select>
+                <DashedSelect value={form.everyUnit} onChange={v => setForm({ ...form, everyUnit: v as EveryUnit })} options={[
+                  { value: "seconds", label: "Seconds" },
+                  { value: "minutes", label: "Minutes" },
+                  { value: "hours", label: "Hours" },
+                  { value: "days", label: "Days" },
+                ]} />
               </div>
             </div>
           )}
@@ -987,55 +984,7 @@ const MEDIA_TOOLS: { name: string; label: string; desc: string }[] = [
 
 const TOOL_PROTOCOLS = ["google", "openai", "openai-chat", "anthropic", "gemini", "ollama"];
 
-function DashedSelect({ value, onChange, options, placeholder }: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  placeholder?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const selected = options.find(o => o.value === value);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.25)] hover:border-[rgba(30,28,23,0.4)] bg-[rgba(30,28,23,0.03)] text-[#1e1c17] transition-colors text-left"
-      >
-        <span className={selected ? "" : "text-[rgba(30,28,23,0.25)]"}>
-          {selected ? selected.label : (placeholder ?? "-- select --")}
-        </span>
-        <span className="text-[rgba(30,28,23,0.3)] text-[9px] ml-2">{open ? "▲" : "▼"}</span>
-      </button>
-      {open && (
-        <div className="absolute z-50 left-0 right-0 mt-0.5 border border-dashed border-[rgba(30,28,23,0.3)] bg-[#ece8df] max-h-40 overflow-y-auto">
-          {options.map(o => (
-            <button
-              key={o.value}
-              type="button"
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full text-left px-2 py-1.5 text-[11px] font-mono hover:bg-[rgba(30,28,23,0.08)] transition-colors ${
-                o.value === value ? "text-[#1e1c17] bg-[rgba(30,28,23,0.06)]" : "text-[rgba(30,28,23,0.6)]"
-              }`}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+// DashedSelect imported from ./DashedSelect
 
 function MediaToolsPane() {
   const [cfg, setCfg] = useState<Config | null>(null);
@@ -1296,10 +1245,7 @@ function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Provider <span className="text-red-400">*</span></label>
-              <select className={selectCls} value={newForm.provider} onChange={e => setNewForm(f => ({ ...f, provider: e.target.value }))}>
-                <option value="">— select —</option>
-                {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
-              </select>
+              <DashedSelect value={newForm.provider} onChange={v => setNewForm(f => ({ ...f, provider: v }))} options={providerIds.map(id => ({ value: id, label: id }))} placeholder="— select —" />
             </div>
             <div>
               <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Model <span className="text-red-400">*</span></label>
@@ -1386,10 +1332,7 @@ function AgentsEditor({ onAgentsChanged }: { onAgentsChanged?: () => void }) {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Provider</label>
-                  <select className={selectCls} value={form.provider} onChange={e => setForm(f => ({ ...f, provider: e.target.value }))}>
-                    <option value="">— none —</option>
-                    {providerIds.map(id => <option key={id} value={id}>{id}</option>)}
-                  </select>
+                  <DashedSelect value={form.provider} onChange={v => setForm(f => ({ ...f, provider: v }))} options={[{ value: "", label: "— none —" }, ...providerIds.map(id => ({ value: id, label: id }))]} placeholder="— none —" />
                 </div>
                 <div>
                   <label className="block text-[11px] text-[rgba(30,28,23,0.5)] mb-1">Model</label>
@@ -1492,10 +1435,6 @@ const inputCls =
   "focus:outline-none focus:border-[rgba(30,28,23,0.35)] " +
   "bg-[rgba(30,28,23,0.03)] text-[#1e1c17] placeholder-[rgba(30,28,23,0.25)]";
 
-const selectCls =
-  "w-full px-3 py-2 text-[11px] font-mono border border-dashed border-[rgba(30,28,23,0.15)] " +
-  "focus:outline-none focus:border-[rgba(30,28,23,0.35)] " +
-  "bg-[#e8e4db] text-[#1e1c17]";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vault
@@ -1954,22 +1893,16 @@ function WhipflowPane() {
           {cfgOpen && (
             <div className="px-3 pb-3 space-y-2">
               {error && <p className="text-[11px] text-red-400">{error}</p>}
-              <select
-                className="w-full bg-[rgba(30,28,23,0.05)] border border-[rgba(30,28,23,0.12)] rounded-sm px-2 py-1.5 text-[11.5px] text-[#1e1c17] outline-none"
+              <DashedSelect
                 value={defaultProvider}
-                onChange={e => setDefaultProvider(e.target.value)}
-              >
-                <option value="">— default (first agent) —</option>
-                <optgroup label="Built-in">
-                  {BUILTIN_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
-                </optgroup>
-                {agentNames.length > 0 && (
-                  <optgroup label="Agents">
-                    {agentNames.map(n => <option key={n} value={n}>{n}</option>)}
-                  </optgroup>
-                )}
-                <option value="__custom__">Custom…</option>
-              </select>
+                onChange={v => setDefaultProvider(v)}
+                placeholder="— default (first agent) —"
+                options={[
+                  ...BUILTIN_PROVIDERS.map(p => ({ value: p, label: p })),
+                  ...agentNames.map(n => ({ value: n, label: n })),
+                  { value: "__custom__", label: "Custom…" },
+                ]}
+              />
               {defaultProvider === "__custom__" && (
                 <input
                   className="w-full bg-[rgba(30,28,23,0.05)] border border-[rgba(30,28,23,0.12)] rounded-sm px-2 py-1.5 text-[11.5px] text-[#1e1c17] outline-none"

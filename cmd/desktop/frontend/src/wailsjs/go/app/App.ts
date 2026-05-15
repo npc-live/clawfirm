@@ -53,7 +53,7 @@ export interface ToolConfig {
 }
 
 export interface Config {
-  providers: Record<string, { type: string; api_key: string; base_url: string }>;
+  providers: Record<string, { platform?: string; protocol?: string; type: string; api_key: string; base_url: string }>;
   agents: AgentConfig[];
   default_agent: string;
   whipflow?: WhipflowConfig;

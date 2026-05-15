@@ -23,7 +23,6 @@ import (
 	"github.com/ai-gateway/clawfirm/config"
 	"github.com/ai-gateway/clawfirm/provider"
 	"github.com/ai-gateway/clawfirm/provider/anthropic"
-	"github.com/ai-gateway/clawfirm/provider/zenmux"
 	"github.com/ai-gateway/clawfirm/types"
 )
 
@@ -65,29 +64,14 @@ func main() {
 //  1. ZenMux  (ZENMUX_API_KEY or config providers.zenmux.api_key)
 //  2. Anthropic  (ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN or config providers.anthropic.api_key)
 func resolveProvider(cfg *config.Config) (provider.LLMProvider, types.Model) {
-	// ── ZenMux ──────────────────────────────────────────────────────────────
-	if key := cfg.ProviderAPIKey("zenmux"); key != "" {
-		baseURL := cfg.ProviderBaseURL("zenmux")
-		if baseURL == "" {
-			baseURL = zenmux.DefaultBaseURL
-		}
-		prov := zenmux.NewWithBaseURL(key, baseURL)
-		modelID := cfg.DefaultModel
-		if modelID == "" {
-			modelID = "anthropic/claude-haiku-4-5"
-		}
-		return prov, types.Model{
-			ID:        modelID,
-			Provider:  "zenmux",
-			BaseURL:   baseURL,
-			MaxTokens: 256,
-		}
-	}
-
-	// ── Anthropic (native or via proxy) ─────────────────────────────────────
-	key := cfg.ProviderAPIKey("anthropic")
+	// Try ZENMUX_API_KEY first (via ZenMux Anthropic proxy), then ANTHROPIC_API_KEY.
+	key := cfg.ProviderAPIKey("zenmux")
+	baseURL := cfg.ProviderBaseURL("zenmux")
 	if key == "" {
-		// Also accept ANTHROPIC_AUTH_TOKEN (ZenMux session token for Anthropic proxy).
+		key = cfg.ProviderAPIKey("anthropic")
+		baseURL = cfg.ProviderBaseURL("anthropic")
+	}
+	if key == "" {
 		key = os.Getenv("ANTHROPIC_AUTH_TOKEN")
 	}
 	if key == "" {
@@ -95,10 +79,8 @@ func resolveProvider(cfg *config.Config) (provider.LLMProvider, types.Model) {
 		os.Exit(1)
 	}
 
-	baseURL := cfg.ProviderBaseURL("anthropic")
 	if baseURL == "" {
-		// ANTHROPIC_AUTH_TOKEN (sk-ss-v1-) → ZenMux Anthropic proxy
-		if isZenMuxToken(key) {
+		if len(key) > 6 && key[:6] == "sk-ss-" {
 			baseURL = "https://zenmux.ai/api/anthropic"
 		} else {
 			baseURL = "https://api.anthropic.com"
@@ -106,16 +88,14 @@ func resolveProvider(cfg *config.Config) (provider.LLMProvider, types.Model) {
 	}
 
 	prov := anthropic.NewWithBaseURL(key, baseURL)
+	modelID := cfg.DefaultModel
+	if modelID == "" {
+		modelID = "claude-haiku-4-5-20251001"
+	}
 	return prov, types.Model{
-		ID:        "claude-haiku-4-5-20251001",
+		ID:        modelID,
 		Provider:  "anthropic",
 		BaseURL:   baseURL,
 		MaxTokens: 256,
 	}
-}
-
-// isZenMuxToken reports whether key is a ZenMux session/subscription token
-// (starts with "sk-ss-") rather than a native Anthropic key ("sk-ant-").
-func isZenMuxToken(key string) bool {
-	return len(key) > 6 && key[:6] == "sk-ss-"
 }

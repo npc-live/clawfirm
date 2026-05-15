@@ -45,15 +45,19 @@ export function HtmlPreview({ html }: Props) {
   if (isMarkdown(html)) {
     enriched = markdownToHtml(html);
   } else {
-    // Inject Tailwind CDN into <head> if not already present
     enriched = html;
+    const fillStyle = `<style>html,body{min-height:100%;}</style>`;
     if (!html.includes("tailwindcss")) {
       if (html.includes("</head>")) {
-        enriched = html.replace("</head>", `${TAILWIND_CDN}\n</head>`);
+        enriched = html.replace("</head>", `${TAILWIND_CDN}\n${fillStyle}\n</head>`);
       } else if (html.includes("<html")) {
-        enriched = html.replace(/<html([^>]*)>/, `<html$1><head>${TAILWIND_CDN}</head>`);
+        enriched = html.replace(/<html([^>]*)>/, `<html$1><head>${TAILWIND_CDN}${fillStyle}</head>`);
       } else {
-        enriched = `<!DOCTYPE html><html><head>${TAILWIND_CDN}</head><body>${html}</body></html>`;
+        enriched = `<!DOCTYPE html><html><head>${TAILWIND_CDN}${fillStyle}</head><body>${html}</body></html>`;
+      }
+    } else {
+      if (html.includes("</head>")) {
+        enriched = html.replace("</head>", `${fillStyle}\n</head>`);
       }
     }
   }
@@ -68,7 +72,7 @@ export function HtmlPreview({ html }: Props) {
         height: "100%",
         border: "none",
         borderRadius: "8px",
-        background: "#fff",
+        background: "transparent",
       }}
     />
   );

@@ -1,0 +1,13 @@
+name: wechat_law_case_download_test
+agent: default
+session_id: s-test-wechat-law-case
+steps:
+  - send:
+      content: "用browser帮我下载 10 个公众号上法律案例分析 ，. 中层数据（专业且接地气）：头部律所与普法公众号 如“北大法宝”、“各大红圈所公众号”发布的真实案例分析。这些内容通常已经过律师团队的审核，质量有保障，且语言比裁判文书更通俗。 • 采集策略：通过微信公众号文章爬虫，筛选带有“案例分析”、“以案说法”、“律师解答”等标签的文章。 • 适用场景：作为常规法律咨询（合同违约、劳动仲裁等）的黄金基准。 放在 /Users/qing/projects/court_docs 先保存原始数据 把链接写个markdown 汇总，然后一个一个下载内容 没打开一页就把链接先放进去 避免大文件写入 , 保存标题和链接 ，做成markdown checklist.md"
+  - expect:
+      event: done
+      timeout: 420000
+  - assert:
+      got_done: true
+      got_response: true
+      no_error: true

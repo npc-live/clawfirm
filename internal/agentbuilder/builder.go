@@ -17,8 +17,7 @@ import (
 	"github.com/ai-gateway/clawfirm/provider/gemini"
 	"github.com/ai-gateway/clawfirm/provider/ollama"
 	"github.com/ai-gateway/clawfirm/provider/openai"
-	"github.com/ai-gateway/clawfirm/provider/zenmux"
-	"github.com/ai-gateway/clawfirm/tool"
+"github.com/ai-gateway/clawfirm/tool"
 	"github.com/ai-gateway/clawfirm/tool/builtin"
 )
 
@@ -66,16 +65,6 @@ func BuildProvider(id string, pc config.ProviderConfig) (provider.LLMProvider, e
 			return nil, fmt.Errorf("provider %q: no api_key", id)
 		}
 		return openai.NewWithBaseURL(key, base), nil
-
-	case "zenmux":
-		base := pc.BaseURL
-		if base == "" {
-			base = zenmux.DefaultBaseURL
-		}
-		if key == "" {
-			return nil, fmt.Errorf("provider %q: no api_key", id)
-		}
-		return zenmux.NewWithBaseURL(key, base), nil
 
 	case "gemini":
 		if key == "" {
@@ -296,7 +285,6 @@ func DefaultModelForProvider(providerID string) string {
 		"openai":      "gpt-4o-mini",
 		"gemini":      "gemini-2.0-flash",
 		"ollama":      "llama3.2",
-		"zenmux":      "anthropic/claude-haiku-4-5",
 		"deepseek":    "deepseek-chat",
 		"minimax":     "MiniMax-M2.7",
 		"moonshot":    "moonshot-v1-8k",

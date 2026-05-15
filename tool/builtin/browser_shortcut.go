@@ -26,12 +26,45 @@ type BrowserShortcut struct {
 func (b *BrowserShortcut) Name() string  { return "browser_shortcut" }
 func (b *BrowserShortcut) Label() string { return "Browser Shortcut" }
 func (b *BrowserShortcut) Description() string {
-	return `Execute a browser automation shortcut (YAML adapter) via Chrome DevTools Protocol.
-Shortcuts are YAML files in ~/.clawfirm/shortcuts/ (e.g. douyin.yaml, xhs.yaml, bilibili.yaml).
-Each shortcut defines commands like "search", "like", "comment", "follow", "post".
-Requires Chrome running with --remote-debugging-port=9222.
+	base := `Execute a browser automation shortcut (YAML adapter) via Chrome DevTools Protocol.
+Shortcuts are YAML files in ~/.clawfirm/shortcuts/. Requires Chrome with --remote-debugging-port=9222.`
 
-Example: to search Douyin for "美食", use file="douyin.yaml", command="search", args=["美食"].`
+	home, _ := os.UserHomeDir()
+	dirs := []string{
+		filepath.Join(home, ".clawfirm", "shortcuts"),
+		filepath.Join(home, ".clawfirm", "bundled", "shortcuts"),
+	}
+	seen := make(map[string]bool)
+	var lines []string
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") || seen[e.Name()] {
+				continue
+			}
+			seen[e.Name()] = true
+			adapter, err := browser.LoadAdapterYAML(filepath.Join(dir, e.Name()))
+			if err != nil {
+				continue
+			}
+			cmds := make([]string, 0, len(adapter.Commands))
+			for k, cmd := range adapter.Commands {
+				if len(cmd.Args) > 0 {
+					cmds = append(cmds, fmt.Sprintf("%s(%s)", k, strings.Join(cmd.Args, ",")))
+				} else {
+					cmds = append(cmds, k)
+				}
+			}
+			lines = append(lines, fmt.Sprintf("- %s (%s): %s", e.Name(), adapter.Platform, strings.Join(cmds, ", ")))
+		}
+	}
+	if len(lines) > 0 {
+		base += "\n\nAvailable shortcuts:\n" + strings.Join(lines, "\n")
+	}
+	return base
 }
 
 func (b *BrowserShortcut) ConcurrencySafe() bool { return false }
@@ -43,7 +76,7 @@ func (b *BrowserShortcut) Schema() map[string]any {
 		"properties": map[string]any{
 			"file": map[string]any{
 				"type":        "string",
-				"description": "YAML shortcut filename (e.g. \"douyin.yaml\", \"xhs.yaml\"). Located in ~/.clawfirm/shortcuts/.",
+				"description": "YAML shortcut filename. See the tool description for available shortcuts.",
 			},
 			"command": map[string]any{
 				"type":        "string",

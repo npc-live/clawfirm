@@ -1,160 +1,76 @@
 package anthropic
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"strings"
 	"time"
 
+	anthropicsdk "github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
+
 	"github.com/ai-gateway/clawfirm/provider"
-	"github.com/ai-gateway/clawfirm/stream"
 	"github.com/ai-gateway/clawfirm/types"
 )
 
 const (
-	defaultBaseURL       = "https://api.anthropic.com"
-	anthropicVersion     = "2023-06-01"
-	defaultMaxTokens     = 8192
+	defaultBaseURL   = "https://api.anthropic.com"
+	defaultMaxTokens = 8192
 )
 
-// Provider implements provider.LLMProvider for Anthropic's API.
+// Provider implements provider.LLMProvider using the official Anthropic Go SDK.
 type Provider struct {
 	apiKey  string
 	baseURL string
-	client  *http.Client
+	client  anthropicsdk.Client
 }
 
-// New creates an Anthropic Provider with the given API key.
 func New(apiKey string) *Provider {
-	return &Provider{
-		apiKey:  apiKey,
-		baseURL: defaultBaseURL,
-		client:  &http.Client{Timeout: 10 * time.Minute},
-	}
+	return NewWithBaseURL(apiKey, defaultBaseURL)
 }
 
-// NewWithBaseURL creates an Anthropic Provider with a custom base URL (for testing).
 func NewWithBaseURL(apiKey, baseURL string) *Provider {
 	return &Provider{
 		apiKey:  apiKey,
 		baseURL: baseURL,
-		client:  &http.Client{Timeout: 10 * time.Minute},
+		client:  buildClient(apiKey, baseURL),
 	}
 }
 
-// ID returns "anthropic".
-func (p *Provider) ID() string { return "anthropic" }
+func buildClient(apiKey, baseURL string) anthropicsdk.Client {
+	opts := []option.RequestOption{
+		option.WithBaseURL(baseURL),
+		option.WithHTTPClient(provider.NewStreamingHTTPClient()),
+	}
+	if strings.HasPrefix(apiKey, "sk-ant-") {
+		opts = append(opts, option.WithAPIKey(apiKey))
+	} else {
+		opts = append(opts, option.WithAuthToken(apiKey))
+	}
+	return anthropicsdk.NewClient(opts...)
+}
 
-// Models returns the built-in Anthropic model list.
+func (p *Provider) ID() string            { return "anthropic" }
 func (p *Provider) Models() []types.Model { return BuiltinModels() }
-
-// --- request/response types ---
-
-type anthropicMessage struct {
-	Role    string `json:"role"`
-	Content any    `json:"content"` // string or []map[string]any
-}
-
-type anthropicTool struct {
-	Name         string         `json:"name"`
-	Description  string         `json:"description"`
-	InputSchema  map[string]any `json:"input_schema"`
-	CacheControl *cacheControl  `json:"cache_control,omitempty"`
-}
-
-type cacheControl struct {
-	Type string `json:"type"` // "ephemeral"
-}
-
-type anthropicRequest struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	System    any                `json:"system,omitempty"` // string or []map[string]any (structured with cache_control)
-	Messages  []anthropicMessage `json:"messages"`
-	Tools     []anthropicTool    `json:"tools,omitempty"`
-	Stream    bool               `json:"stream"`
-	Thinking  *anthropicThinking `json:"thinking,omitempty"`
-}
-
-type anthropicThinking struct {
-	Type         string `json:"type"`
-	BudgetTokens int    `json:"budget_tokens"`
-}
-
-// --- SSE event types ---
-
-type contentBlockStartEvent struct {
-	Index        int `json:"index"`
-	ContentBlock struct {
-		Type string `json:"type"`
-		ID   string `json:"id"`
-		Name string `json:"name"`
-		Text string `json:"text"`
-	} `json:"content_block"`
-}
-
-type contentBlockDeltaEvent struct {
-	Index int `json:"index"`
-	Delta struct {
-		Type        string `json:"type"`
-		Text        string `json:"text"`
-		PartialJSON string `json:"partial_json"`
-		Thinking    string `json:"thinking"`
-		Signature   string `json:"signature"`
-	} `json:"delta"`
-}
-
-type messageDeltaEvent struct {
-	Delta struct {
-		StopReason string `json:"stop_reason"`
-	} `json:"delta"`
-	Usage struct {
-		OutputTokens int `json:"output_tokens"`
-	} `json:"usage"`
-}
-
-type messageStartEvent struct {
-	Message struct {
-		Usage struct {
-			InputTokens              int `json:"input_tokens"`
-			OutputTokens             int `json:"output_tokens"`
-			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
-			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
-		} `json:"usage"`
-	} `json:"message"`
-}
 
 // Stream sends a streaming request to Anthropic and returns an event channel.
 func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan types.AssistantMessageEvent, error) {
-	apiKey := req.Options.APIKey
-	if apiKey == "" {
-		apiKey = p.apiKey
+	var reqOpts []option.RequestOption
+	if req.Options.APIKey != "" {
+		key := req.Options.APIKey
+		if strings.HasPrefix(key, "sk-ant-") {
+			reqOpts = append(reqOpts, option.WithAPIKey(key))
+		} else {
+			reqOpts = append(reqOpts, option.WithAuthToken(key))
+		}
 	}
-
-	// Build messages
-	msgs, err := convertMessages(req.Messages)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: convert messages: %w", err)
+	if req.Model.BaseURL != "" {
+		reqOpts = append(reqOpts, option.WithBaseURL(req.Model.BaseURL))
 	}
-
-	// Build tools
-	var tools []anthropicTool
-	for _, t := range req.Tools {
-		tools = append(tools, anthropicTool{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: t.Parameters,
-		})
-	}
-
-	// Mark the last tool with cache_control so the entire tools array is cached.
-	if len(tools) > 0 {
-		tools[len(tools)-1].CacheControl = &cacheControl{Type: "ephemeral"}
+	for k, v := range req.Options.Headers {
+		reqOpts = append(reqOpts, option.WithHeader(k, v))
 	}
 
 	maxTokens := defaultMaxTokens
@@ -164,302 +80,237 @@ func (p *Provider) Stream(ctx context.Context, req provider.LLMRequest) (<-chan 
 		maxTokens = req.Model.MaxTokens
 	}
 
-	// System prompt: use structured block with cache_control for prompt caching.
-	var system any
-	if req.SystemPrompt != "" {
-		system = []map[string]any{
-			{
-				"type":          "text",
-				"text":          req.SystemPrompt,
-				"cache_control": map[string]string{"type": "ephemeral"},
-			},
-		}
+	msgs, err := convertMessages(req.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic: convert messages: %w", err)
 	}
+	injectCacheBreakpoints(msgs)
 
-	// Inject message cache breakpoints for conversation history caching.
-	injectMessageCacheBreakpoints(msgs)
-
-	body := anthropicRequest{
-		Model:     req.Model.ID,
-		MaxTokens: maxTokens,
-		System:    system,
+	params := anthropicsdk.MessageNewParams{
+		Model:     anthropicsdk.Model(req.Model.ID),
+		MaxTokens: int64(maxTokens),
 		Messages:  msgs,
-		Tools:     tools,
-		Stream:    true,
+		Tools:     buildTools(req.Tools),
 	}
-
-	// Add thinking config if requested
+	if req.SystemPrompt != "" {
+		params.System = []anthropicsdk.TextBlockParam{{
+			Text:         req.SystemPrompt,
+			CacheControl: anthropicsdk.NewCacheControlEphemeralParam(),
+		}}
+	}
 	if req.Options.ThinkingLevel != "" && req.Options.ThinkingLevel != types.ThinkingLevelOff {
 		budget := thinkingBudget(req.Options.ThinkingLevel, maxTokens)
-		body.Thinking = &anthropicThinking{Type: "enabled", BudgetTokens: budget}
-	}
-
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: marshal request: %w", err)
+		params.Thinking = anthropicsdk.ThinkingConfigParamOfEnabled(int64(budget))
 	}
 
 	baseURL := p.baseURL
 	if req.Model.BaseURL != "" {
 		baseURL = req.Model.BaseURL
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/messages", bytes.NewReader(bodyBytes))
-	if err != nil {
-		return nil, fmt.Errorf("anthropic: create request: %w", err)
-	}
-	// Native Anthropic keys start with "sk-ant-"; other tokens (e.g. sk-ss-v1- relay
-	// keys) use Bearer auth as the Anthropic SDK does with ANTHROPIC_AUTH_TOKEN.
-	if strings.HasPrefix(apiKey, "sk-ant-") {
-		httpReq.Header.Set("x-api-key", apiKey)
-	} else {
-		httpReq.Header.Set("Authorization", "Bearer "+apiKey)
-	}
-	httpReq.Header.Set("anthropic-version", anthropicVersion)
-	httpReq.Header.Set("content-type", "application/json")
-	for k, v := range req.Options.Headers {
-		httpReq.Header.Set(k, v)
-	}
-
 	log.Printf("anthropic: POST %s model=%s messages=%d", baseURL+"/v1/messages", req.Model.ID, len(msgs))
-	resp, err := p.client.Do(httpReq)
-	if err != nil {
-		log.Printf("anthropic: http error: %v", err)
-		return nil, fmt.Errorf("anthropic: http request: %w", err)
-	}
-	log.Printf("anthropic: HTTP %d", resp.StatusCode)
 
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		return nil, &provider.APIError{
-			StatusCode: resp.StatusCode,
-			Body:       string(body),
-			Provider:   "anthropic",
-			RetryAfter: provider.ParseRetryAfter(resp),
-		}
-	}
+	stream := p.client.Messages.NewStreaming(ctx, params, reqOpts...)
 
 	ch := make(chan types.AssistantMessageEvent, 32)
 	go func() {
 		defer close(ch)
-		p.readStream(ctx, resp.Body, ch, req.Model.ID)
-	}()
-	return ch, nil
-}
+		defer stream.Close()
 
-func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<- types.AssistantMessageEvent, modelID string) {
-	defer body.Close()
-	log.Printf("[anthropic-stream] starting stream read (model=%s)", modelID)
+		streamStart := time.Now()
+		log.Printf("[anthropic-stream] starting stream read (model=%s) at %v", req.Model.ID, streamStart.Format(time.RFC3339Nano))
 
-	sseEvents := stream.ParseSSEStream(ctx, body)
-
-	// Accumulated state
-	partial := &types.AssistantMessage{
-		Role:     "assistant",
-		Provider: "anthropic",
-		Model:    modelID,
-	}
-
-	// Track tool call accumulation by content index
-	type toolAccum struct {
-		id   string
-		name string
-		args strings.Builder
-	}
-	toolAccums := map[int]*toolAccum{}
-	// Track text accumulation by content index
-	textAccums := map[int]*strings.Builder{}
-	// Track content block types by index
-	blockTypes := map[int]string{}
-
-	var inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int
-
-	emit := func(ev types.AssistantMessageEvent) {
-		select {
-		case ch <- ev:
-		case <-ctx.Done():
+		partial := &types.AssistantMessage{
+			Role:     "assistant",
+			Provider: "anthropic",
+			Model:    req.Model.ID,
 		}
-	}
 
-	emit(types.AssistantMessageEvent{Type: types.StreamEventStart})
-
-	eventCount := 0
-	for sseEv := range sseEvents {
-		eventCount++
-		if sseEv.Event == "" && sseEv.Data == "" {
-			continue
+		type toolAccum struct {
+			id   string
+			name string
+			args strings.Builder
 		}
-		switch sseEv.Event {
-		case "message_start":
-			log.Printf("[anthropic-stream] event: message_start")
-			var ms messageStartEvent
-			if err := json.Unmarshal([]byte(sseEv.Data), &ms); err == nil {
-				inputTokens = ms.Message.Usage.InputTokens
-				outputTokens = ms.Message.Usage.OutputTokens
-				cacheReadTokens = ms.Message.Usage.CacheReadInputTokens
-				cacheWriteTokens = ms.Message.Usage.CacheCreationInputTokens
+		toolAccums := map[int]*toolAccum{}
+		textAccums := map[int]*strings.Builder{}
+		blockTypes := map[int]string{}
+
+		var inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens int
+
+		emit := func(ev types.AssistantMessageEvent) {
+			select {
+			case ch <- ev:
+			case <-ctx.Done():
+			}
+		}
+
+		emit(types.AssistantMessageEvent{Type: types.StreamEventStart})
+
+		eventCount := 0
+		lastEventTime := streamStart
+
+		for stream.Next() {
+			ev := stream.Current()
+			eventCount++
+			elapsed := time.Since(streamStart)
+			gap := time.Since(lastEventTime)
+			lastEventTime = time.Now()
+
+			if gap > 5*time.Second {
+				log.Printf("[anthropic-stream] *** long gap before event #%d: %v (elapsed=%v) ***",
+					eventCount, gap.Round(time.Millisecond), elapsed.Round(time.Millisecond))
+			} else {
+				log.Printf("[anthropic-stream] event #%d type=%q elapsed=%v gap=%v",
+					eventCount, ev.Type, elapsed.Round(time.Millisecond), gap.Round(time.Millisecond))
 			}
 
-		case "content_block_start":
-			var cbs contentBlockStartEvent
-			if err := json.Unmarshal([]byte(sseEv.Data), &cbs); err != nil {
-				continue
-			}
-			blockTypes[cbs.Index] = cbs.ContentBlock.Type
-			switch cbs.ContentBlock.Type {
-			case "text":
-				textAccums[cbs.Index] = &strings.Builder{}
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventTextStart,
-					ContentIndex: cbs.Index,
-				})
-			case "thinking":
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventThinkingStart,
-					ContentIndex: cbs.Index,
-				})
-			case "tool_use":
-				toolAccums[cbs.Index] = &toolAccum{
-					id:   cbs.ContentBlock.ID,
-					name: cbs.ContentBlock.Name,
-				}
-				tc := &types.ToolCall{
-					Type: types.ContentTypeToolCall,
-					ID:   cbs.ContentBlock.ID,
-					Name: cbs.ContentBlock.Name,
-				}
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventToolCallStart,
-					ContentIndex: cbs.Index,
-					ToolCall:     tc,
-				})
-			}
+			switch variant := ev.AsAny().(type) {
+			case anthropicsdk.MessageStartEvent:
+				inputTokens = int(variant.Message.Usage.InputTokens)
+				cacheReadTokens = int(variant.Message.Usage.CacheReadInputTokens)
+				cacheWriteTokens = int(variant.Message.Usage.CacheCreationInputTokens)
+				log.Printf("[anthropic-stream] event: message_start")
 
-		case "content_block_delta":
-			var cbd contentBlockDeltaEvent
-			if err := json.Unmarshal([]byte(sseEv.Data), &cbd); err != nil {
-				continue
-			}
-			btype := blockTypes[cbd.Index]
-			switch btype {
-			case "text":
-				if acc, ok := textAccums[cbd.Index]; ok {
-					acc.WriteString(cbd.Delta.Text)
-				}
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventTextDelta,
-					ContentIndex: cbd.Index,
-					Delta:        cbd.Delta.Text,
-				})
-			case "thinking":
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventThinkingDelta,
-					ContentIndex: cbd.Index,
-					Delta:        cbd.Delta.Thinking,
-				})
-			case "tool_use":
-				if acc, ok := toolAccums[cbd.Index]; ok {
-					acc.args.WriteString(cbd.Delta.PartialJSON)
-				}
-			}
-
-		case "content_block_stop":
-			var cbs struct {
-				Index int `json:"index"`
-			}
-			if err := json.Unmarshal([]byte(sseEv.Data), &cbs); err != nil {
-				continue
-			}
-			btype := blockTypes[cbs.Index]
-			switch btype {
-			case "text":
-				// Accumulate full text into partial.Content for history.
-				if acc, ok := textAccums[cbs.Index]; ok {
-					partial.Content = append(partial.Content, &types.TextContent{
-						Type: types.ContentTypeText,
-						Text: acc.String(),
-					})
-				}
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventTextEnd,
-					ContentIndex: cbs.Index,
-				})
-			case "thinking":
-				emit(types.AssistantMessageEvent{
-					Type:         types.StreamEventThinkingEnd,
-					ContentIndex: cbs.Index,
-				})
-			case "tool_use":
-				if acc, ok := toolAccums[cbs.Index]; ok {
-					var args map[string]any
-					if err := json.Unmarshal([]byte(acc.args.String()), &args); err != nil {
-						log.Printf("[anthropic-stream] malformed tool args for %s: %v", acc.name, err)
-					}
-					if args == nil {
-						args = map[string]any{}
-					}
-					tc := &types.ToolCall{
-						Type:      types.ContentTypeToolCall,
-						ID:        acc.id,
-						Name:      acc.name,
-						Arguments: args,
-					}
-					partial.Content = append(partial.Content, tc)
+			case anthropicsdk.ContentBlockStartEvent:
+				idx := int(variant.Index)
+				cb := variant.ContentBlock
+				blockTypes[idx] = cb.Type
+				switch cb.Type {
+				case "text":
+					textAccums[idx] = &strings.Builder{}
 					emit(types.AssistantMessageEvent{
-						Type:         types.StreamEventToolCallEnd,
-						ContentIndex: cbs.Index,
+						Type:         types.StreamEventTextStart,
+						ContentIndex: idx,
+					})
+				case "thinking":
+					emit(types.AssistantMessageEvent{
+						Type:         types.StreamEventThinkingStart,
+						ContentIndex: idx,
+					})
+				case "tool_use":
+					log.Printf("[anthropic-stream] tool_use block #%d: id=%q name=%q", idx, cb.ID, cb.Name)
+					toolAccums[idx] = &toolAccum{id: cb.ID, name: cb.Name}
+					tc := &types.ToolCall{
+						Type: types.ContentTypeToolCall,
+						ID:   cb.ID,
+						Name: cb.Name,
+					}
+					emit(types.AssistantMessageEvent{
+						Type:         types.StreamEventToolCallStart,
+						ContentIndex: idx,
 						ToolCall:     tc,
 					})
 				}
-			}
 
-		case "message_delta":
-			var md messageDeltaEvent
-			if err := json.Unmarshal([]byte(sseEv.Data), &md); err != nil {
-				continue
-			}
-			outputTokens += md.Usage.OutputTokens
-			partial.StopReason = mapStopReason(md.Delta.StopReason)
-			log.Printf("[anthropic-stream] event: message_delta — stop_reason=%q", md.Delta.StopReason)
+			case anthropicsdk.ContentBlockDeltaEvent:
+				idx := int(variant.Index)
+				delta := variant.Delta
+				switch blockTypes[idx] {
+				case "text":
+					text := delta.Text
+					if acc, ok := textAccums[idx]; ok {
+						acc.WriteString(text)
+					}
+					emit(types.AssistantMessageEvent{
+						Type:         types.StreamEventTextDelta,
+						ContentIndex: idx,
+						Delta:        text,
+					})
+				case "thinking":
+					emit(types.AssistantMessageEvent{
+						Type:         types.StreamEventThinkingDelta,
+						ContentIndex: idx,
+						Delta:        delta.Thinking,
+					})
+				case "tool_use":
+					if acc, ok := toolAccums[idx]; ok {
+						pj := delta.PartialJSON
+						acc.args.WriteString(pj)
+						log.Printf("[anthropic-stream] tool_use #%d (%s) partial_json delta=%d total=%d",
+							idx, acc.name, len(pj), acc.args.Len())
+					}
+				}
 
-		case "message_stop":
-			log.Printf("[anthropic-stream] event: message_stop — emitting Done (content=%d blocks)", len(partial.Content))
-			partial.Usage = types.Usage{
-				Input:      inputTokens,
-				Output:     outputTokens,
-				CacheRead:  cacheReadTokens,
-				CacheWrite: cacheWriteTokens,
-				Total:      inputTokens + outputTokens,
-			}
-			partial.Timestamp = time.Now().UnixMilli()
-			finalMsg := *partial
-			emit(types.AssistantMessageEvent{
-				Type:    types.StreamEventDone,
-				Message: &finalMsg,
-				Reason:  finalMsg.StopReason,
-			})
-			return
+			case anthropicsdk.ContentBlockStopEvent:
+				idx := int(variant.Index)
+				switch blockTypes[idx] {
+				case "text":
+					if acc, ok := textAccums[idx]; ok {
+						partial.Content = append(partial.Content, &types.TextContent{
+							Type: types.ContentTypeText,
+							Text: acc.String(),
+						})
+					}
+					emit(types.AssistantMessageEvent{
+						Type:         types.StreamEventTextEnd,
+						ContentIndex: idx,
+					})
+				case "thinking":
+					emit(types.AssistantMessageEvent{
+						Type:         types.StreamEventThinkingEnd,
+						ContentIndex: idx,
+					})
+				case "tool_use":
+					if acc, ok := toolAccums[idx]; ok {
+						var args map[string]any
+						if err := json.Unmarshal([]byte(acc.args.String()), &args); err != nil {
+							log.Printf("[anthropic-stream] malformed tool args for %s: %v", acc.name, err)
+						}
+						if args == nil {
+							args = map[string]any{}
+						}
+						tc := &types.ToolCall{
+							Type:      types.ContentTypeToolCall,
+							ID:        acc.id,
+							Name:      acc.name,
+							Arguments: args,
+						}
+						partial.Content = append(partial.Content, tc)
+						emit(types.AssistantMessageEvent{
+							Type:         types.StreamEventToolCallEnd,
+							ContentIndex: idx,
+							ToolCall:     tc,
+						})
+					}
+				}
 
-		case "error":
-			var errBody struct {
-				Error struct {
-					Message string `json:"message"`
-				} `json:"error"`
+			case anthropicsdk.MessageDeltaEvent:
+				outputTokens += int(variant.Usage.OutputTokens)
+				partial.StopReason = mapStopReason(string(variant.Delta.StopReason))
+				log.Printf("[anthropic-stream] event: message_delta — stop_reason=%q elapsed=%v out_tokens=%d",
+					variant.Delta.StopReason, time.Since(streamStart).Round(time.Millisecond), outputTokens)
+
+			case anthropicsdk.MessageStopEvent:
+				log.Printf("[anthropic-stream] event: message_stop — emitting Done (content=%d blocks, elapsed=%v, in=%d, out=%d)",
+					len(partial.Content), time.Since(streamStart).Round(time.Millisecond), inputTokens, outputTokens)
+				partial.Usage = types.Usage{
+					Input:      inputTokens,
+					Output:     outputTokens,
+					CacheRead:  cacheReadTokens,
+					CacheWrite: cacheWriteTokens,
+					Total:      inputTokens + outputTokens,
+				}
+				partial.Timestamp = time.Now().UnixMilli()
+				finalMsg := *partial
+				emit(types.AssistantMessageEvent{
+					Type:    types.StreamEventDone,
+					Message: &finalMsg,
+					Reason:  finalMsg.StopReason,
+				})
+				return
 			}
-			if err := json.Unmarshal([]byte(sseEv.Data), &errBody); err != nil {
-				log.Printf("[anthropic-stream] failed to parse error event: %v", err)
-			}
-			errMsg := errBody.Error.Message
-			if errMsg == "" {
-				errMsg = sseEv.Data
-			}
-			log.Printf("[anthropic-stream] event: error — %s", errMsg)
+		}
+
+		// Stream ended without message_stop.
+		totalElapsed := time.Since(streamStart)
+		if err := stream.Err(); err != nil {
+			log.Printf("[anthropic-stream] stream error after %v (events=%d): %v",
+				totalElapsed.Round(time.Millisecond), eventCount, err)
 			errAMsg := &types.AssistantMessage{
 				Role:         "assistant",
 				Provider:     "anthropic",
-				Model:        modelID,
+				Model:        req.Model.ID,
 				StopReason:   types.StopReasonError,
-				ErrorMessage: errMsg,
+				ErrorMessage: err.Error(),
 				Timestamp:    time.Now().UnixMilli(),
 			}
 			emit(types.AssistantMessageEvent{
@@ -467,16 +318,10 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 				Error: errAMsg,
 			})
 			return
-		default:
-			log.Printf("[anthropic-stream] unknown event type: %q", sseEv.Event)
 		}
-	}
-	// SSE channel closed without message_stop — stream was interrupted
-	log.Printf("[anthropic-stream] WARNING: SSE channel closed without message_stop (events=%d, content=%d blocks, stopReason=%q)",
-		eventCount, len(partial.Content), partial.StopReason)
 
-	// Emit whatever we have so the loop doesn't hang forever
-	if len(partial.Content) > 0 || partial.StopReason != "" {
+		log.Printf("[anthropic-stream] WARNING: SSE channel closed without message_stop (events=%d, content=%d blocks, stopReason=%q, elapsed=%v, in=%d, out=%d)",
+			eventCount, len(partial.Content), partial.StopReason, totalElapsed.Round(time.Millisecond), inputTokens, outputTokens)
 		partial.Usage = types.Usage{
 			Input:  inputTokens,
 			Output: outputTokens,
@@ -493,10 +338,10 @@ func (p *Provider) readStream(ctx context.Context, body io.ReadCloser, ch chan<-
 			Message: &finalMsg,
 			Reason:  finalMsg.StopReason,
 		})
-	}
+	}()
+	return ch, nil
 }
 
-// mapStopReason maps Anthropic stop reasons to the canonical StopReason type.
 func mapStopReason(reason string) types.StopReason {
 	switch reason {
 	case "end_turn":
@@ -510,7 +355,6 @@ func mapStopReason(reason string) types.StopReason {
 	}
 }
 
-// thinkingBudget returns an appropriate token budget for the given thinking level.
 func thinkingBudget(level types.ThinkingLevel, maxTokens int) int {
 	fraction := 0.5
 	switch level {
@@ -532,132 +376,132 @@ func thinkingBudget(level types.ThinkingLevel, maxTokens int) int {
 	return budget
 }
 
-// convertMessages converts types.Message slice to Anthropic API format.
-func convertMessages(msgs []types.Message) ([]anthropicMessage, error) {
-	var out []anthropicMessage
+// buildTools converts ToolSchema slice to Anthropic SDK ToolUnionParam slice.
+func buildTools(tools []provider.ToolSchema) []anthropicsdk.ToolUnionParam {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make([]anthropicsdk.ToolUnionParam, len(tools))
+	for i, t := range tools {
+		tp := anthropicsdk.ToolParam{
+			Name:        t.Name,
+			Description: anthropicsdk.String(t.Description),
+			InputSchema: buildInputSchema(t.Parameters),
+		}
+		if i == len(tools)-1 {
+			tp.CacheControl = anthropicsdk.NewCacheControlEphemeralParam()
+		}
+		out[i] = anthropicsdk.ToolUnionParam{OfTool: &tp}
+	}
+	return out
+}
+
+// buildInputSchema converts a raw JSON-schema map to ToolInputSchemaParam.
+func buildInputSchema(schema map[string]any) anthropicsdk.ToolInputSchemaParam {
+	p := anthropicsdk.ToolInputSchemaParam{}
+	for k, v := range schema {
+		switch k {
+		case "type":
+			// ToolInputSchemaParam already defaults to "object".
+		case "properties":
+			p.Properties = v
+		case "required":
+			if list, ok := v.([]any); ok {
+				for _, r := range list {
+					if s, ok := r.(string); ok {
+						p.Required = append(p.Required, s)
+					}
+				}
+			}
+		default:
+			if p.ExtraFields == nil {
+				p.ExtraFields = make(map[string]any)
+			}
+			p.ExtraFields[k] = v
+		}
+	}
+	return p
+}
+
+// convertMessages converts the internal message slice to Anthropic SDK MessageParam slice.
+func convertMessages(msgs []types.Message) ([]anthropicsdk.MessageParam, error) {
+	out := make([]anthropicsdk.MessageParam, 0, len(msgs))
 	for _, m := range msgs {
 		switch msg := m.(type) {
 		case *types.UserMessage:
-			content, err := convertContentBlocks(msg.Content)
+			blocks, err := convertBlocks(msg.Content)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, anthropicMessage{Role: "user", Content: content})
+			out = append(out, anthropicsdk.NewUserMessage(blocks...))
 		case *types.AssistantMessage:
-			content, err := convertContentBlocks(msg.Content)
+			blocks, err := convertBlocks(msg.Content)
 			if err != nil {
 				return nil, err
 			}
-			out = append(out, anthropicMessage{Role: "assistant", Content: content})
-		case *types.ToolResultMessage:
-			result := map[string]any{
-				"type":        "tool_result",
-				"tool_use_id": msg.ToolCallID,
-				"is_error":    msg.IsError,
+			if len(blocks) == 0 {
+				continue // Anthropic API rejects empty assistant messages.
 			}
+			out = append(out, anthropicsdk.NewAssistantMessage(blocks...))
+		case *types.ToolResultMessage:
+			content := ""
 			if len(msg.Content) > 0 {
 				if tc, ok := msg.Content[0].(*types.TextContent); ok {
-					result["content"] = tc.Text
+					content = tc.Text
 				}
 			}
-			out = append(out, anthropicMessage{Role: "user", Content: []map[string]any{result}})
+			out = append(out, anthropicsdk.NewUserMessage(
+				anthropicsdk.NewToolResultBlock(msg.ToolCallID, content, msg.IsError),
+			))
 		}
 	}
 	return out, nil
 }
 
-// convertContentBlocks converts ContentBlock slice to Anthropic content block format.
-func convertContentBlocks(blocks []types.ContentBlock) ([]map[string]any, error) {
-	var out []map[string]any
+// convertBlocks converts ContentBlock slice to ContentBlockParamUnion slice.
+func convertBlocks(blocks []types.ContentBlock) ([]anthropicsdk.ContentBlockParamUnion, error) {
+	out := make([]anthropicsdk.ContentBlockParamUnion, 0, len(blocks))
 	for _, b := range blocks {
-		var item map[string]any
 		switch block := b.(type) {
 		case *types.TextContent:
-			item = map[string]any{"type": "text", "text": block.Text}
+			out = append(out, anthropicsdk.NewTextBlock(block.Text))
 		case *types.ImageContent:
 			if block.URL != "" {
-				item = map[string]any{
-					"type": "image",
-					"source": map[string]any{
-						"type": "url",
-						"url":  block.URL,
-					},
-				}
+				out = append(out, anthropicsdk.NewImageBlock(
+					anthropicsdk.URLImageSourceParam{URL: block.URL},
+				))
 			} else {
-				item = map[string]any{
-					"type": "image",
-					"source": map[string]any{
-						"type":       "base64",
-						"media_type": block.MimeType,
-						"data":       block.Data,
-					},
-				}
+				out = append(out, anthropicsdk.NewImageBlockBase64(block.MimeType, block.Data))
 			}
 		case *types.ToolCall:
-			item = map[string]any{
-				"type":  "tool_use",
-				"id":    block.ID,
-				"name":  block.Name,
-				"input": block.Arguments,
-			}
+			out = append(out, anthropicsdk.NewToolUseBlock(block.ID, block.Arguments, block.Name))
 		case *types.ThinkingContent:
 			if block.ThinkingSignature != "" {
-				// Keep the signature for validation but omit the thinking text
-				// to save tokens. Anthropic requires the signature to be present
-				// in history but the full thinking text is not needed.
-				item = map[string]any{
-					"type":      "thinking",
-					"thinking":  "",
-					"signature": block.ThinkingSignature,
-				}
-			} else {
-				// No signature — skip entirely (e.g. non-Anthropic thinking blocks).
-				continue
+				// Send back signature only; full thinking text is not needed for caching.
+				out = append(out, anthropicsdk.NewThinkingBlock(block.ThinkingSignature, ""))
 			}
-		default:
-			continue
 		}
-		out = append(out, item)
 	}
 	return out, nil
 }
 
-// injectMessageCacheBreakpoints adds cache_control to the second-to-last user
-// message so that the entire prefix up to that point is cached by Anthropic.
-// This means on the next turn, only the final user message + new tool results
-// are "new" tokens — everything before is a cache hit.
-func injectMessageCacheBreakpoints(msgs []anthropicMessage) {
-	var userIndices []int
+// injectCacheBreakpoints stamps cache_control on the last block of the second-to-last
+// user message, so the entire conversation prefix is cached on subsequent turns.
+func injectCacheBreakpoints(msgs []anthropicsdk.MessageParam) {
+	var userIdx []int
 	for i, m := range msgs {
-		if m.Role == "user" {
-			userIndices = append(userIndices, i)
+		if m.Role == anthropicsdk.MessageParamRoleUser {
+			userIdx = append(userIdx, i)
 		}
 	}
-	if len(userIndices) < 2 {
-		return // too short to benefit from caching
+	if len(userIdx) < 2 {
+		return
 	}
-	targetIdx := userIndices[len(userIndices)-2]
-	addCacheControlToLastBlock(&msgs[targetIdx])
-}
-
-// addCacheControlToLastBlock stamps cache_control on the last content block of
-// an anthropicMessage. The Content field is `any` — it may be a string (simple
-// user message) or []map[string]any (structured content blocks).
-func addCacheControlToLastBlock(msg *anthropicMessage) {
-	cc := map[string]string{"type": "ephemeral"}
-	switch content := msg.Content.(type) {
-	case []map[string]any:
-		if len(content) > 0 {
-			content[len(content)-1]["cache_control"] = cc
-		}
-	case string:
-		// Convert from plain string to structured block so we can attach cache_control.
-		msg.Content = []map[string]any{
-			{
-				"type":          "text",
-				"text":          content,
-				"cache_control": cc,
-			},
-		}
+	content := msgs[userIdx[len(userIdx)-2]].Content
+	if len(content) == 0 {
+		return
+	}
+	if last := content[len(content)-1]; last.OfText != nil {
+		last.OfText.CacheControl = anthropicsdk.NewCacheControlEphemeralParam()
 	}
 }
