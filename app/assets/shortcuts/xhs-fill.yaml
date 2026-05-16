@@ -9,6 +9,7 @@ commands:
     - title
     - desc
     - tags
+    - chapters
     steps:
     - open: https://creator.xiaohongshu.com/publish/publish?source=official
     - wait: 3000
@@ -171,6 +172,23 @@ commands:
         \ (var i = 0; i < btns.length; i++) {\n    if (btns[i].textContent.trim() ===\
         \ '确定' && btns[i].offsetParent !== null) {\n      btns[i].click();\n      return\
         \ 'clicked:确定';\n    }\n  }\n  return 'no_confirm_btn';\n})()"
+    - wait: 2000
+    # ── 添加章节（如有 chapters 参数）──
+    - eval: >-
+        (function(){
+          var ch = "{{chapters}}";
+          if (!ch || ch.indexOf("{{") === 0 || ch.length === 0) return "skip_chapters";
+          var btn = [...document.querySelectorAll('span,div,a,button')].find(function(el){
+            return el.textContent.trim() === '去添加' && el.closest('[class*=chapter], [class*=section]') !== null;
+          });
+          if (!btn) {
+            btn = [...document.querySelectorAll('span,div,a,button')].find(function(el){
+              return el.textContent.trim() === '去添加';
+            });
+          }
+          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:去添加"; }
+          return "no_chapter_btn";
+        })()
     - wait: 2000
     - capture:
         name: result_url

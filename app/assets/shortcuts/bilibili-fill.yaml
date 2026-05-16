@@ -10,6 +10,7 @@ commands:
     - desc
     - cover
     - tags
+    - chapters
     steps:
     - open: https://member.bilibili.com/platform/upload/video/frame
     - wait: 4000
@@ -56,10 +57,20 @@ commands:
           return true;
         })()
     - wait: 300
+    # 将章节时间戳追加到描述末尾（B站描述中的时间戳自动识别为章节）
+    - capture:
+        name: full_desc
+        eval: >-
+          (function(){
+            var ch = "{{chapters}}";
+            var desc = "{{desc}}";
+            if (ch && ch.indexOf("{{") !== 0 && ch.length > 0) return desc + "\n\n" + ch;
+            return desc;
+          })()
     # 填写描述（用 type_rich 代替已废弃的 execCommand）
     - type_rich:
         selector: ".ql-editor"
-        value: "{{desc}}"
+        value: "{{full_desc}}"
     - wait: 500
     - eval: "(function(){\n  var cover = \"{{cover}}\";\n  if (!cover || cover.indexOf(\"\
         {{\") === 0) return \"no_cover\";\n  return \"has_cover\";\n})()"

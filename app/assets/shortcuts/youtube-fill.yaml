@@ -5,7 +5,7 @@ login_check:
 
 commands:
   post_video:
-    args: [video, title, desc, cover, visibility]
+    args: [video, title, desc, cover, visibility, chapters]
     steps:
       - open: "https://studio.youtube.com/"
       - wait: 4000
@@ -127,7 +127,17 @@ commands:
             return "ok";
           })()
       - wait: 200
-      - insert_text: "{{desc}}"
+      # 将章节时间戳 prepend 到描述前面（YouTube 自动识别为章节）
+      - capture:
+          name: full_desc
+          eval: >-
+            (function(){
+              var ch = "{{chapters}}";
+              var desc = "{{desc}}";
+              if (ch && ch.indexOf("{{") !== 0 && ch.length > 0) return ch + "\n\n" + desc;
+              return desc;
+            })()
+      - insert_text: "{{full_desc}}"
       - wait: 500
       # 选择 "Not made for kids" 受众设置（YouTube 要求必选才能保存）
       - eval: >-

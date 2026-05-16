@@ -10,6 +10,7 @@ commands:
     - desc
     - cover
     - tags
+    - chapters
     steps:
     - open: https://creator.douyin.com/creator-micro/content/upload
     - wait: 4000
@@ -189,6 +190,19 @@ commands:
         \    .find(function(b){ return b.textContent.trim() === '暂不设置'; });\n  if\
         \ (btn) btn.click();\n  return !!btn;\n})()"
     - wait: 500
+    # ── 添加看点/章节（如有 chapters 参数）──
+    - eval: >-
+        (function(){
+          var ch = "{{chapters}}";
+          if (!ch || ch.indexOf("{{") === 0 || ch.length === 0) return "skip_chapters";
+          var btn = [...document.querySelectorAll('span,div,a,button')].find(function(el){
+            var t = el.textContent.trim();
+            return t === '添加看点' || t === '添加章节' || t === '去添加';
+          });
+          if (btn) { btn.scrollIntoView({block:'center'}); btn.click(); return "clicked:" + btn.textContent.trim(); }
+          return "no_chapter_btn";
+        })()
+    - wait: 2000
     - capture:
         name: result_url
         eval: location.href

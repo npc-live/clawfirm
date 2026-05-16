@@ -9,11 +9,11 @@ const CONFIGS: Record<string, { yaml: string; cmd: string; build: (c: any, u: an
   },
   bilibili: {
     yaml: "bilibili-fill.yaml", cmd: "post",
-    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || ""],
+    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || "", u.chapters || ""],
   },
   youtube: {
     yaml: "youtube-fill.yaml", cmd: "post_video",
-    build: (c, u) => [u.video, c.title, c.desc, "unlisted"],
+    build: (c, u) => [u.video, c.title, c.desc, "unlisted", u.chapters || ""],
   },
   tiktok: {
     yaml: "tiktok-fill.yaml", cmd: "post",
@@ -21,11 +21,11 @@ const CONFIGS: Record<string, { yaml: string; cmd: string; build: (c: any, u: an
   },
   xiaohongshu: {
     yaml: "xhs-fill.yaml", cmd: "post_video",
-    build: (c, u) => [u.video, c.title, c.desc, c.tags || ""],
+    build: (c, u) => [u.video, c.title, c.desc, c.tags || "", u.chapters || ""],
   },
   douyin: {
     yaml: "douyin-fill.yaml", cmd: "post",
-    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || ""],
+    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || "", u.chapters || ""],
   },
   linkedin: {
     yaml: "linkedin-fill.yaml", cmd: "post_video",
@@ -118,6 +118,33 @@ export async function main() {
   }
   if (!userInput.video || !userInput.topic || !userInput.platforms || userInput.platforms.length === 0) {
     return done({ summary: "缺少必需字段: video, topic, platforms" });
+  }
+
+  // 3b. Read chapters from video directory: prefer .srt, fallback to chapters*.txt
+  if (!userInput.chapters) {
+    let videoDir = userInput.video.replace(/\/[^/]+$/, "");
+    let srtCheck = await sh('ls "' + videoDir + '"/*.srt 2>/dev/null | head -1');
+    if (srtCheck.code === 0 && srtCheck.stdout.trim()) {
+      let srtContent = await sh('cat "' + srtCheck.stdout.trim() + '"');
+      if (srtContent.code === 0 && srtContent.stdout.trim()) {
+        let chaptersFromSrt = await ask({
+          prompt: "从以下 SRT 字幕中提取视频章节时间轴。输出纯文本，每行格式：MM:SS 章节标题。只提取主要话题转折点（10-20个章节），不要输出其他内容。",
+          data: { srt: srtContent.stdout },
+        });
+        if (chaptersFromSrt) {
+          userInput.chapters = chaptersFromSrt;
+        }
+      }
+    }
+    if (!userInput.chapters) {
+      let txtCheck = await sh('ls "' + videoDir + '"/chapters*.txt "' + videoDir + '"/*章节*.txt 2>/dev/null | head -1');
+      if (txtCheck.code === 0 && txtCheck.stdout.trim()) {
+        let txtContent = await sh('cat "' + txtCheck.stdout.trim() + '"');
+        if (txtContent.code === 0 && txtContent.stdout.trim()) {
+          userInput.chapters = txtContent.stdout.trim();
+        }
+      }
+    }
   }
 
   // 4. Batch-read all content-rules in ONE shell call
