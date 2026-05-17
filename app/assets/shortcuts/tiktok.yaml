@@ -35,9 +35,9 @@ commands:
           eval: "!!document.querySelector('input[type=\"file\"][accept*=\"video\"], input[type=\"file\"]')"
           timeout: 10000
           interval: 500
-      # 上传视频文件
-      - upload:
-          selector: "input[type=file][accept*=video], input[type=file]"
+      # 上传视频文件（cdp_upload 通过 file chooser interception 触发 trusted change event）
+      - cdp_upload:
+          eval: "document.querySelector('input[type=file][accept*=video]') || document.querySelector('input[type=file]')"
           file: "{{video}}"
       # 等待编辑器渲染（caption 输入区出现）
       - wait_until:
@@ -381,9 +381,9 @@ commands:
             })()
           timeout: 10000
           interval: 1000
-      # 上传横版封面文件
-      - upload:
-          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+      # 上传横版封面文件（cdp_upload 触发 trusted event）
+      - cdp_upload:
+          eval: "document.querySelector('input[type=file][accept*=image]') || document.querySelector(\"input[type=file][accept*='.jpg']\") || document.querySelector(\"input[type=file][accept*='.png']\")"
           file: "{{cover_h}}"
       - wait: 3000
       # 点击确认/完成（横版封面）
@@ -458,9 +458,9 @@ commands:
             })()
           timeout: 10000
           interval: 1000
-      # 上传竖版封面文件
-      - upload:
-          selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+      # 上传竖版封面文件（cdp_upload 触发 trusted event）
+      - cdp_upload:
+          eval: "document.querySelector('input[type=file][accept*=image]') || document.querySelector(\"input[type=file][accept*='.jpg']\") || document.querySelector(\"input[type=file][accept*='.png']\")"
           file: "{{cover_v}}"
       - wait: 3000
       # 点击确认/完成（竖版封面）

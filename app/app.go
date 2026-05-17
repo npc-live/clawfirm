@@ -3086,6 +3086,7 @@ func (a *App) BrowserLaunchChrome() BrowserStatus {
 		"--user-data-dir="+profileDir,
 		"--no-first-run",
 		"--no-default-browser-check",
+		"--disable-blink-features=AutomationControlled",
 	)
 	if err := cmd.Start(); err != nil {
 		return BrowserStatus{Connected: false, Error: "failed to launch Chrome: " + err.Error()}

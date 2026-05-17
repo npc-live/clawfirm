@@ -76,6 +76,18 @@ let repurposed = session: creator
   ▸ B站脚本版（如果 platforms 含 bilibili）：
     - 改写为口播稿，3-5章节，适合5-8分钟视频
     - 标题（悬念化/数字化）+ 简介（关键词植入）+ Tags
+    - 视频看点/章节：MM:SS 格式时间线，从 00:00 开始，3-9 个节点（不超过10个），标题≤16字
+
+  ▸ 抖音版（如果 platforms 含 douyin）：
+    - 标题：20-55 字，前 15 字含核心关键词，悬念/痛点驱动
+    - 描述：改写为口播稿，口语化、前3秒 Hook + 正文 + CTA
+    - 标签：2-5 个话题标签（行业大标签 + 内容标签 + 热门标签）
+    - 看点/章节：MM:SS 格式，3-5 个节点（不超过10个），标题≤16字
+
+  ▸ TikTok版（如果 platforms 含 tiktok）：
+    - 改写为 Caption（描述），中英双语
+    - Hook + 核心价值 + CTA + hashtags
+    - 标签：3-5 个 trending hashtags（不支持章节，不生成 title）
 
   ▸ Twitter版（如果 platforms 含 twitter）：
     - 英文精炼版，≤280字符

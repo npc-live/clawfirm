@@ -18,8 +18,8 @@ commands:
         \ return b.textContent.trim() === \"知道了\"; });\n  if(btn) btn.click();\n \
         \ return !!btn;\n})()"
     - wait: 500
-    - upload:
-        selector: input[accept*='.mp4']
+    - cdp_upload:
+        eval: "document.querySelector(\"input[accept*='.mp4']\")"
         file: '{{video}}'
     - wait:
         selector: input[placeholder='请输入稿件标题']
@@ -91,8 +91,8 @@ commands:
           return "already_in_upload";
         })()
     - wait: 1000
-    - upload:
-        selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+    - cdp_upload:
+        eval: "document.querySelector('input[type=file][accept*=image]') || document.querySelector(\"input[type=file][accept*='.jpg']\") || document.querySelector(\"input[type=file][accept*='.png']\")"
         file: '{{cover}}'
     - wait: 3000
     - wait: 5000

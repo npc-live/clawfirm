@@ -68,6 +68,7 @@ echo "Launching Chrome (CDP port ${CDP_PORT}, profile ${PROFILE_DIR})..."
   --user-data-dir="${PROFILE_DIR}" \
   --no-first-run \
   --no-default-browser-check \
+  --disable-blink-features=AutomationControlled \
   &>/dev/null &
 
 # ── Step 4: Poll for CDP readiness (up to 5s) ───────────────────────────────

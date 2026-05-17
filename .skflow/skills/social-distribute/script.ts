@@ -9,23 +9,23 @@ const CONFIGS: Record<string, { yaml: string; cmd: string; build: (c: any, u: an
   },
   bilibili: {
     yaml: "bilibili-fill.yaml", cmd: "post",
-    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || "", u.chapters || ""],
+    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || "", u.chapters || c.chapters || ""],
   },
   youtube: {
     yaml: "youtube-fill.yaml", cmd: "post_video",
-    build: (c, u) => [u.video, c.title, c.desc, "unlisted", u.chapters || ""],
+    build: (c, u) => [u.video, c.title, c.desc, "unlisted", u.chapters || c.chapters || ""],
   },
   tiktok: {
     yaml: "tiktok-fill.yaml", cmd: "post",
-    build: (c, u) => [u.video, c.title, c.desc, c.tags || "", u.cover_h || "", u.cover_v || ""],
+    build: (c, u) => [u.video, "", c.desc, c.tags || "", u.cover_h || "", u.cover_v || ""],
   },
   xiaohongshu: {
     yaml: "xhs-fill.yaml", cmd: "post_video",
-    build: (c, u) => [u.video, c.title, c.desc, c.tags || "", u.chapters || ""],
+    build: (c, u) => [u.video, c.title, c.desc, c.tags || "", u.chapters || c.chapters || ""],
   },
   douyin: {
     yaml: "douyin-fill.yaml", cmd: "post",
-    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || "", u.chapters || ""],
+    build: (c, u) => [u.video, c.title, c.desc, u.cover_v || "", c.tags || "", u.chapters || c.chapters || ""],
   },
   linkedin: {
     yaml: "linkedin-fill.yaml", cmd: "post_video",
@@ -160,15 +160,23 @@ export async function main() {
       "- 每个平台独立生成，严格遵守该平台的 content-rules 和 format-specs\n" +
       "- 返回纯 JSON 对象（不要 markdown code block），key 是平台名，value 包含字段\n" +
       "- Twitter: {text} — 中英双语推文\n" +
-      "- Bilibili/小红书/抖音: {title, desc, tags} — tags 用逗号分隔\n" +
-      "- YouTube: {title, desc} — 中英双语\n" +
-      "- TikTok: {title, desc, tags} — 中英双语，tags 用逗号分隔\n" +
-      "- LinkedIn: {title, desc} — 专业语气\n" +
-      "- 微信视频号(wechat_channels): {title, desc} — 中文",
+      "- Bilibili/小红书/抖音: {title, desc, tags, chapters} — tags 用逗号分隔\n" +
+      "- YouTube: {title, desc, chapters} — 中英双语\n" +
+      "- TikTok: {desc, tags} — 中英双语 Caption，tags 用逗号分隔（不支持 chapters，不需要 title）\n" +
+      "- LinkedIn: {title, desc} — 专业语气（不支持 chapters）\n" +
+      "- 微信视频号(wechat_channels): {title, desc} — 中文（不支持 chapters）\n\n" +
+      "chapters 字段规则（仅 YouTube/Bilibili/小红书/抖音）：\n" +
+      "- 格式: 多行文本，每行 MM:SS 章节标题\n" +
+      "- 必须从 00:00 开始，至少 3 个节点\n" +
+      "- 章节标题≤15字（B站≤16字），简洁明了，包含核心关键词\n" +
+      "- B站特殊限制：章节数 <10 个，每个标题≤16字\n" +
+      "- 根据视频主题合理规划章节（教程/评测/分析等）\n" +
+      "- 如果 data 中已有 existingChapters，基于其优化标题措辞，保留原始时间戳",
     data: {
       topic: userInput.topic,
       platforms: userInput.platforms,
       platformRules: platformRules,
+      existingChapters: userInput.chapters || null,
     },
   });
 

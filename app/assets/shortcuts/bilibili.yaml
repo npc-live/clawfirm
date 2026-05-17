@@ -209,9 +209,9 @@ commands:
             return !!btn;
           })()
       - wait: 500
-      # 上传视频
-      - upload:
-          selector: "input[accept*='.mp4']"
+      # 上传视频（cdp_upload 通过 file chooser interception 触发 trusted change event）
+      - cdp_upload:
+          eval: "document.querySelector(\"input[accept*='.mp4']\")"
           file: "{{video}}"
       # 等待编辑器渲染（标题输入框出现）
       - wait:

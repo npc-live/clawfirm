@@ -30,8 +30,8 @@ commands:
         eval: "!!document.querySelector('input[type=\"file\"][accept*=\"video\"], input[type=\"file\"]')"
         timeout: 10000
         interval: 500
-    - upload:
-        selector: "input[type=file][accept*=video], input[type=file]"
+    - cdp_upload:
+        eval: "document.querySelector('input[type=file][accept*=video]') || document.querySelector('input[type=file]')"
         file: '{{video}}'
     - wait_until:
         eval: >-
@@ -378,8 +378,8 @@ commands:
           })()
         timeout: 10000
         interval: 1000
-    - upload:
-        selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+    - cdp_upload:
+        eval: "document.querySelector('input[type=file][accept*=image]') || document.querySelector(\"input[type=file][accept*='.jpg']\") || document.querySelector(\"input[type=file][accept*='.png']\")"
         file: '{{cover_h}}'
     - wait: 3000
     - eval: >-
@@ -459,8 +459,8 @@ commands:
           })()
         timeout: 10000
         interval: 1000
-    - upload:
-        selector: "input[type=file][accept*=image], input[type=file][accept*='.jpg'], input[type=file][accept*='.png']"
+    - cdp_upload:
+        eval: "document.querySelector('input[type=file][accept*=image]') || document.querySelector(\"input[type=file][accept*='.jpg']\") || document.querySelector(\"input[type=file][accept*='.png']\")"
         file: '{{cover_v}}'
     - wait: 3000
     - eval: >-
