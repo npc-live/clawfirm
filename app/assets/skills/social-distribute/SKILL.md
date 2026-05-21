@@ -30,7 +30,7 @@ node scripts/skflow-run.mjs run social-distribute
 
 ## Supported platforms
 
-twitter, bilibili, youtube, tiktok, xiaohongshu, douyin, linkedin
+twitter, bilibili, youtube, tiktok, xiaohongshu, douyin, linkedin, wechat_channels, wechat_moments
 
 ## How it works
 

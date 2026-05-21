@@ -33,6 +33,10 @@ const CONFIGS = {
         yaml: "channels-fill.yaml", cmd: "post",
         build: (c, u) => [u.video, c.title, c.desc, u.cover_v || ""],
     },
+    wechat_moments: {
+        yaml: "", cmd: "",
+        build: (c, u) => [],
+    },
 };
 function safeParse(text) {
     try {
@@ -72,6 +76,8 @@ function makeShCmd(platformName, copy, userIn, port) {
     const cfg = CONFIGS[platformName];
     if (!cfg || !copy)
         return "";
+    if (!cfg.yaml)
+        return "SKIP";
     const args = cfg.build(copy, userIn);
     const payload = JSON.stringify({ file: cfg.yaml, command: cfg.cmd, args: args });
     const escaped = payload.replace(/'/g, "'\\''");
@@ -161,7 +167,7 @@ export function step(state, input) { while (true) {
             state.rulesRaw = JSON.parse(input);
             state.platformRules = parseRules(state.rulesRaw.stdout, state.userInput.platforms);
             return { yield: { type: "text", ...{
-                        prompt: "为以下视频生成多平台分发文案。\n\n" + "要求：\n" + "- 每个平台独立生成，严格遵守该平台的 content-rules 和 format-specs\n" + "- 返回纯 JSON 对象（不要 markdown code block），key 是平台名，value 包含字段\n" + "- Twitter: {text} — 中英双语推文\n" + "- Bilibili/小红书/抖音: {title, desc, tags} — tags 用逗号分隔\n" + "- YouTube: {title, desc} — 中英双语\n" + "- TikTok: {title, desc, tags} — 中英双语，tags 用逗号分隔\n" + "- LinkedIn: {title, desc} — 专业语气\n" + "- 微信视频号(wechat_channels): {title, desc} — 中文",
+                        prompt: "为以下视频生成多平台分发文案。\n\n" + "要求：\n" + "- 每个平台独立生成，严格遵守该平台的 content-rules 和 format-specs\n" + "- 返回纯 JSON 对象（不要 markdown code block），key 是平台名，value 包含字段\n" + "- Twitter: {text} — 中英双语推文\n" + "- Bilibili/小红书/抖音: {title, desc, tags} — tags 用逗号分隔\n" + "- YouTube: {title, desc} — 中英双语\n" + "- TikTok: {title, desc, tags} — 中英双语，tags 用逗号分隔\n" + "- LinkedIn: {title, desc} — 专业语气\n" + "- 微信视频号(wechat_channels): {title, desc} — 中文\n" + "- 朋友圈(wechat_moments): {text} — 中文，紧凑单段，不分段不换行，篇幅控制在2-3句话以内，口语化随性风格",
                         data: {
                             topic: state.userInput.topic,
                             platforms: state.userInput.platforms,
@@ -203,7 +209,17 @@ export function step(state, input) { while (true) {
         case 21:
             state.pName = state.userInput.platforms[state.idx];
             state.shellCmd = makeShCmd(state.pName, state.allCopy[state.pName], state.userInput, state.cdpPort);
-            if (state.shellCmd) {
+            if (state.shellCmd === "SKIP") {
+                state.results.push({
+                    platform: state.pName,
+                    success: true,
+                    code: 0,
+                    note: "文案已生成（无需浏览器发布）",
+                });
+                state.phase = 25;
+                continue;
+            }
+            else if (state.shellCmd) {
                 state.phase = 22;
                 continue;
             }

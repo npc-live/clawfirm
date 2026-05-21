@@ -35,6 +35,10 @@ const CONFIGS: Record<string, { yaml: string; cmd: string; build: (c: any, u: an
     yaml: "channels-fill.yaml", cmd: "post",
     build: (c, u) => [u.video, c.title, c.desc, u.cover_v || ""],
   },
+  wechat_moments: {
+    yaml: "", cmd: "",
+    build: (c, u) => [],
+  },
 };
 
 function safeParse(text: string): any {
@@ -72,6 +76,7 @@ function parseRules(text: string, platforms: string[]): Record<string, { content
 function makeShCmd(platformName: string, copy: any, userIn: any, port: string): string {
   const cfg = CONFIGS[platformName];
   if (!cfg || !copy) return "";
+  if (!cfg.yaml) return "SKIP";
   const args = cfg.build(copy, userIn);
   const payload = JSON.stringify({ file: cfg.yaml, command: cfg.cmd, args: args });
   const escaped = payload.replace(/'/g, "'\\''");
@@ -164,7 +169,8 @@ export async function main() {
       "- YouTube: {title, desc, chapters} — 中英双语\n" +
       "- TikTok: {desc, tags} — 中英双语 Caption，tags 用逗号分隔（不支持 chapters，不需要 title）\n" +
       "- LinkedIn: {title, desc} — 专业语气（不支持 chapters）\n" +
-      "- 微信视频号(wechat_channels): {title, desc} — 中文（不支持 chapters）\n\n" +
+      "- 微信视频号(wechat_channels): {title, desc} — 中文（不支持 chapters）\n" +
+      "- 朋友圈(wechat_moments): {text} — 中文，紧凑单段，不分段不换行，篇幅控制在2-3句话以内，口语化随性风格\n\n" +
       "chapters 字段规则（仅 YouTube/Bilibili/小红书/抖音）：\n" +
       "- 格式: 多行文本，每行 MM:SS 章节标题\n" +
       "- 必须从 00:00 开始，至少 3 个节点\n" +
@@ -193,7 +199,14 @@ export async function main() {
     let pName = userInput.platforms[idx];
     let shellCmd = makeShCmd(pName, allCopy[pName], userInput, cdpPort);
 
-    if (shellCmd) {
+    if (shellCmd === "SKIP") {
+      results.push({
+        platform: pName,
+        success: true,
+        code: 0,
+        note: "文案已生成（无需浏览器发布）",
+      });
+    } else if (shellCmd) {
       let shOut = await sh(shellCmd, { timeout: 600000 });
       results.push({
         platform: pName,
