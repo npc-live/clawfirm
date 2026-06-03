@@ -91,7 +91,7 @@ GitHub 根路径: `https://github.com/npc-live/clawfirm/blob/main/`
 
 > 扫描天气预测市场 → Open-Meteo 集合预报概率 → edge 计算 → 自动交易
 >
-> 📌 还没有 Polymarket 账户？通过返佣链接注册 / Don't have a Polymarket account? Sign up with referral: [https://polymarket.com/?r=0xOlivia](https://polymarket.com/?r=0xOlivia)
+> 📌 还没有 Polymarket 账户？通过返佣链接注册 / Don't have a Polymarket account? Sign up with referral: [https://polymarket.com/?r=Olivia](https://polymarket.com/?r=Olivia)
 
 | 类型 | 本地路径 | GitHub |
 |------|----------|--------|

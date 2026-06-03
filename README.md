@@ -24,7 +24,7 @@ Each business module has its own subdirectory under `whips/` with 5 standard fil
 
 | 模块 / Module | 业务 / Description (CN) | Description (EN) | 类型 / Type |
 |---|---|---|---|
-| `polymarket` | 天气预测市场交易 | Weather prediction market trading on [Polymarket](https://polymarket.com/?r=0xOlivia) | 套利交易 / Trading |
+| `polymarket` | 天气预测市场交易 | Weather prediction market trading on [Polymarket](https://polymarket.com/?r=Olivia) | 套利交易 / Trading |
 | `hyperliquid` | 新闻驱动加密期货交易 | News-driven crypto futures trading on Hyperliquid | 套利交易 / Trading |
 | `social-media` | 社交媒体内容自动生成与发布 | Auto-generate and publish content across social platforms | 自媒体 / Content |
 | `arbitrage` | 电商跨平台套利 (闲鱼↔拼多多 / eBay↔Amazon) | Cross-platform e-commerce arbitrage (Xianyu↔Pinduoduo / eBay↔Amazon) | 电商 / E-Commerce |
