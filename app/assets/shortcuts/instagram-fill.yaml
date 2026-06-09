@@ -1,0 +1,106 @@
+platform: instagram
+login_url: https://www.instagram.com
+login_check:
+  cookie: sessionid
+commands:
+  post_reel:
+    args:
+    - video
+    - caption
+    - cover
+    steps:
+    - open: https://www.instagram.com/
+    - wait: 3000
+    - eval: >-
+        (function(){
+          var btn = document.querySelector('[aria-label="New post"]') ||
+                    document.querySelector('[aria-label="新帖子"]') ||
+                    document.querySelector('[aria-label="Create"]') ||
+                    document.querySelector('[aria-label="创建"]') ||
+                    document.querySelector('svg[aria-label="New post"]')?.closest('a,div,[role=button]');
+          if (btn) { btn.click(); return "clicked_create"; }
+          var links = document.querySelectorAll('a, div[role="button"], span[role="link"]');
+          for (var i = 0; i < links.length; i++) {
+            var label = links[i].getAttribute('aria-label') || '';
+            if (/new post|create|新帖|创建/i.test(label)) {
+              links[i].click();
+              return "clicked_label:" + label;
+            }
+          }
+          return "no_create_btn";
+        })()
+    - wait: 2000
+    - wait_until:
+        eval: >-
+          (function(){
+            return !!(
+              document.querySelector('input[type="file"]') ||
+              document.querySelector('[role="dialog"]')
+            );
+          })()
+        timeout: 10000
+        interval: 500
+    - upload:
+        selector: input[type=file]
+        file: '{{video}}'
+    - wait_until:
+        eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Next' || t === '下一步' || t === 'Trim' || t === '裁剪') return true;
+            }
+            return false;
+          })()
+        timeout: 120000
+        interval: 2000
+    - wait: 1000
+    # Next（跳过裁剪）
+    - eval: >-
+        (function(){
+          var btns = document.querySelectorAll('button, div[role="button"]');
+          for (var i = 0; i < btns.length; i++) {
+            var t = btns[i].textContent.trim();
+            if (t === 'Next' || t === '下一步') { btns[i].click(); return "clicked_next_1"; }
+          }
+          return "no_next";
+        })()
+    - wait: 2000
+    # Next（跳过滤镜）
+    - eval: >-
+        (function(){
+          var btns = document.querySelectorAll('button, div[role="button"]');
+          for (var i = 0; i < btns.length; i++) {
+            var t = btns[i].textContent.trim();
+            if (t === 'Next' || t === '下一步') { btns[i].click(); return "clicked_next_2"; }
+          }
+          return "no_next";
+        })()
+    - wait: 2000
+    # 填写 Caption
+    - eval: >-
+        (function(){
+          var textarea = document.querySelector('[aria-label*="caption" i]') ||
+                         document.querySelector('[aria-label*="说明" i]') ||
+                         document.querySelector('[contenteditable="true"]') ||
+                         document.querySelector('textarea');
+          if (!textarea) return "no_caption";
+          textarea.focus();
+          if (textarea.tagName === 'TEXTAREA') textarea.value = '';
+          return "ready";
+        })()
+    - wait: 300
+    - insert_text: '{{caption}}'
+    - wait: 500
+    # 不点击 Share，由用户手动确认
+    - capture:
+        name: result_url
+        eval: location.href
+    - return:
+      - field: 状态
+        value: ✅ Instagram Reel 内容已填写，请手动确认后点击 Share 发布
+      - field: 文案
+        value: '{{caption}}'
+      - field: 页面URL
+        value: '{{result_url}}'

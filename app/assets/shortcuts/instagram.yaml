@@ -1,0 +1,371 @@
+platform: instagram
+login_url: https://www.instagram.com
+login_check:
+  cookie: sessionid
+
+# Instagram 发布使用 Meta Business Suite (business.facebook.com) 或直接 instagram.com
+# Reels/视频上传：通过 instagram.com/reels/create/ 或 Meta Business Suite
+# 图文帖子：通过 instagram.com 顶部 + 按钮
+# Instagram 使用 React/Next.js，编辑器为 contenteditable div
+
+commands:
+
+  # ── 搜索 ──────────────────────────────────────────────────────────────────────
+  search:
+    args: [keyword]
+    steps:
+      - open: "https://www.instagram.com/explore/search/keyword/{{keyword}}/"
+      - wait: 4000
+      - eval: >-
+          (function(){
+            var searchInput = document.querySelector('input[aria-label="Search input"]') ||
+                              document.querySelector('input[placeholder="Search"]') ||
+                              document.querySelector('input[placeholder="搜索"]');
+            if (searchInput) { searchInput.focus(); return true; }
+            var searchBtn = document.querySelector('[aria-label="Search"]') ||
+                            document.querySelector('a[href*="/explore/"]');
+            if (searchBtn) { searchBtn.click(); return "clicked_search"; }
+            return false;
+          })()
+      - wait: 1500
+      - insert_text: "{{keyword}}"
+      - wait: 2000
+      - extract:
+          selector: "a[href*='/p/'], a[href*='/reel/']"
+          fields:
+            link:
+              selector: "a"
+              attr: href
+            text: "span, div"
+
+  # ── 点赞 ──────────────────────────────────────────────────────────────────────
+  like:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 3000
+      - capture:
+          name: already_liked
+          eval: >-
+            (function(){
+              var svg = document.querySelector('[aria-label="Unlike"]') ||
+                        document.querySelector('[aria-label="取消赞"]');
+              return !!svg;
+            })()
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[aria-label="Like"]') ||
+                      document.querySelector('[aria-label="赞"]') ||
+                      document.querySelector('[aria-label="Unlike"]') ||
+                      document.querySelector('[aria-label="取消赞"]');
+            if (btn) { btn.closest('button') ? btn.closest('button').click() : btn.click(); return true; }
+            return false;
+          })()
+      - wait: 1000
+      - capture:
+          name: is_liked
+          eval: >-
+            (function(){
+              var svg = document.querySelector('[aria-label="Unlike"]') ||
+                        document.querySelector('[aria-label="取消赞"]');
+              return !!svg;
+            })()
+      - return:
+          - field: 操作
+            value: "{{already_liked == 'true' && '取消点赞' || '点赞成功'}}"
+          - field: 状态
+            value: "{{is_liked}}"
+
+  # ── 评论 ──────────────────────────────────────────────────────────────────────
+  comment:
+    args: [url, text]
+    steps:
+      - open: "{{url}}"
+      - wait: 3000
+      - eval: >-
+          (function(){
+            var textarea = document.querySelector('textarea[aria-label*="comment" i]') ||
+                           document.querySelector('textarea[aria-label*="评论"]') ||
+                           document.querySelector('textarea[placeholder*="comment" i]') ||
+                           document.querySelector('textarea[placeholder*="评论"]');
+            if (textarea) { textarea.focus(); textarea.click(); return true; }
+            return false;
+          })()
+      - wait: 500
+      - insert_text: "{{text}}"
+      - wait: 500
+      - eval: >-
+          (function(){
+            var postBtn = document.querySelector('div[role="button"]:not([aria-disabled="true"])');
+            var btns = document.querySelectorAll('div[role="button"], button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Post' || t === '发布' || t === '发送') {
+                btns[i].click();
+                return "clicked:" + t;
+              }
+            }
+            return "no_post_btn";
+          })()
+      - wait: 2000
+      - return:
+          - field: 状态
+            value: "✅ 评论成功"
+          - field: 评论内容
+            value: "{{text}}"
+
+  # ── 关注 ──────────────────────────────────────────────────────────────────────
+  follow:
+    args: [url]
+    steps:
+      - open: "{{url}}"
+      - wait: 3000
+      - capture:
+          name: is_following
+          eval: >-
+            (function(){
+              var btns = document.querySelectorAll('button');
+              for (var i = 0; i < btns.length; i++) {
+                var t = btns[i].textContent.trim();
+                if (t === 'Following' || t === '正在关注' || t === '已关注') return 'true';
+              }
+              return 'false';
+            })()
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Follow' || t === '关注' || t === 'Follow Back' || t === '回关') {
+                btns[i].click();
+                return "clicked:" + t;
+              }
+            }
+            return "already_following_or_no_btn";
+          })()
+      - wait: 1500
+      - return:
+          - field: 操作
+            value: "{{is_following == 'true' ? '已在关注中' : '关注成功'}}"
+
+  # ── 发布 Reel/视频 ──────────────────────────────────────────────────────────
+  post_reel:
+    args: [video, caption, cover]   # video: 本地视频路径（必填）, caption: 文案（必填）, cover: 封面图片路径（可选）
+    steps:
+      - open: "https://www.instagram.com/"
+      - wait: 3000
+      # 点击顶部 "Create" / "创建" / "+" 按钮
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[aria-label="New post"]') ||
+                      document.querySelector('[aria-label="新帖子"]') ||
+                      document.querySelector('[aria-label="Create"]') ||
+                      document.querySelector('[aria-label="创建"]') ||
+                      document.querySelector('a[href="/create/style/"]') ||
+                      document.querySelector('svg[aria-label="New post"]')?.closest('a,div,[role=button]');
+            if (btn) { btn.click(); return "clicked_create"; }
+            var links = document.querySelectorAll('a, div[role="button"], span[role="link"]');
+            for (var i = 0; i < links.length; i++) {
+              var label = links[i].getAttribute('aria-label') || '';
+              if (/new post|create|新帖|创建/i.test(label)) {
+                links[i].click();
+                return "clicked_label:" + label;
+              }
+            }
+            return "no_create_btn";
+          })()
+      - wait: 2000
+      # 等待上传弹窗出现
+      - wait_until:
+          eval: >-
+            (function(){
+              return !!(
+                document.querySelector('input[type="file"]') ||
+                document.querySelector('[role="dialog"]') ||
+                document.querySelector('[aria-label*="Select"]') ||
+                document.querySelector('[aria-label*="选择"]')
+              );
+            })()
+          timeout: 10000
+          interval: 500
+      # 上传视频
+      - upload:
+          selector: "input[type=file]"
+          file: "{{video}}"
+      # 等待视频处理完成
+      - wait_until:
+          eval: >-
+            (function(){
+              var btns = document.querySelectorAll('button, div[role="button"]');
+              for (var i = 0; i < btns.length; i++) {
+                var t = btns[i].textContent.trim();
+                if (t === 'Next' || t === '下一步' || t === 'Trim' || t === '裁剪') return true;
+              }
+              return false;
+            })()
+          timeout: 120000
+          interval: 2000
+      - wait: 1000
+      # 点击 Next（跳过裁剪/滤镜）
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Next' || t === '下一步') { btns[i].click(); return "clicked_next_1"; }
+            }
+            return "no_next";
+          })()
+      - wait: 2000
+      # 再次点击 Next（跳过滤镜/编辑页）
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Next' || t === '下一步') { btns[i].click(); return "clicked_next_2"; }
+            }
+            return "no_next";
+          })()
+      - wait: 2000
+      # 填写 Caption
+      - eval: >-
+          (function(){
+            var textarea = document.querySelector('[aria-label*="caption" i]') ||
+                           document.querySelector('[aria-label*="说明" i]') ||
+                           document.querySelector('[contenteditable="true"]') ||
+                           document.querySelector('textarea');
+            if (!textarea) return "no_caption";
+            textarea.focus();
+            if (textarea.tagName === 'TEXTAREA') {
+              textarea.value = '';
+            }
+            return "ready";
+          })()
+      - wait: 300
+      - insert_text: "{{caption}}"
+      - wait: 500
+      # 点击 Share / 分享
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Share' || t === '分享' || t === 'Share to Reels' || t === '分享到 Reels') {
+                btns[i].click();
+                return "clicked_share";
+              }
+            }
+            return "no_share_btn";
+          })()
+      - wait: 5000
+      - capture:
+          name: success
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              return body.includes('Your reel has been shared') ||
+                     body.includes('已分享') ||
+                     body.includes('shared') ||
+                     body.includes('Post shared');
+            })()
+      - return:
+          - field: 状态
+            value: "{{success === 'true' ? '✅ Reel 发布成功' : '⚠️ 请检查页面'}}"
+          - field: 文案
+            value: "{{caption}}"
+
+  # ── 发布图文帖子 ──────────────────────────────────────────────────────────────
+  post_photo:
+    args: [image, caption]   # image: 本地图片路径（必填）, caption: 文案（必填）
+    steps:
+      - open: "https://www.instagram.com/"
+      - wait: 3000
+      - eval: >-
+          (function(){
+            var btn = document.querySelector('[aria-label="New post"]') ||
+                      document.querySelector('[aria-label="新帖子"]') ||
+                      document.querySelector('[aria-label="Create"]') ||
+                      document.querySelector('[aria-label="创建"]');
+            if (btn) { btn.click(); return "clicked_create"; }
+            return "no_create_btn";
+          })()
+      - wait: 2000
+      - wait_until:
+          eval: "!!document.querySelector('input[type=\"file\"]')"
+          timeout: 10000
+          interval: 500
+      - upload:
+          selector: "input[type=file]"
+          file: "{{image}}"
+      - wait_until:
+          eval: >-
+            (function(){
+              var btns = document.querySelectorAll('button, div[role="button"]');
+              for (var i = 0; i < btns.length; i++) {
+                var t = btns[i].textContent.trim();
+                if (t === 'Next' || t === '下一步') return true;
+              }
+              return false;
+            })()
+          timeout: 30000
+          interval: 1000
+      - wait: 500
+      # 点击 Next（跳过裁剪）
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Next' || t === '下一步') { btns[i].click(); return "clicked_next_1"; }
+            }
+            return "no_next";
+          })()
+      - wait: 1500
+      # 点击 Next（跳过滤镜）
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Next' || t === '下一步') { btns[i].click(); return "clicked_next_2"; }
+            }
+            return "no_next";
+          })()
+      - wait: 2000
+      # 填写 Caption
+      - eval: >-
+          (function(){
+            var textarea = document.querySelector('[aria-label*="caption" i]') ||
+                           document.querySelector('[aria-label*="说明" i]') ||
+                           document.querySelector('[contenteditable="true"]') ||
+                           document.querySelector('textarea');
+            if (!textarea) return "no_caption";
+            textarea.focus();
+            return "ready";
+          })()
+      - wait: 300
+      - insert_text: "{{caption}}"
+      - wait: 500
+      - eval: >-
+          (function(){
+            var btns = document.querySelectorAll('button, div[role="button"]');
+            for (var i = 0; i < btns.length; i++) {
+              var t = btns[i].textContent.trim();
+              if (t === 'Share' || t === '分享') { btns[i].click(); return "clicked_share"; }
+            }
+            return "no_share_btn";
+          })()
+      - wait: 5000
+      - capture:
+          name: success
+          eval: >-
+            (function(){
+              var body = document.body.innerText;
+              return body.includes('Post shared') || body.includes('已分享') || body.includes('Your post');
+            })()
+      - return:
+          - field: 状态
+            value: "{{success === 'true' ? '✅ 帖子发布成功' : '⚠️ 请检查页面'}}"
+          - field: 文案
+            value: "{{caption}}"
