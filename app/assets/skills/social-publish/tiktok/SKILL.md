@@ -128,7 +128,9 @@ Style: Highlight keywords in accent color (yellow, red, green)
 
 ---
 
-## Title/Caption Rules
+## Caption Rules
+
+> **TikTok 没有独立标题字段。** 只有 Caption（描述文案），即发布时的文字输入区。Caption 兼具标题和正文功能，前 80 字符决定信息传达效率。不要在 Agent 调用中传递 title 参数。
 
 ### Caption Writing
 

@@ -6,7 +6,6 @@ commands:
   post:
     args:
     - video
-    - title
     - desc
     - tags
     - cover_h
@@ -66,21 +65,6 @@ commands:
         timeout: 600000
         interval: 5000
     - wait: 1000
-    # 填写标题
-    - eval: >-
-        (function(){
-          var title = "{{title}}";
-          if (!title || title.indexOf("{{") === 0) return "no_title";
-          var input = document.querySelector('input[placeholder*="title" i], input[placeholder*="标题"]');
-          if (!input) return "no_title_input";
-          input.focus();
-          var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-          setter.call(input, title);
-          input.dispatchEvent(new Event('input', {bubbles: true}));
-          input.dispatchEvent(new Event('change', {bubbles: true}));
-          return "ok";
-        })()
-    - wait: 500
     # 清空 caption
     - eval: >-
         (function(){
@@ -483,8 +467,6 @@ commands:
     - return:
       - field: 状态
         value: ✅ TikTok 内容已填写，请手动检查封面后点击 Post 发布
-      - field: 标题
-        value: '{{title}}'
       - field: 描述
         value: '{{desc}}'
       - field: 页面URL
